@@ -2,6 +2,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useEffectEvent,
   useLayoutEffect,
   useRef,
   useState,
@@ -57,12 +58,11 @@ export const LazyGalleryImage = memo(function LazyGalleryImage({
   const holderRef = useRef<HTMLDivElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const taskRef = useRef<ImageLoadTaskHandle | null>(null);
-  const inViewportRef = useRef(false);
   const [visibility, setVisibility] = useState<GalleryImageVisibility>(hiddenVisibility);
   const [renderImage, setRenderImage] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
-  inViewportRef.current = visibility.inViewport;
+  const inViewport = useEffectEvent(() => visibility.inViewport);
   const setImageRef = useCallback((image: HTMLImageElement | null) => {
     imageRef.current = image;
   }, []);
@@ -118,7 +118,7 @@ export const LazyGalleryImage = memo(function LazyGalleryImage({
     let current = true;
     const task = scheduler.schedule({
       group: "gallery",
-      priority: inViewportRef.current
+      priority: inViewport()
         ? imageLoadPriority.viewport
         : imageLoadPriority.nearby,
       run: (signal) => loadImageElement(image, { src }, signal).then(() => undefined)

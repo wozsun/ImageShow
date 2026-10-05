@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 
 import { createHash, randomUUID } from "node:crypto";
 import {
+  readFile,
   rm,
   writeFile
 } from "node:fs/promises";
@@ -2440,7 +2441,7 @@ test("[Server/图片] 标准化取消等待当前编码收口且不进入后续�
     const rejected=assert.rejects(pending,e=>e===reason);await started;abort.abort(reason);await delay(0);assert.equal(settled,false);release();await rejected;assert.equal(encodes,cancelAt);
   }
 });
-test("[Server/图片] 安全抓取在预取消时不联网，原图代理头部及正文取消传到上游且不 fallback", async (t) => {
+test("[Server/图片] 安全抓取在预取消时不联网，原图代理取消不 fallback，超时错误码与导入正文中断清理保持正确", async (t) => {
   const { safeFetchExternalImage } =
     await import("../../../packages/server/src/core/external-image-fetch.ts");
   const { proxyExternalImage } =
@@ -2540,6 +2541,76 @@ test("[Server/图片] 安全抓取在预取消时不联网，原图代理头部�
     (e: any) => e.code === "external_image_cancelled"
   );
   assert.equal(fetches - beforeRedirect, 1);
+  for (const phase of ["headers", "body"] as const) {
+    globalThis.fetch = async (_url, init) => {
+      const signal = init!.signal!;
+      if (phase === "headers")
+        return new Promise<Response>((_resolve, reject) =>
+          signal.addEventListener("abort", () => reject(signal.reason), { once: true })
+        );
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            signal.addEventListener("abort", () => controller.error(signal.reason), { once: true });
+          }
+        }),
+        { headers: { "content-type": "image/png" } }
+      );
+    };
+    await assert.rejects(
+      safeFetchExternalImage("https://example.com/image", {
+        timeoutMs: 20,
+        signal: new AbortController().signal
+      }),
+      (e: any) => e.code === "external_url_timeout",
+      `${phase} 阶段超时`
+    );
+  }
+  const { fetchImportImageToFile } =
+    await import("../../../packages/server/src/images/ingestion/sources/fetch.ts");
+  initializeRuntimeConfig();
+  const directory = await createTestDirectory("import-body-interruption-");
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  for (const failure of ["timeout", "cancel"] as const) {
+    const abort = new AbortController();
+    const bodyStarted = Promise.withResolvers<void>();
+    const target = join(directory, `${failure}.raw`);
+    const part = join(directory, `${failure}.part`);
+    await writeFile(target, "complete successor content");
+    let failBody!: (error: Error) => void;
+    globalThis.fetch = async () => new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(image);
+          failBody = (error) => controller.error(error);
+        }
+      }),
+      {
+        headers: {
+          "content-type": "image/png",
+          "content-length": String(image.length * 2)
+        }
+      }
+    );
+    const pending = fetchImportImageToFile(
+      "https://example.com/image.png",
+      target,
+      part,
+      image.length * 4,
+      abort.signal,
+      () => bodyStarted.resolve()
+    );
+    const rejection = assert.rejects(pending, {
+      status: failure === "timeout" ? 400 : 409,
+      code: failure === "timeout" ? "import_timeout" : "ingestion_cancelled"
+    });
+    await bodyStarted.promise;
+    if (failure === "timeout") failBody(new DOMException("synthetic body timeout", "TimeoutError"));
+    else abort.abort(new Error("synthetic caller cancellation"));
+    await rejection;
+    assert.equal(await readFile(target, "utf8"), "complete successor content");
+    await assert.rejects(readFile(part), { code: "ENOENT" });
+  }
 });
 test("[Server/图片] 管理员原图等待共享探测时单个 HTTP 取消不影响另一消费者", async () => {
   const item = servingReadyCacheItem();

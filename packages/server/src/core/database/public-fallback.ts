@@ -1,3 +1,4 @@
+import { markPromiseAsHandled } from "node:util";
 import { appConfig } from "@imageshow/shared";
 import type { Pool, PoolClient } from "pg";
 import { ApiError } from "../api-error.ts";
@@ -145,7 +146,7 @@ export function createPublicDatabaseReadScope(dependencies: PublicDatabaseReadSc
           });
         // A rejected tail also rejects queued SQL without starting it.
         queryTail = query;
-        void query.catch(() => undefined);
+        markPromiseAsHandled(query);
         return query;
       }) as DatabaseReader["query"]
     };
@@ -159,7 +160,7 @@ export function createPublicDatabaseReadScope(dependencies: PublicDatabaseReadSc
       operationAbort.signal.throwIfAborted();
       return value;
     } catch (error) {
-      void operation.catch(() => undefined);
+      markPromiseAsHandled(operation);
       if (operationAbort.signal.aborted) {
         destroyClient = true;
         throw abortSignalError(operationAbort.signal);

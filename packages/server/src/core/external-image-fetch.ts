@@ -8,7 +8,6 @@ import {
   externalImageLookupErrorCode
 } from "./external-image-lookup.ts";
 import { logger } from "./logger.ts";
-import { responseWithCleanup } from "./http/response-lifecycle.ts";
 import { parseHttpMimeType } from "./http/media-type.ts";
 
 const maxExternalRedirects = 5;
@@ -221,15 +220,11 @@ function abortError(signal: AbortSignal) {
 async function fetchWithTimeout(url: URL, options: SafeExternalImageFetchOptions) {
   if (options.signal.aborted) throw abortError(options.signal);
   assertTlsCertificateVerificationEnabled();
-  const controller = new AbortController();
-  const abort = () => controller.abort();
-  options.signal.addEventListener("abort", abort, { once: true });
-  const timer = setTimeout(abort, options.timeoutMs);
-  let handedOff = false;
-  const cleanup = () => {
-    clearTimeout(timer);
-    options.signal.removeEventListener("abort", abort);
-  };
+  // The response body keeps this signal, so the timeout also covers body reads.
+  const signal = AbortSignal.any([
+    options.signal,
+    AbortSignal.timeout(options.timeoutMs)
+  ]);
   try {
     const headers = new Headers(options.headers);
     if (options.targetOriginReferer) {
@@ -242,25 +237,22 @@ async function fetchWithTimeout(url: URL, options: SafeExternalImageFetchOptions
       method: options.method ?? "GET",
       headers,
       redirect: "manual",
-      signal: controller.signal,
+      signal,
       dispatcher: externalImageDispatcher
     } as RequestInit & { dispatcher: Agent });
-    if (controller.signal.aborted) {
+    if (signal.aborted) {
       await response.body?.cancel().catch(() => undefined);
       throw abortError(options.signal);
     }
-    handedOff = Boolean(response.body);
-    return responseWithCleanup(response, cleanup);
+    return response;
   } catch (error) {
-    if (controller.signal.aborted) throw abortError(options.signal);
+    if (signal.aborted) throw abortError(options.signal);
     if (hasErrorCode(error, externalImageLookupErrorCode)) {
       throw externalImageRejected("blocked_resolved_address", urlLogContext(url));
     }
     if (tlsCertificateErrorCode(error))
       throw externalImageRejected("tls_certificate_invalid", urlLogContext(url));
     throw error;
-  } finally {
-    if (!handedOff) cleanup();
   }
 }
 
@@ -296,7 +288,8 @@ export async function safeFetchExternalImage(
         return await responseWithSniffedImageBody(response, options.signal);
       return response;
     } catch (error) {
-      if (options.signal.aborted || (error as Error).name === "AbortError")
+      // Without caller cancellation, the only abort source is the timeout.
+      if (options.signal.aborted || (error as Error).name === "TimeoutError")
         throw abortError(options.signal);
       throw error;
     }

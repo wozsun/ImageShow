@@ -181,14 +181,11 @@ export class WorkerExecutionCoordinator<Job, Result> {
     if (this.isIdle()) {
       return { promise: Promise.resolve(), cancel: () => undefined };
     }
-    let resolveIdle!: () => void;
-    const promise = new Promise<void>((resolve) => {
-      resolveIdle = resolve;
-      this.idleWaiters.add(resolve);
-    });
+    const { promise, resolve } = Promise.withResolvers<void>();
+    this.idleWaiters.add(resolve);
     return {
       promise,
-      cancel: () => this.idleWaiters.delete(resolveIdle)
+      cancel: () => this.idleWaiters.delete(resolve)
     };
   }
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import {
   ingestionEventsPath,
   type IngestionQueueEventDto,
@@ -106,14 +106,17 @@ export function useServerIngestionQueue(
       connectionGeneration?: number
     ) => boolean) | null
   >(null);
-  const onCompletedIngestionsRef = useRef(input.onCompletedIngestions);
-  onCompletedIngestionsRef.current = input.onCompletedIngestions;
-  const onCompletedIngestionReceiptRef = useRef(input.onCompletedIngestionReceipt);
-  onCompletedIngestionReceiptRef.current = input.onCompletedIngestionReceipt;
-  const onServerIngestionItemRef = useRef(input.onServerIngestionItem);
-  onServerIngestionItemRef.current = input.onServerIngestionItem;
-  const displayedRef = useRef(input.displayed);
-  displayedRef.current = input.displayed;
+  const onCompletedIngestions = useEffectEvent(
+    (entries: readonly CompletedIngestionObservation[]) => input.onCompletedIngestions?.(entries)
+  );
+  const onCompletedIngestionReceipt = useEffectEvent(
+    (receipt: IngestionQueueTerminalEventItemDto & { status: "completed" }) =>
+      input.onCompletedIngestionReceipt?.(receipt)
+  );
+  const onServerIngestionItem = useEffectEvent(
+    (item: ServerIngestionItemDto) => input.onServerIngestionItem?.(item)
+  );
+  const isDisplayed = useEffectEvent(() => input.displayed);
   const generationCounterRef = useRef(0);
 
   useEffect(() => {
@@ -673,12 +676,7 @@ export function useServerIngestionQueue(
     recoverAuthorityRef.current = () => {
       const minimumSnapshotSerial = snapshotSerial + 1;
       if (authorityRecovery === null) {
-        let resolve!: () => void;
-        let reject!: (error: unknown) => void;
-        const promise = new Promise<void>((resolvePromise, rejectPromise) => {
-          resolve = resolvePromise;
-          reject = rejectPromise;
-        });
+        const { promise, resolve, reject } = Promise.withResolvers<void>();
         authorityRecovery = {
           minimumSnapshotSerial,
           promise,
@@ -883,7 +881,7 @@ export function useServerIngestionQueue(
           // Completion invalidation belongs to the queue owner, not to the
           // bounded page. A completed mutation outside this page still changes
           // both its retained browser card and the image-data projections.
-          onCompletedIngestionsRef.current?.([
+          onCompletedIngestions([
             {
               pair: event.session,
               item: event.session.completed_item,
@@ -901,7 +899,7 @@ export function useServerIngestionQueue(
           // terminal fence immediately, then use its existing bounded status
           // hydrator to fetch the deferred PostgreSQL presentation. Unknown
           // pairs are not mounted, but still hydrate for image-data invalidation.
-          onCompletedIngestionReceiptRef.current?.(
+          onCompletedIngestionReceipt(
             event.session as IngestionQueueTerminalEventItemDto & {
               status: "completed";
             }
@@ -910,13 +908,13 @@ export function useServerIngestionQueue(
           // Project only into an already retained exact-pair owner. This keeps
           // off-page current-document cards current without retaining another
           // queue DTO page or mounting a new card from an event.
-          onServerIngestionItemRef.current?.(event.session);
+          onServerIngestionItem(event.session);
         }
         // Hidden owners normally do not chase removed/reordered members. A
         // bounded authority recovery is the exception: mutations that race
         // its snapshot must still be buffered so tasks completing after the
         // frozen close boundary remain visible in the converged result.
-        if (!displayedRef.current && authorityRecovery === null) return;
+        if (!isDisplayed() && authorityRecovery === null) return;
         if (activeSnapshot !== null) {
           if (buffered.length >= clientMutationBufferLimit) {
             requestSnapshot("reload");

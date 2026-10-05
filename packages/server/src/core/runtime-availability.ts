@@ -1,3 +1,4 @@
+import { markPromiseAsHandled } from "node:util";
 import { logger } from "./logger.ts";
 import {
   getRedisConnectionState,
@@ -145,7 +146,7 @@ function ensureRedisConnectionListener() {
       markRedisUnavailable("connection_unavailable");
       return;
     }
-    void probeRedisOperationalState().catch(() => undefined);
+    markPromiseAsHandled(probeRedisOperationalState());
   });
 }
 
@@ -237,11 +238,11 @@ export function startRedisOperationalMonitor(intervalMs = 5_000) {
   ensureRedisConnectionListener();
   if (!monitorTimer) {
     monitorTimer = setInterval(() => {
-      void probeRedisOperationalState().catch(() => undefined);
+      markPromiseAsHandled(probeRedisOperationalState());
     }, intervalMs);
     monitorTimer.unref();
   }
-  void probeRedisOperationalState().catch(() => undefined);
+  markPromiseAsHandled(probeRedisOperationalState());
 }
 
 export function stopRedisOperationalMonitor() {

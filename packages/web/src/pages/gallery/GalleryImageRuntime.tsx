@@ -214,14 +214,14 @@ export function GalleryImageRuntime({
   );
 
   return (
-    <GalleryImageRuntimeContext.Provider value={contextValue}>
+    <GalleryImageRuntimeContext value={contextValue}>
       <ImageLoadSchedulerProvider scheduler={runtime.scheduler}>
         {children}
         {development && runtime.debug && (
           <GalleryDevelopmentStats debug={runtime.debug} />
         )}
       </ImageLoadSchedulerProvider>
-    </GalleryImageRuntimeContext.Provider>
+    </GalleryImageRuntimeContext>
   );
 }
 

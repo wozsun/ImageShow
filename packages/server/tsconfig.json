@@ -8,7 +8,8 @@
       "DOM.AsyncIterable",
       "WebWorker.ImportScripts",
       "ScriptHost",
-      "ESNext.Collection"
+      "ESNext.Collection",
+      "ESNext.Temporal"
     ],
     "outDir": "dist",
     "rootDir": "src",

@@ -24,9 +24,9 @@ export function ImageLoadSchedulerProvider({
   children: React.ReactNode;
 }) {
   return (
-    <ImageLoadSchedulerContext.Provider value={scheduler}>
+    <ImageLoadSchedulerContext value={scheduler}>
       {children}
-    </ImageLoadSchedulerContext.Provider>
+    </ImageLoadSchedulerContext>
   );
 }
 

@@ -8,9 +8,10 @@ export type ReadyImageCacheReadLease<T> = { acquired: true; value: T } | { acqui
 
 function acquireReadFence() {
   if (activeReaders === 0) {
-    readersDrained = new Promise<void>((resolve) => {
-      resolveReadersDrained = resolve;
-    });
+    ({
+      promise: readersDrained,
+      resolve: resolveReadersDrained
+    } = Promise.withResolvers<void>());
   }
   activeReaders += 1;
 }

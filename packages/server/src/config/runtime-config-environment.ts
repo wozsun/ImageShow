@@ -20,7 +20,7 @@ type RuntimeConfigLeafPath<T = RuntimeConfig> = {
 type RuntimeConfigEnvironmentLeafPath = RuntimeConfigLeafPath;
 
 type RuntimeConfigEnvironmentValueKind =
-  "string" | "number" | "boolean" | "json-array" | "json-object";
+  "string" | "number" | "boolean" | "json-array";
 
 type RuntimeConfigEnvironmentBinding = {
   path: RuntimeConfigEnvironmentLeafPath;
@@ -239,128 +239,6 @@ export const runtimeConfigEnvironmentBindings = [
   { path: "log.max_files", environmentVariable: "LOG_MAX_FILES", valueKind: "number" }
 ] as const satisfies readonly RuntimeConfigEnvironmentBinding[];
 
-function parseStrictJsonValue(source: string) {
-  let index = 0;
-
-  function fail(message: string): never {
-    throw new Error(`${message} at character ${index + 1}`);
-  }
-
-  function skipWhitespace() {
-    while (/\s/.test(source[index] ?? "")) index += 1;
-  }
-
-  function consumeString() {
-    const start = index;
-    index += 1;
-    let escaped = false;
-    while (index < source.length) {
-      const character = source[index];
-      if (escaped) {
-        escaped = false;
-      } else if (character === "\\") {
-        escaped = true;
-      } else if (character === '"') {
-        index += 1;
-        try {
-          return JSON.parse(source.slice(start, index)) as string;
-        } catch (error) {
-          throw new Error(
-            `invalid JSON string at character ${start + 1}: ${errorMessage(error)}`
-          );
-        }
-      } else if (character.charCodeAt(0) < 0x20) {
-        fail("unescaped control character in JSON string");
-      }
-      index += 1;
-    }
-    fail("unterminated JSON string");
-  }
-
-  function consumeLiteral(literal: string) {
-    if (source.slice(index, index + literal.length) !== literal) {
-      fail(`expected ${literal}`);
-    }
-    index += literal.length;
-  }
-
-  function consumeNumber() {
-    const match = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(source.slice(index));
-    if (!match) fail("invalid JSON number");
-    index += match[0].length;
-  }
-
-  function consumeArray() {
-    index += 1;
-    skipWhitespace();
-    if (source[index] === "]") {
-      index += 1;
-      return;
-    }
-    while (index < source.length) {
-      consumeValue();
-      skipWhitespace();
-      if (source[index] === "]") {
-        index += 1;
-        return;
-      }
-      if (source[index] !== ",") fail("expected ',' or ']' in JSON array");
-      index += 1;
-      skipWhitespace();
-    }
-    fail("unterminated JSON array");
-  }
-
-  function consumeObject() {
-    index += 1;
-    skipWhitespace();
-    const keys = new Set<string>();
-    if (source[index] === "}") {
-      index += 1;
-      return;
-    }
-    while (index < source.length) {
-      if (source[index] !== '"') fail("expected a quoted JSON object key");
-      const key = consumeString();
-      if (key === "__proto__") {
-        throw new Error('JSON object key "__proto__" is not allowed');
-      }
-      if (keys.has(key)) throw new Error(`duplicate JSON object key ${JSON.stringify(key)}`);
-      keys.add(key);
-      skipWhitespace();
-      if (source[index] !== ":") fail("expected ':' after JSON object key");
-      index += 1;
-      consumeValue();
-      skipWhitespace();
-      if (source[index] === "}") {
-        index += 1;
-        return;
-      }
-      if (source[index] !== ",") fail("expected ',' or '}' in JSON object");
-      index += 1;
-      skipWhitespace();
-    }
-    fail("unterminated JSON object");
-  }
-
-  function consumeValue() {
-    skipWhitespace();
-    const character = source[index];
-    if (character === '"') consumeString();
-    else if (character === "[") consumeArray();
-    else if (character === "{") consumeObject();
-    else if (character === "t") consumeLiteral("true");
-    else if (character === "f") consumeLiteral("false");
-    else if (character === "n") consumeLiteral("null");
-    else consumeNumber();
-  }
-
-  consumeValue();
-  skipWhitespace();
-  if (index !== source.length) fail("unexpected trailing JSON content");
-  return JSON.parse(source) as unknown;
-}
-
 function parseEnvironmentValue(
   binding: RuntimeConfigEnvironmentBinding,
   value: string
@@ -379,16 +257,14 @@ function parseEnvironmentValue(
     if (value === "false") return false;
     throw new Error("must be true or false");
   }
-  const parsed = parseStrictJsonValue(value);
-  if (binding.valueKind === "json-array" && !Array.isArray(parsed)) {
-    throw new Error("must be a JSON array");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    // Parser messages quote the input, which may contain private origins.
+    throw new Error("must be valid JSON");
   }
-  if (
-    binding.valueKind === "json-object" &&
-    (parsed === null || typeof parsed !== "object" || Array.isArray(parsed))
-  ) {
-    throw new Error("must be a JSON object");
-  }
+  if (!Array.isArray(parsed)) throw new Error("must be a JSON array");
   return parsed;
 }
 

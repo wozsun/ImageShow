@@ -1,3 +1,4 @@
+import { markPromiseAsHandled } from "node:util";
 import { neverAbortedSignal } from "../../../core/abort.ts";
 import { coalesce } from "../../../core/coalesce.ts";
 import { logger } from "../../../core/logger.ts";
@@ -156,7 +157,7 @@ export async function resolveReadyImageFilterIndex(
 }
 
 function scheduleReadyImageFilterIndexBuild(plan: ImageFilterPlan) {
-  void resolveReadyImageFilterIndex(plan, neverAbortedSignal).catch(() => undefined);
+  markPromiseAsHandled(resolveReadyImageFilterIndex(plan, neverAbortedSignal));
 }
 
 /**

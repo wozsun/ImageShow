@@ -108,10 +108,10 @@ export function useUpload(options: {
       const inputs = candidates.map((job) => buildUploadIntentItemInput(job, maxLongEdge));
       const controller = new AbortController();
       intentControllers.current.add(controller);
-      let resolveIntentOwnership!: () => void;
-      const intentSettled = new Promise<void>((resolve) => {
-        resolveIntentOwnership = resolve;
-      });
+      const {
+        promise: intentSettled,
+        resolve: resolveIntentOwnership
+      } = Promise.withResolvers<void>();
       let intentOwnershipSettled = false;
       const finishIntentOwnership = () => {
         if (intentOwnershipSettled) return;

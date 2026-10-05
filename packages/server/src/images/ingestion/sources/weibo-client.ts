@@ -1,3 +1,4 @@
+import { raceWithAbortSignal } from "../../../core/abort.ts";
 import { errorMessage } from "../../../core/api-error.ts";
 import {
   WeiboImportError,
@@ -33,24 +34,6 @@ function parseCallbackJson(text: string) {
   }
 }
 
-async function readResponseChunk(
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-  signal: AbortSignal
-) {
-  signal.throwIfAborted();
-  let rejectForAbort: (() => void) | undefined;
-  const aborted = new Promise<never>((_resolve, reject) => {
-    rejectForAbort = () => reject(signal.reason);
-    signal.addEventListener("abort", rejectForAbort, { once: true });
-    if (signal.aborted) rejectForAbort();
-  });
-  try {
-    return await Promise.race([reader.read(), aborted]);
-  } finally {
-    if (rejectForAbort) signal.removeEventListener("abort", rejectForAbort);
-  }
-}
-
 function responseLimitLabel(maxBytes: number) {
   return maxBytes % (1024 * 1024) === 0
     ? `${maxBytes / (1024 * 1024)} MiB`
@@ -82,7 +65,7 @@ async function readWeiboResponseText(
   let text = "";
   try {
     for (;;) {
-      const { done, value } = await readResponseChunk(reader, signal);
+      const { done, value } = await raceWithAbortSignal(signal, reader.read());
       if (done) break;
       size += value.byteLength;
       if (size > maxBytes) throw tooLarge();

@@ -469,7 +469,9 @@ export class ShowPixiCamera {
     this.panScreen(deltaX, deltaY);
     // Only drag, wheel pan and inertia contribute navigation movement.
     // Zoom anchoring and automatic cruise use separate transform paths.
-    const verticalMovement = -deltaY / this.scale;
+    // Report screen pixels like the float and cluster scenes, so the
+    // navigation threshold does not tighten as denser columns shrink the scale.
+    const verticalMovement = -deltaY;
     if (Math.abs(verticalMovement) > 0.01) {
       this.#onManualVerticalMovement(verticalMovement, pointerType);
     }

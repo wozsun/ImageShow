@@ -25,9 +25,7 @@ export function useEmbeddedCursorBridge(enabled: boolean) {
     if (!enabled || window.parent === window) return;
 
     const parent = window.parent;
-    const bridgeId = Array.from(crypto.getRandomValues(new Uint32Array(4)), (value) =>
-      value.toString(16).padStart(8, "0")
-    ).join("");
+    const bridgeId = crypto.getRandomValues(new Uint8Array(16)).toHex();
     const root = document.documentElement;
     const finePointer = window.matchMedia("(pointer: fine)");
     const listeners = new AbortController();

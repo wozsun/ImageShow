@@ -92,11 +92,11 @@ export function DialogFrame({
       }
       onAnimationEnd={onAnimationEnd}
     >
-      <DialogPortalTargetContext.Provider value={containerRef}>
+      <DialogPortalTargetContext value={containerRef}>
         {children({
           requestClose
         })}
-      </DialogPortalTargetContext.Provider>
+      </DialogPortalTargetContext>
     </div>
   );
 

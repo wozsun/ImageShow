@@ -1,7 +1,6 @@
 import {
-  forwardRef,
   useRef,
-  type ButtonHTMLAttributes,
+  type ComponentPropsWithRef,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent
 } from "react";
@@ -117,7 +116,7 @@ function suppressCompatibilityActivation(ownerDocument: Document) {
 }
 
 export type DirectActivationButtonProps = Omit<
-  ButtonHTMLAttributes<HTMLButtonElement>,
+  ComponentPropsWithRef<"button">,
   | "onClick"
   | "onPointerCancel"
   | "onPointerDown"
@@ -277,17 +276,15 @@ function useDirectActivation(
  * release-after-activation keeps that focus stable through pointerup before
  * releasing it after a closing action. Keyboard focus is retained.
  */
-export const DirectActivationButton = forwardRef<HTMLButtonElement, DirectActivationButtonProps>(
-  function DirectActivationButton({
+export function DirectActivationButton({
+  onActivate,
+  pointerFocus = "target",
+  ...buttonProps
+}: DirectActivationButtonProps) {
+  const activationHandlers = useDirectActivation(
     onActivate,
-    pointerFocus = "target",
-    ...buttonProps
-  }, ref) {
-    const activationHandlers = useDirectActivation(
-      onActivate,
-      pointerFocus
-    );
+    pointerFocus
+  );
 
-    return <button {...buttonProps} {...activationHandlers} ref={ref} />;
-  }
-);
+  return <button {...buttonProps} {...activationHandlers} />;
+}

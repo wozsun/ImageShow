@@ -243,7 +243,7 @@ export function ImageAdminFilters({
           </>
         )}
       </div>
-      <AnchoredMenuDismissSignalContext.Provider
+      <AnchoredMenuDismissSignalContext
         key={mobileLayout ? "mobile" : "desktop"}
         value={disclosure.menuDismissSignal}
       >
@@ -276,7 +276,7 @@ export function ImageAdminFilters({
             </div>
           )}
         </div>
-      </AnchoredMenuDismissSignalContext.Provider>
+      </AnchoredMenuDismissSignalContext>
     </div>
   );
 }

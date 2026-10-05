@@ -807,7 +807,7 @@ test("[Web/展映] Show Pixi 窄相机 wheel 与 pinch 按锚点缩放、夹取�
   assert.equal(camera.scale, 1.25);
   camera.destroy();
 });
-test("[Web/展映] waterfall 只有手动纵向平移上报导航，缩放、resize 和自动平移不触发", () => {
+test("[Web/展映] waterfall 只有手动纵向平移按屏幕像素上报导航，缩放、resize 和自动平移不触发", () => {
   const target = createCameraTestElement();
   const movements: number[] = [];
   const camera = new ShowPixiCamera({
@@ -837,6 +837,8 @@ test("[Web/展映] waterfall 只有手动纵向平移上报导航，缩放、res
     assert.ok(movements.some((delta) => delta > 0));
     for (let frame = 0; frame < 120; frame += 1) camera.update(16);
     assert.equal(camera.moving, false, "余量结束即释放运动，不附加固定等待");
+    const reported = movements.reduce((total, delta) => total + delta, 0);
+    assert.ok(scale > 1 && Math.abs(reported - 180) < 0.05, "放大后仍按屏幕像素上报导航位移");
 
     movements.length = 0;
     target.emit("pointerdown", { clientX: 200, clientY: 200, pointerId: 1, pointerType: "touch" });

@@ -470,9 +470,9 @@ export function AdminPreferencesProvider({
   );
 
   return (
-    <AdminPreferenceContext.Provider value={contextValue}>
+    <AdminPreferenceContext value={contextValue}>
       {children}
-    </AdminPreferenceContext.Provider>
+    </AdminPreferenceContext>
   );
 }
 

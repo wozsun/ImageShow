@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import {
   ingestionStatusBatchMaxItems,
   type IngestionSessionPairDto
@@ -57,14 +57,12 @@ export function useIngestionAuthorityHandoffs(
   const fencesRef = useRef(new Map<string, AuthorityHandoffFence>());
   const serverRef = useRef(input.server);
   serverRef.current = input.server;
-  const reportErrorRef = useRef(input.reportError);
-  reportErrorRef.current = input.reportError;
+  const reportError = useEffectEvent(input.reportError);
   const dispatchRef = useRef(input.dispatch);
   dispatchRef.current = input.dispatch;
   const jobsRefRef = useRef(input.jobsRef);
   jobsRefRef.current = input.jobsRef;
-  const observeCompletedIngestionsRef = useRef(input.observeCompletedIngestions);
-  observeCompletedIngestionsRef.current = input.observeCompletedIngestions;
+  const observeCompletedIngestions = useEffectEvent(input.observeCompletedIngestions);
   const scheduledCoverageRef = useRef<Map<string, ScheduledAuthorityCoverage> | null>(null);
   const [fenceEpoch, setFenceEpoch] = useState(0);
 
@@ -398,7 +396,7 @@ export function useIngestionAuthorityHandoffs(
             controller.signal
           );
           if (controller.signal.aborted) return;
-          observeCompletedIngestionsRef.current(completedIngestionObservations(statuses));
+          observeCompletedIngestions(completedIngestionObservations(statuses));
           for (const [index, [pairKey]] of chunk.entries()) {
             const current = fencesRef.current.get(pairKey);
             if (
@@ -462,7 +460,7 @@ export function useIngestionAuthorityHandoffs(
         if (resolved.size) clearFences(resolved);
       } catch (error) {
         if (!controller.signal.aborted) {
-          reportErrorRef.current(error instanceof Error ? error.message : String(error));
+          reportError(error instanceof Error ? error.message : String(error));
         }
       }
     })();

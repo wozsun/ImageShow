@@ -85,7 +85,10 @@ export async function fetchImportImageToFile(
     // Preserve a complete target that may belong to a lock-loss successor;
     // this attempt owns only the partial file until atomic publication.
     await rm(part, { force: true });
-    if ((error as Error).name === "AbortError") {
+    // The pipeline reports caller cancellation as AbortError and a body
+    // timeout as TimeoutError; the caller signal tells the two apart.
+    const errorName = (error as Error).name;
+    if (errorName === "AbortError" || errorName === "TimeoutError") {
       throw new ApiError(
         signal.aborted ? 409 : 400,
         signal.aborted ? "ingestion_cancelled" : "import_timeout",

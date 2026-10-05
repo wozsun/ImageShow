@@ -1,3 +1,4 @@
+import { markPromiseAsHandled } from "node:util";
 import type {
   CompletedIngestionImageDto,
   IngestionCancelItemInputDto,
@@ -265,7 +266,7 @@ async function cancelLoadedIngestionSessions(
   const committedGate = Promise.withResolvers<CommittedIngestionResults>();
   // A database_started boundary never awaits the gate. Mark its possible
   // rejection as observed while cancellable boundaries still receive it.
-  void committedGate.promise.catch(() => undefined);
+  markPromiseAsHandled(committedGate.promise);
   const workByPair = new Map<string, ActiveBoundaryWork>();
   const workByIndex = new Map<number, ActiveBoundaryWork>();
 

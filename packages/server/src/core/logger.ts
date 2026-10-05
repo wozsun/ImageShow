@@ -46,9 +46,10 @@ function rotateIfNeeded(maxBytes: number, maxFiles: number) {
 }
 
 function localTimestamp() {
-  const date = new Date();
-  const pad = (value: number, size = 2) => String(value).padStart(size, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`;
+  return Temporal.Now
+    .plainDateTimeISO()
+    .toString({ fractionalSecondDigits: 3 })
+    .replace("T", " ");
 }
 
 function write(level: LevelName, message: string, context?: unknown) {

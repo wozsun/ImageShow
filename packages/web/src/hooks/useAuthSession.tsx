@@ -115,9 +115,9 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
   }, [recoverAuthSession]);
 
   return (
-    <AuthSessionContext.Provider value={{ query: { ...query, refetch }, recoverAuthSession }}>
+    <AuthSessionContext value={{ query: { ...query, refetch }, recoverAuthSession }}>
       {children}
-    </AuthSessionContext.Provider>
+    </AuthSessionContext>
   );
 }
 

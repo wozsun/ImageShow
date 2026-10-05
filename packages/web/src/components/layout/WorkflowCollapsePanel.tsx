@@ -54,8 +54,8 @@ export function WorkflowCollapsePanel({
         <small>{summary}</small>
         <Icon name="arrow-down-s-line" />
       </DirectActivationButton>
-      <AnchoredMenuDismissSignalContext.Provider value={disclosure.menuDismissSignal}>
-        <InteractionSurfaceContext.Provider
+      <AnchoredMenuDismissSignalContext value={disclosure.menuDismissSignal}>
+        <InteractionSurfaceContext
           value={{ id: contentId, returnFocusRef: disclosure.triggerRef }}
         >
           <div
@@ -67,8 +67,8 @@ export function WorkflowCollapsePanel({
           >
             {children}
           </div>
-        </InteractionSurfaceContext.Provider>
-      </AnchoredMenuDismissSignalContext.Provider>
+        </InteractionSurfaceContext>
+      </AnchoredMenuDismissSignalContext>
     </div>
   );
 }

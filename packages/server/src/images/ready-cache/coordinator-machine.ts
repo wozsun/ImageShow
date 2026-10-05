@@ -1,3 +1,4 @@
+import { markPromiseAsHandled } from "node:util";
 import { errorMessage } from "../../core/api-error.ts";
 import { raceWithAbortSignal } from "../../core/abort.ts";
 import { logger } from "../../core/logger.ts";
@@ -421,7 +422,7 @@ export class ReadyImageCacheCoordinator {
     }
     const forceRebuild = this.pendingRefresh === "rebuild";
     this.pendingRefresh = "none";
-    void this.startRefresh(forceRebuild).catch(() => undefined);
+    markPromiseAsHandled(this.startRefresh(forceRebuild));
   }
 
   private queueRefresh(forceRebuild: boolean) {

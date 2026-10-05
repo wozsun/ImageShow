@@ -1,3 +1,4 @@
+import { markPromiseAsHandled } from "node:util";
 import type { Hono } from "hono";
 import {
   adminApiBasePath,
@@ -18,7 +19,7 @@ export function registerAdminCacheRoutes(app: Hono) {
     requireAdminPermission(adminPermissions.cacheMaintenanceRebuild),
     async (c) => {
       // The rebuild belongs to the coordinator, not to this request.
-      void requestReadyImageCacheRebuild({ signal: neverAbortedSignal }).catch(() => undefined);
+      markPromiseAsHandled(requestReadyImageCacheRebuild({ signal: neverAbortedSignal }));
       const status = await readAdminCheckStatus();
       return c.json(apiSuccess(status satisfies AdminCheckStatusDto));
     }

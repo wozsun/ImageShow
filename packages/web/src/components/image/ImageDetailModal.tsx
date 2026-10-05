@@ -243,7 +243,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
             <Icon name="close-line" />
           </DirectActivationButton>
         )}
-        <DialogPortalTargetContext.Provider value={frameRef}>
+        <DialogPortalTargetContext value={frameRef}>
           <article ref={dialogRef} tabIndex={-1} onClick={(event) => event.stopPropagation()}>
             <ProgressiveImage
               key={item.id}
@@ -408,7 +408,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
               />
             </div>
           </article>
-        </DialogPortalTargetContext.Provider>
+        </DialogPortalTargetContext>
       </div>
     </DialogLayerPortal>
   );

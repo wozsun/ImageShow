@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useEffectEvent,
   useLayoutEffect,
   useRef,
   useState,
@@ -87,13 +88,12 @@ export function useAnchoredMenu(options: {
   getAnchorRef.current = options.getAnchor;
   const onCloseRef = useRef(options.onClose);
   onCloseRef.current = options.onClose;
-  const focusOnOpenRef = useRef(options.focusOnOpen);
-  focusOnOpenRef.current = options.focusOnOpen;
-  const focusAfterCloseRef = useRef(options.focusAfterClose);
-  focusAfterCloseRef.current = options.focusAfterClose;
+  const focusOnOpen = useEffectEvent(() => options.focusOnOpen?.());
+  const focusAfterClose = useEffectEvent(() => options.focusAfterClose?.());
   const restoreFocusAfterCloseRef = useRef(false);
-  const restoreFocusOnEscapeRef = useRef(options.restoreFocusOnEscape);
-  restoreFocusOnEscapeRef.current = options.restoreFocusOnEscape;
+  const restoreFocusOnEscape = useEffectEvent(
+    () => options.restoreFocusOnEscape?.() ?? true
+  );
 
   // RefObject.current 的变化不会触发 effect。用稳定的 callback ref 同时保存
   // 当前节点并触发一次渲染，让条件渲染的菜单首次挂载时也能进入测量与观察流程。
@@ -147,7 +147,7 @@ export function useAnchoredMenu(options: {
   useLayoutEffect(() => {
     if (open || !restoreFocusAfterCloseRef.current) return;
     restoreFocusAfterCloseRef.current = false;
-    (focusAfterCloseRef.current?.() ?? triggerRef.current)?.focus();
+    (focusAfterClose() ?? triggerRef.current)?.focus();
   }, [open, triggerRef]);
 
   useLayoutEffect(() => {
@@ -275,7 +275,7 @@ export function useAnchoredMenu(options: {
         event.preventDefault();
         event.stopImmediatePropagation();
         if (closing) return;
-        if (restoreFocusOnEscapeRef.current?.() ?? true) requestCloseAndRestoreFocus();
+        if (restoreFocusOnEscape()) requestCloseAndRestoreFocus();
         else requestClose();
       };
       document.addEventListener("keydown", onKeyDown, { capture: true, signal });
@@ -314,7 +314,7 @@ export function useAnchoredMenu(options: {
 
   useEffect(() => {
     if (!open || closing) return;
-    const frame = window.requestAnimationFrame(() => focusOnOpenRef.current?.()?.focus());
+    const frame = window.requestAnimationFrame(() => focusOnOpen()?.focus());
     return () => window.cancelAnimationFrame(frame);
   }, [open, closing]);
 

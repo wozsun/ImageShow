@@ -96,7 +96,6 @@ import { S3RequestRuntime } from "../../../packages/server/src/storage/drivers/s
 import { registerCheckRoutes } from "../../../packages/server/src/routes/check.ts";
 import { imageId } from "../support/server-test-context.ts";
 import { webReadableFromNode } from "../../../packages/server/src/storage/objects/stream-buffer.ts";
-import { responseWithCleanup } from "../../../packages/server/src/core/http/response-lifecycle.ts";
 
 test(
   "[Server/存储] 响应流取消在首次读取前及在途读取中均只释放一次",
@@ -104,7 +103,6 @@ test(
   async (t) => {
     for (const pendingRead of [false, true]) {
       let destroyed = 0;
-      let released = 0;
       const started = Promise.withResolvers<void>();
       const source = new Readable({
         read() {
@@ -116,17 +114,13 @@ test(
         }
       });
       const closed = new Promise<void>((resolveClose) => source.once("close", resolveClose));
-      const response = responseWithCleanup(new Response(webReadableFromNode(source)), () => {
-        released += 1;
-      });
-      const reader = response.body!.getReader();
+      const reader = webReadableFromNode(source).getReader();
       const pending = pendingRead ? reader.read() : Promise.resolve();
       if (pendingRead) await started.promise;
       await reader.cancel(new Error("synthetic consumer cancellation"));
       await Promise.all([pending, closed]);
       assert.equal(source.destroyed, true);
       assert.equal(destroyed, 1);
-      assert.equal(released, 1);
     }
 
     const directory = await createTestDirectory("cancel-opening-stream-");

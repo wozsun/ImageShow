@@ -84,10 +84,10 @@ export function ActionFeedbackProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <ActionFeedbackRegionContext.Provider value={registry}>
+    <ActionFeedbackRegionContext value={registry}>
       {children}
       {fallback}
-    </ActionFeedbackRegionContext.Provider>
+    </ActionFeedbackRegionContext>
   );
 }
 

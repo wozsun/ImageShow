@@ -120,7 +120,7 @@ export function PublicRoutePreloadProvider({
   intents: PublicRoutePreloadIntents;
 }) {
   return createElement(
-    PublicRoutePreloadContext.Provider,
+    PublicRoutePreloadContext,
     { value: intents },
     children
   );

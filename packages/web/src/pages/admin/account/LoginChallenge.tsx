@@ -1,5 +1,4 @@
-import { forwardRef, useCallback } from "react";
-import type { ForwardedRef } from "react";
+import { useCallback, type Ref } from "react";
 import type { AltchaWidgetElement } from "altcha";
 import type { AltchaGlobal } from "altcha/types";
 import type {} from "altcha/types/react";
@@ -48,12 +47,13 @@ const altchaWidgetAttributes: Record<string, string | number> = {
 };
 
 type LoginChallengeProps = {
+  ref?: Ref<AltchaWidgetElement>;
   onError: () => void;
   onReady: () => void;
   onVerificationChange: (verified: boolean) => void;
 };
 
-function assignRef(ref: ForwardedRef<AltchaWidgetElement>, value: AltchaWidgetElement | null) {
+function assignRef(ref: Ref<AltchaWidgetElement> | undefined, value: AltchaWidgetElement | null) {
   if (typeof ref === "function") ref(value);
   else if (ref) ref.current = value;
 }
@@ -83,78 +83,81 @@ function AltchaMark() {
   );
 }
 
-export const LoginChallenge = forwardRef<AltchaWidgetElement, LoginChallengeProps>(
-  function LoginChallenge({ onError, onReady, onVerificationChange }, forwardedRef) {
-    const setRef = useCallback(
-      (element: AltchaWidgetElement | null) => {
-        assignRef(forwardedRef, element);
-        if (!element) return;
-        let ready = false;
-        let failed = false;
-        let disposed = false;
-        const reportFailure = () => {
-          if (failed) return;
-          failed = true;
-          onError();
-        };
-        const reportState = (state: string | undefined) => {
-          if (!state) return;
-          onVerificationChange(state === "verified");
-          if (state === "error") reportFailure();
-        };
-        const markReady = () => {
-          if (ready) return;
-          ready = true;
-          clearTimeout(loadTimeout);
-          onReady();
-          reportState(element.getState());
-        };
-        const handleStateChange = (event: Event) => {
-          const state = (event as CustomEvent<{ state?: string }>).detail?.state;
-          reportState(state);
-        };
-        const preventVerifiedReset = (event: Event) => {
-          if (element.getState() !== "verified") return;
-          const target = event.target;
-          if (!(target instanceof Element) || !target.closest(".altcha-checkbox-wrap")) return;
-          event.preventDefault();
-        };
-        const loadTimeout = window.setTimeout(() => {
-          if (!ready) reportFailure();
-        }, 5000);
+export function LoginChallenge({
+  ref,
+  onError,
+  onReady,
+  onVerificationChange
+}: LoginChallengeProps) {
+  const setRef = useCallback(
+    (element: AltchaWidgetElement | null) => {
+      assignRef(ref, element);
+      if (!element) return;
+      let ready = false;
+      let failed = false;
+      let disposed = false;
+      const reportFailure = () => {
+        if (failed) return;
+        failed = true;
+        onError();
+      };
+      const reportState = (state: string | undefined) => {
+        if (!state) return;
+        onVerificationChange(state === "verified");
+        if (state === "error") reportFailure();
+      };
+      const markReady = () => {
+        if (ready) return;
+        ready = true;
+        clearTimeout(loadTimeout);
+        onReady();
+        reportState(element.getState());
+      };
+      const handleStateChange = (event: Event) => {
+        const state = (event as CustomEvent<{ state?: string }>).detail?.state;
+        reportState(state);
+      };
+      const preventVerifiedReset = (event: Event) => {
+        if (element.getState() !== "verified") return;
+        const target = event.target;
+        if (!(target instanceof Element) || !target.closest(".altcha-checkbox-wrap")) return;
+        event.preventDefault();
+      };
+      const loadTimeout = window.setTimeout(() => {
+        if (!ready) reportFailure();
+      }, 5000);
 
-        // ALTCHA 的实例方法只在自定义 load 事件后可用。监听事件之外再安排一次
-        // 微任务检查也覆盖组件在 React ref 回调前已经完成挂载的时序。
-        element.addEventListener("load", markReady, { once: true });
-        element.addEventListener("statechange", handleStateChange);
-        element.addEventListener("click", preventVerifiedReset, true);
-        queueMicrotask(() => {
-          if (disposed || !element.isConnected || ready) return;
-          try {
-            element.getConfiguration();
-            markReady();
-          } catch {
-            // 尚未完成挂载时继续等待 load 事件。
-          }
-        });
+      // ALTCHA 的实例方法只在自定义 load 事件后可用。监听事件之外再安排一次
+      // 微任务检查也覆盖组件在 React ref 回调前已经完成挂载的时序。
+      element.addEventListener("load", markReady, { once: true });
+      element.addEventListener("statechange", handleStateChange);
+      element.addEventListener("click", preventVerifiedReset, true);
+      queueMicrotask(() => {
+        if (disposed || !element.isConnected || ready) return;
+        try {
+          element.getConfiguration();
+          markReady();
+        } catch {
+          // 尚未完成挂载时继续等待 load 事件。
+        }
+      });
 
-        return () => {
-          disposed = true;
-          clearTimeout(loadTimeout);
-          element.removeEventListener("load", markReady);
-          element.removeEventListener("statechange", handleStateChange);
-          element.removeEventListener("click", preventVerifiedReset, true);
-          assignRef(forwardedRef, null);
-        };
-      },
-      [forwardedRef, onError, onReady, onVerificationChange]
-    );
+      return () => {
+        disposed = true;
+        clearTimeout(loadTimeout);
+        element.removeEventListener("load", markReady);
+        element.removeEventListener("statechange", handleStateChange);
+        element.removeEventListener("click", preventVerifiedReset, true);
+        assignRef(ref, null);
+      };
+    },
+    [ref, onError, onReady, onVerificationChange]
+  );
 
-    return (
-      <div className="login-altcha-shell">
-        <altcha-widget ref={setRef} className="login-altcha" {...altchaWidgetAttributes} />
-        <AltchaMark />
-      </div>
-    );
-  }
-);
+  return (
+    <div className="login-altcha-shell">
+      <altcha-widget ref={setRef} className="login-altcha" {...altchaWidgetAttributes} />
+      <AltchaMark />
+    </div>
+  );
+}

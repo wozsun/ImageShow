@@ -1,4 +1,4 @@
-import { lstat, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
+import { lstat, mkdir, mkdtempDisposable, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { runtimePaths } from "../../config/bootstrap-env.ts";
 
@@ -21,7 +21,6 @@ export async function clearVariantScratchAtStartup() {
 
 export async function withVariantScratch<T>(run: (directory: string) => Promise<T>) {
   await ensureScratchRoot();
-  const directory = await mkdtemp(join(root, "work-"));
-  try { return await run(directory); }
-  finally { await rm(directory, { recursive: true, force: true }); }
+  await using directory = await mkdtempDisposable(join(root, "work-"));
+  return await run(directory.path);
 }

@@ -1,5 +1,11 @@
 import { setMaxListeners } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
+import { markPromiseAsHandled } from "node:util";
+
+// Node 26.10 API not yet declared by @types/node 26.6.4.
+declare module "node:util" {
+  function markPromiseAsHandled(promise: Promise<unknown>): void;
+}
 
 export const neverAbortedSignal = new AbortController().signal;
 // Many concurrent waits share this signal; it never fires, so its listener
@@ -32,7 +38,7 @@ export function raceWithAbortSignal<T>(
   fallbackMessage = "Operation aborted"
 ): Promise<T> {
   if (signal.aborted) {
-    void operation.catch(() => undefined);
+    markPromiseAsHandled(operation);
     return Promise.reject(abortSignalError(signal, fallbackMessage));
   }
   return new Promise<T>((resolve, reject) => {

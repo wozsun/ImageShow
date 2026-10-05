@@ -1,4 +1,3 @@
-import { forwardRef } from "react";
 import {
   DirectActivationButton,
   type DirectActivationButtonProps
@@ -15,19 +14,16 @@ import {
  * intent are required, so scrolling never selects even when implicit pointer
  * capture keeps the moving finger over the item.
  */
-export const MenuItemButton = forwardRef<HTMLButtonElement, DirectActivationButtonProps>(
-  function MenuItemButton({
-    className = "",
-    onActivate,
-    ...buttonProps
-  }, ref) {
-    return (
-      <DirectActivationButton
-        {...buttonProps}
-        ref={ref}
-        className={`anchored-menu-item ${className}`.trim()}
-        onActivate={onActivate}
-      />
-    );
-  }
-);
+export function MenuItemButton({
+  className = "",
+  onActivate,
+  ...buttonProps
+}: DirectActivationButtonProps) {
+  return (
+    <DirectActivationButton
+      {...buttonProps}
+      className={`anchored-menu-item ${className}`.trim()}
+      onActivate={onActivate}
+    />
+  );
+}

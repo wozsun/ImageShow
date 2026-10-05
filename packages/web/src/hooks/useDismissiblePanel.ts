@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useEffectEvent,
   useLayoutEffect,
   useRef,
   useState,
@@ -123,7 +124,6 @@ export function useDismissiblePanel({
   closeOnEscape?: boolean;
   portalSelector?: string;
 }) {
-  const openRef = useRef(open);
   const onOpenChangeRef = useRef(onOpenChange);
   const motionTimerRef = useRef<number | undefined>(undefined);
   const [motionEnabled, setMotionEnabled] = useState(false);
@@ -132,7 +132,6 @@ export function useDismissiblePanel({
     open,
     transient: enabled
   });
-  openRef.current = open;
   onOpenChangeRef.current = onOpenChange;
 
   const dismissMenus = useCallback(() => {
@@ -162,14 +161,18 @@ export function useDismissiblePanel({
     [dismissMenus, enabled, semantics.prepareForClose]
   );
 
+  const closeForReset = useEffectEvent(() => {
+    if (!open) return;
+    semantics.prepareForClose();
+    onOpenChange(false);
+  });
+
+  // prepareForClose changes with the transient mode, which also resets the panel.
   useLayoutEffect(() => {
     window.clearTimeout(motionTimerRef.current);
     dismissMenus();
     setMotionEnabled(false);
-    if (openRef.current) {
-      semantics.prepareForClose();
-      onOpenChangeRef.current(false);
-    }
+    closeForReset();
   }, [dismissMenus, resetKey, semantics.prepareForClose]);
 
   useEffect(
