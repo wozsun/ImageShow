@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { normalizeAuthor, normalizeTheme } from "../../../../lib/image-draft.js";
+import { normalizeNamedSlug } from "../../../../lib/image-draft.js";
 import { findIngestionAttempt, type IngestionJob } from "./model/ingestion-job.js";
 import { updateStoredIngestions } from "./ingestion-http-client.js";
 import {
@@ -59,8 +59,8 @@ export function useIngestionRetry({
                 expected_version: current.serverVersion!,
                 metadata: {
                   ...current.draft,
-                  theme: normalizeTheme(current.draft.theme),
-                  author: normalizeAuthor(current.draft.author)
+                  theme: normalizeNamedSlug(current.draft.theme),
+                  author: normalizeNamedSlug(current.draft.author)
                 },
                 retry_prepare: true
               }

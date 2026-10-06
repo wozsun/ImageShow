@@ -20,7 +20,7 @@ export const readyImageSourceColumns = `m.id::text AS id,
   m.brightness,
   m.theme,
   m.storage_slug,
-  COALESCE(m.author, '') AS author,
+  m.author,
   COALESCE((
     SELECT array_agg(it.tag_slug ORDER BY it.tag_slug)
       FROM image_tag it

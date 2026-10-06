@@ -1,7 +1,7 @@
 import { z } from "zod";
 import {
   vocabularyDisplayNameMaxLength,
-  isThemeSlug
+  unsetSelector
 } from "@imageshow/shared/browser";
 import {
   httpsUrlField,
@@ -22,10 +22,14 @@ export const tagDisplayUpdateInput = z.strictObject({
   display_name: displayNameInput
 });
 
-export const themeSlugInput = requestSlugInput.refine(
-  isThemeSlug,
-  "null 是未设置主题的保留值，不能用作主题标识"
-);
+function namedVocabularySlugInput(noun: string) {
+  return requestSlugInput.refine(
+    (value) => value !== unsetSelector,
+    `null 是未设置${noun}的保留值，不能用作${noun}标识`
+  );
+}
+
+export const themeSlugInput = namedVocabularySlugInput("主题");
 export const themeCreateInput = z.strictObject({
   slug: themeSlugInput,
   display_name: displayNameInput.optional().default("")
@@ -34,7 +38,7 @@ export const themeDisplayUpdateInput = z.strictObject({
   display_name: displayNameInput
 });
 
-export const authorSlugInput = requestSlugInput;
+export const authorSlugInput = namedVocabularySlugInput("作者");
 const authorLinkInput = httpsUrlField("作者主页链接需为有效的 HTTPS 链接");
 export const authorCreateInput = z.strictObject({
   slug: authorSlugInput,

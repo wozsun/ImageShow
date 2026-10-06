@@ -73,10 +73,7 @@ export function ImageAdmin() {
 function ImageAdminContent({ settings }: { settings: AdminSettings }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const viewParam = searchParams.get("view");
-  const routeView: ImageAdminView =
-    viewParam === "unset" || viewParam === "deleted"
-      ? viewParam
-      : "ready";
+  const routeView: ImageAdminView = viewParam === "deleted" ? viewParam : "ready";
   const [view, setView] = useState<ImageAdminView>(routeView);
   const [filters, setFilters] = useState<ImageAdminFilterValues>(emptyImageAdminFilters);
   const [preferredSortBy, setPreferredSortBy] = useAdminPreference("image_sort_by");
@@ -320,14 +317,6 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
             </button>
             <button
               type="button"
-              className={view === "unset" ? "active" : ""}
-              disabled={interfaceBusy}
-              onClick={() => changeView("unset")}
-            >
-              无主题
-            </button>
-            <button
-              type="button"
               className={view === "deleted" ? "active" : ""}
               disabled={interfaceBusy}
               onClick={() => changeView("deleted")}
@@ -341,7 +330,6 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
         <ImageAdminFilters
           value={filters}
           vocabulary={vocabulary}
-          view={view}
           mobileLayout={mobileLayout}
           disabled={interfaceBusy}
           onChange={changeFilter}
@@ -432,7 +420,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
               </button>
             </div>
             <div className="image-list-batch-actions">
-              {(view === "ready" || view === "unset") && (
+              {view !== "deleted" && (
                 <button
                   type="button"
                   disabled={!selected.length

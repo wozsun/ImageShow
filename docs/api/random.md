@@ -42,7 +42,7 @@ curl "https://img.example.com/random?mode=json&limit=3"
 
 - 主题、标签、作者可以使用标识（如 `city-night`）或显示名（如 `城市夜景`）。
 - 不存在的主题、标签、作者不匹配任何图片：`theme=a,写错的名字` 只返回主题 a 的图片，排除不存在的名字没有效果；要包含的名字全部不存在时返回 404，错误详情的 `ignored` 列出这些名字。
-- `theme=null` 只选没有主题的图片，`theme=!null` 只选有主题的图片。
+- `theme=null` 只选没有主题的图片，`theme=!null` 只选有主题的图片；`author=null`、`author=!null` 同理，按有无作者筛选。`null` 可与其他名字混写，如 `author=photographer,null` 为该作者或没有作者的图片。
 - 参数值为空或只有空白（如 `device=`）时视为未填写，`seed` 和 `id` 除外；除 `seed` 外，参数值和列表项的首尾空白会被忽略，逗号分隔的列表会忽略空项，如 `theme=a,`；`theme`、`author` 还会忽略空的排除项，如 `theme=a,!`。
 - `device`、`brightness`、`seed`、`mode`、`size`、`limit` 只取一个值。重复出现时，取值相同（不区分大小写，`seed` 除外）或其余几次为空，按一次处理，如 `size=small&size=small`、`device=&device=pc`；取值不同返回 400。
 - 参数名必须小写；不认识的参数会返回 400。
@@ -116,7 +116,7 @@ curl "https://img.example.com/random?device=all&mode=json"
 | `count` | 实际返回的数量，可能少于 `limit` |
 | `id` | 图片 ID |
 | `title` | 标题 |
-| `author` / `theme` / `tags` | 作者、主题、标签的标识；没有作者时为空字符串，没有主题时为 `null` |
+| `author` / `theme` / `tags` | 作者、主题、标签的标识；没有作者或主题时为 `null` |
 | `url` | 所选尺寸的图片地址（绝对地址） |
 | `device` / `brightness` | 横竖（`pc` / `mb`）、明暗（`dark` / `light`） |
 | `width` / `height` / `byte_size` | 所选尺寸的宽、高（像素）和文件大小（字节） |

@@ -239,7 +239,7 @@ export function useAnchoredMenu(options: {
     }
 
     // 折叠区、标签 chip 或字体加载改变锚点/菜单尺寸时也重新测量；只在共享层处理，
-    // ThemeInput、AuthorInput、TagInput 共用这一套滚动重定位。
+    // NamedSlugInput、TagInput 共用这一套滚动重定位。
     resizeObserver = new ResizeObserver(update);
     syncObservedAnchor();
     if (menuNode) resizeObserver.observe(menuNode);

@@ -21,7 +21,7 @@ import { useImeSearchInput } from "../../../hooks/useImeSearchInput.js";
 import type { FacetOption } from "../../../lib/types.js";
 import { galleryStatsSearch, type GalleryFilters } from "../../../lib/gallery/gallery-query.js";
 import type { GallerySelectorField } from "../../../lib/gallery/gallery-selectors.js";
-import { themesWithUnsetLast } from "../../../lib/gallery/public-filter-options.js";
+import { optionsWithUnsetLast } from "../../../lib/gallery/public-filter-options.js";
 import {
   createPublicFilterDraft,
   publicDraftFilters,
@@ -125,14 +125,18 @@ export function PublicFilterDialog({
     return {
       device: fixedOptions.device,
       brightness: fixedOptions.brightness,
-      theme: themesWithUnsetLast(filterOptions(facets?.themes ?? [], normalizedQuery, "theme", matchName)),
+      theme: optionsWithUnsetLast(
+        filterOptions(facets?.themes ?? [], normalizedQuery, "theme", matchName)
+      ),
       tag: filterOptions(
         (facets?.tags ?? []).filter((item) => activeTags.has(item.slug)),
         normalizedQuery,
         "tag",
         matchName
       ),
-      author: filterOptions(facets?.authors ?? [], normalizedQuery, "author", matchName)
+      author: optionsWithUnsetLast(
+        filterOptions(facets?.authors ?? [], normalizedQuery, "author", matchName)
+      )
     };
   }, [facets, normalizedQuery, totals.data, matchName]);
   const directorySections = publicFilterSections.filter(

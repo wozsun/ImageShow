@@ -1,6 +1,6 @@
 import { randomUUIDv7 } from "node:crypto";
 import { microsecondsTimestamp } from "../../../core/microseconds.ts";
-import { unsetThemeFilter } from "@imageshow/shared/browser";
+import { unsetSelector } from "@imageshow/shared/browser";
 import { withTransactionOnClient } from "../../../core/database/transactions.ts";
 import { neverAbortedSignal } from "../../../core/abort.ts";
 import type { DatabaseReader } from "../../../core/database/pools.ts";
@@ -70,8 +70,8 @@ function attributeSourceQuery(
     conditions.push(`m.brightness=${bind(spec.brightness)}`);
   } else {
     conditions.push(
-      spec.kind === "theme" && spec.value === unsetThemeFilter
-        ? "m.theme IS NULL"
+      (spec.kind === "theme" || spec.kind === "author") && spec.value === unsetSelector
+        ? `m.${spec.kind} IS NULL`
         : `m.${spec.kind}=${bind(spec.value)}`
     );
   }

@@ -21,7 +21,7 @@ function imagePlaceholder(card: ShowImageCardDto | GalleryImageCard): PublicImag
   return {
     brightness: "light",
     theme: null,
-    author: "",
+    author: null,
     tags: [],
     image_time: "",
     ...card,

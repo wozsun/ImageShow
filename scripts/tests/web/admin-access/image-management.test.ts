@@ -41,8 +41,6 @@ test("[Web/后台访问] 概览渲染当前、历史与未知 Redis 占用且重
 
   const overviewResult = (redisCache: AdminOverviewDto["redis_cache"]): AdminOverviewDto => ({
     gallery: 7,
-    theme_unset: 0,
-    trash: 0,
     total: 7,
     local: 7,
     nonlocal: 0,
@@ -53,6 +51,8 @@ test("[Web/后台访问] 概览渲染当前、历史与未知 Redis 占用且重
     nonlocal_large_bytes: 0,
     nonlocal_small_bytes: 0,
     theme_count: 1,
+    tag_count: 0,
+    author_count: 0,
     backend_count: 1,
     pc: 7,
     mb: 0,
@@ -445,7 +445,7 @@ test("[Web/后台访问] 图片详情根据链接显示原图并保持来源、�
       device: "pc",
       brightness: "dark",
       theme: "night",
-      author: "",
+      author: null,
       tags: ["blue", "stars"],
       width: 1600,
       height: 900,

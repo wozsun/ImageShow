@@ -1,5 +1,4 @@
-import { unsetThemeFilter } from "@imageshow/shared/browser";
-import { brightnesses, devices } from "@imageshow/shared/browser";
+import { brightnesses, devices, unsetSelector } from "@imageshow/shared/browser";
 import type {
   ImageFilterDimension,
   ImageFilterPlan,
@@ -86,9 +85,9 @@ export function buildImageFilterSql(
     if (omitted.has(axis)) continue;
     const selection = selectedValues(group);
     if (!selection) continue;
-    const includesNull = column === "theme" && selection.values.includes(unsetThemeFilter);
+    const includesNull = selection.values.includes(unsetSelector);
     const values = includesNull
-      ? selection.values.filter((value) => value !== unsetThemeFilter)
+      ? selection.values.filter((value) => value !== unsetSelector)
       : selection.values;
     const matches = `${prefix}${column}=ANY(${bind(values)}::text[])`;
     where.push(

@@ -167,7 +167,7 @@ export async function createReadyIngestionFixture(
     device: "auto",
     brightness: "auto",
     theme: null,
-    author: "",
+    author: null,
     title: `integration ${label}`,
     description: "",
     source: "",

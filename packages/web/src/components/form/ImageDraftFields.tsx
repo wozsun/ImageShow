@@ -1,9 +1,8 @@
 import { imageDescriptionMaxLength, imageTitleMaxLength } from "@imageshow/shared/browser";
 import { useId } from "react";
 import { SelectMenu } from "./SelectMenu.js";
-import { ThemeInput } from "./ThemeInput.js";
+import { NamedSlugInput } from "./NamedSlugInput.js";
 import { TagInput } from "./TagInput.js";
-import { AuthorInput } from "./AuthorInput.js";
 import type { SelectOption } from "../../lib/ui/select-options.js";
 import type { FacetOption, ImageDraft } from "../../lib/types.js";
 
@@ -104,7 +103,7 @@ export function ImageDraftFields({
           options={brightnessOptions}
           ariaLabel={`${ariaPrefix} 亮度`}
         />
-        <ThemeInput
+        <NamedSlugInput
           className={`image-fields-theme${changedFields.theme ? " is-changed" : ""}`}
           value={draft.theme}
           onChange={(theme) => {
@@ -118,12 +117,13 @@ export function ImageDraftFields({
           onBlur={deferredEditing
             ? () => deferredEditing.onBlur("theme")
             : undefined}
-          themes={themes}
+          options={themes}
+          noun="主题"
           placeholder="主题"
           disabled={disabled}
           ariaLabel={`${ariaPrefix} 主题`}
         />
-        <AuthorInput
+        <NamedSlugInput
           className={`image-fields-author${changedFields.author ? " is-changed" : ""}`}
           value={draft.author}
           onChange={(author) => {
@@ -137,7 +137,8 @@ export function ImageDraftFields({
           onBlur={deferredEditing
             ? () => deferredEditing.onBlur("author")
             : undefined}
-          authors={authors}
+          options={authors}
+          noun="作者"
           placeholder="作者"
           disabled={disabled}
           ariaLabel={`${ariaPrefix} 作者`}

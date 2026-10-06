@@ -1,5 +1,5 @@
 import type { ImageVariantRecord } from "../variants/record.ts";
-import { unsetThemeFilter } from "@imageshow/shared/browser";
+import { unsetSelector } from "@imageshow/shared/browser";
 import {
   brightnesses,
   devices,
@@ -37,7 +37,7 @@ export type ReadyImageSourceRow = ImageVariantRecord & {
   brightness: string;
   theme: string | null;
   storage_slug: string;
-  author: string;
+  author: string | null;
   tags: string[];
   sort_score: number | string;
   title: string;
@@ -54,7 +54,7 @@ export type ReadyImageCacheItem = ImageVariantRecord & {
   brightness: Brightness;
   theme: string | null;
   storage_slug: string;
-  author: string;
+  author: string | null;
   tags: string[];
   width: number;
   height: number;
@@ -112,7 +112,7 @@ export function readyImageCacheItemFromRow(row: ReadyImageSourceRow): ReadyImage
     brightness: row.brightness as Brightness,
     theme: row.theme === null ? null : String(row.theme),
     storage_slug: String(row.storage_slug ?? ""),
-    author: String(row.author ?? ""),
+    author: row.author === null ? null : String(row.author),
     tags,
     width: finiteNonNegative(row.s_width),
     height: finiteNonNegative(row.s_height),
@@ -155,9 +155,8 @@ function validateReadyImageCacheItem(item: ReadyImageCacheItem) {
       || !slugPattern.test(item.theme))) ||
     item.storage_slug.length > slugMaxLength ||
     !slugPattern.test(item.storage_slug) ||
-    (item.author && (
-      item.author.length > slugMaxLength || !slugPattern.test(item.author)
-    ))
+    (item.author !== null && (item.author.length > slugMaxLength
+      || !slugPattern.test(item.author)))
   ) {
     throw new Error("Ready-image cache row is outside the supported model");
   }
@@ -176,7 +175,7 @@ export function parseReadyImageCacheItem(raw: string | null): ReadyImageCacheIte
       const entry: unknown = value[index];
       if (field === "tags") {
         if (!Array.isArray(entry) || entry.some((tag) => typeof tag !== "string")) return null;
-      } else if (field === "theme") {
+      } else if (field === "theme" || field === "author") {
         if (entry !== null && typeof entry !== "string") return null;
       } else if (field === "sort_score" || /_(width|height|byte_size)$/.test(field)) {
         if (typeof entry !== "number" || !Number.isSafeInteger(entry) || (field !== "sort_score" && entry <= 0)) return null;
@@ -224,8 +223,8 @@ export function readyImageStatFields(item: ReadyImageCacheItem) {
     `device:${item.device}`,
     `brightness:${item.brightness}`,
     `axis:${item.device}:${item.brightness}`,
-    `theme:${item.theme ?? unsetThemeFilter}`,
+    `theme:${item.theme ?? unsetSelector}`,
     ...item.tags.map((tag) => `tag:${tag}`),
-    ...(item.author ? [`author:${item.author}`] : [])
+    `author:${item.author ?? unsetSelector}`
   ];
 }

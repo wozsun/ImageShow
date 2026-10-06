@@ -85,6 +85,7 @@ await runIntegrationScenario(async (runtime) => {
   );
   try {
     await assert.rejects(themes.createTheme("null", ""), { status: 400, code: "invalid_theme" });
+    await assert.rejects(authors.createAuthor("null", "", ""), { status: 400, code: "invalid_author" });
     const invalidThemeUpdate = await updateImages([{ id: imageId, theme: "null" }]);
     assert.equal(invalidThemeUpdate.updated, 0);
     assert.equal(invalidThemeUpdate.failed, 1);
@@ -132,7 +133,7 @@ await runIntegrationScenario(async (runtime) => {
       assert.deepEqual(slugs(await entity.list()), expected[entity.field]);
       assert.deepEqual(
         slugs((await vocab.getIngestionVocabulary())[entity.field]),
-        entity.kind === "theme" ? ["null", ...expected.themes] : expected[entity.field]
+        entity.kind === "tag" ? expected.tags : ["null", ...expected[entity.field]]
       );
     }
     assert.equal((await updateImages([update])).updated, 1);

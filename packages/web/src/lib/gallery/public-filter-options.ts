@@ -1,10 +1,11 @@
-import { unsetThemeFilter } from "@imageshow/shared/browser";
+import { unsetSelector } from "@imageshow/shared/browser";
 
-export function themesWithUnsetLast<T extends { slug: string }>(items: readonly T[]) {
+/** Moves the theme or author unset selector after named options. */
+export function optionsWithUnsetLast<T extends { slug: string }>(items: readonly T[]) {
   const configured: T[] = [];
   const unset: T[] = [];
   for (const item of items) {
-    (item.slug === unsetThemeFilter ? unset : configured).push(item);
+    (item.slug === unsetSelector ? unset : configured).push(item);
   }
   return [...configured, ...unset];
 }

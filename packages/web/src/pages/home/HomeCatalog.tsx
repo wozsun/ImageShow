@@ -20,7 +20,7 @@ import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { useMediaQuery } from "../../hooks/useMediaQuery.js";
 import { useOneShotAnimation } from "../../hooks/useOneShotAnimation.js";
 import { useRefreshGlint, useRefreshGlintRun } from "../../hooks/useRefreshGlint.js";
-import { publicFilterOptionState, themesWithUnsetLast } from "../../lib/gallery/public-filter-options.js";
+import { optionsWithUnsetLast, publicFilterOptionState } from "../../lib/gallery/public-filter-options.js";
 import type { GalleryFilters } from "../../lib/gallery/gallery-query.js";
 import {
   boundedHomeRevealIndexes,
@@ -245,9 +245,9 @@ export function HomeCatalog({
   // never switches labels.
   const options = stats && facets
     ? {
-        themes: themesWithUnsetLast(homeFacetOptions(stats.themes, facets.themes)),
+        themes: optionsWithUnsetLast(homeFacetOptions(stats.themes, facets.themes)),
         tags: homeFacetOptions(stats.tags, facets.tags),
-        authors: homeFacetOptions(stats.authors, facets.authors)
+        authors: optionsWithUnsetLast(homeFacetOptions(stats.authors, facets.authors))
       }
     : null;
   const themes = options?.themes ?? [];

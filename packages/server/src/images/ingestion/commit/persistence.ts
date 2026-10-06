@@ -52,7 +52,10 @@ export async function persistIngestionImage(
     ) {
       createdEntityKinds.add("theme");
     }
-    if (await ensureAuthorWithMutationLockHeld(client, commit.metadata.author)) {
+    if (
+      commit.metadata.author !== null &&
+      (await ensureAuthorWithMutationLockHeld(client, commit.metadata.author))
+    ) {
       createdEntityKinds.add("author");
     }
     const classification = resolveClassification(commit.metadata, {
@@ -76,7 +79,7 @@ export async function persistIngestionImage(
         commit.metadata.description,
         commit.metadata.source,
         commit.metadata.original,
-        commit.metadata.author || null,
+        commit.metadata.author,
         commit.created_by,
         ...imageVariants.flatMap((variant) => {
           const facts = prepared.variants[variant];

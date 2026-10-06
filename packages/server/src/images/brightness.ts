@@ -1,16 +1,14 @@
 import sharp from "sharp";
 import type { Brightness } from "@imageshow/shared/browser";
 
-const BRIGHTNESS_THUMBNAIL = 1024;
-
 const DARK_THRESHOLD = 113.08;
-const DARK_PIXEL_MAX = 104;
+const DARK_PIXEL_BELOW = 104;
 const BRIGHT_PIXEL_MIN = 237;
 const SCORE_WEIGHT_MEAN = 0.7173;
 const SCORE_WEIGHT_P75 = 0.2827;
 const BRIGHT_RATIO_BONUS_START = 0.099;
 const BRIGHT_RATIO_BONUS_SCALE = 42.59;
-const HARD_DARK_P50_MAX = 79;
+const HARD_DARK_P50_BELOW = 79;
 const HARD_DARK_RATIO_MIN = 0.5798;
 
 const LINEAR_LUT = (() => {
@@ -48,10 +46,9 @@ function brightnessMetrics(hist: number[]) {
     const count = hist[value];
     total += count;
     weighted += value * count;
-    if (value < DARK_PIXEL_MAX) darkCount += count;
+    if (value < DARK_PIXEL_BELOW) darkCount += count;
     if (value >= BRIGHT_PIXEL_MIN) brightCount += count;
   }
-  total = total || 1;
   const mean = weighted / total;
   const p50 = percentileFromHistogram(hist, total, 0.5);
   const p75 = percentileFromHistogram(hist, total, 0.75);
@@ -65,33 +62,29 @@ function brightnessMetrics(hist: number[]) {
 
 function classifyBrightnessHistogram(hist: number[]): "dark" | "light" {
   const { score, p50, darkRatio } = brightnessMetrics(hist);
-  if (p50 < HARD_DARK_P50_MAX && darkRatio > HARD_DARK_RATIO_MIN) return "dark";
+  if (p50 < HARD_DARK_P50_BELOW && darkRatio > HARD_DARK_RATIO_MIN) return "dark";
   return score < DARK_THRESHOLD ? "dark" : "light";
 }
 
-async function imageBrightnessHistogram(input: Buffer | string): Promise<number[]> {
-  const { data, info } = await sharp(input)
-    .resize({
-      width: BRIGHTNESS_THUMBNAIL,
-      height: BRIGHTNESS_THUMBNAIL,
-      fit: "inside",
-      withoutEnlargement: true
-    })
+/**
+ * Analyses the stored small variant as published: transparency is composited on
+ * white and the sRGB conversion always yields three channels, so every pixel
+ * contributes and the histogram is never empty.
+ */
+async function imageBrightnessHistogram(smallVariant: Buffer): Promise<number[]> {
+  const { data, info } = await sharp(smallVariant)
     .flatten({ background: "#ffffff" })
     .toColourspace("srgb")
     .raw()
     .toBuffer({ resolveWithObject: true });
-  const channels = info.channels;
   const hist = new Array(256).fill(0);
-  for (let i = 0; i + channels - 1 < data.length; i += channels) {
-    const r = data[i];
-    const g = channels >= 3 ? data[i + 1] : r;
-    const b = channels >= 3 ? data[i + 2] : r;
-    hist[labL(r, g, b)] += 1;
+  for (let i = 0; i < data.length; i += info.channels) {
+    hist[labL(data[i], data[i + 1], data[i + 2])] += 1;
   }
   return hist;
 }
 
-export async function detectBrightness(input: Buffer | string): Promise<Brightness> {
-  return classifyBrightnessHistogram(await imageBrightnessHistogram(input));
+/** Classifies the small variant that ingestion and the classification editor both read. */
+export async function detectBrightness(smallVariant: Buffer): Promise<Brightness> {
+  return classifyBrightnessHistogram(await imageBrightnessHistogram(smallVariant));
 }

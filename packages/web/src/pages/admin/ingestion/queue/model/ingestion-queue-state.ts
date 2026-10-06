@@ -6,8 +6,7 @@ import type {
 } from "./ingestion-job.js";
 import {
   imageAttributeClearPatch,
-  normalizeAuthor,
-  normalizeTheme,
+  normalizeNamedSlug,
   type ClearableImageAttribute
 } from "../../../../../lib/image-draft.js";
 
@@ -234,8 +233,8 @@ export function createIngestionCommitIntent(
     md5: job.md5,
     metadata: {
       ...job.draft,
-      theme: normalizeTheme(job.draft.theme),
-      author: normalizeAuthor(job.draft.author),
+      theme: normalizeNamedSlug(job.draft.theme),
+      author: normalizeNamedSlug(job.draft.author),
       tags: [...job.draft.tags]
     }
   };
@@ -297,7 +296,8 @@ export function isUncommittedIngestionJob(job: IngestionJob) {
 
 function patchJobDraft(job: IngestionJob, patch: Partial<ImageDraft>): IngestionJob {
   if (job.commitIntent) return job;
-  if (patch.theme !== undefined) patch = { ...patch, theme: normalizeTheme(patch.theme) };
+  if (patch.theme !== undefined) patch = { ...patch, theme: normalizeNamedSlug(patch.theme) };
+  if (patch.author !== undefined) patch = { ...patch, author: normalizeNamedSlug(patch.author) };
   if (!imageDraftPatchChanges(job.draft, patch)) return job;
   const next = { ...job, draft: { ...job.draft, ...patch } };
   return {

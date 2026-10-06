@@ -10,11 +10,12 @@ export function imageDevice(width: number, height: number): Device {
   return width >= height ? "pc" : "mb";
 }
 
-/** Query-only selector and virtual facet identity; never a stored theme slug. */
-export const unsetThemeFilter = "null";
+/** Theme and author selector for images without one, and its virtual facet slug; never stored. */
+export const unsetSelector = "null";
 
-export function isThemeSlug(value: string) {
-  return value !== unsetThemeFilter && value.length <= slugMaxLength && slugPattern.test(value);
+/** A storable theme or author slug: the slug format minus the reserved unset selector. */
+export function isNamedSlug(value: string) {
+  return value !== unsetSelector && value.length <= slugMaxLength && slugPattern.test(value);
 }
 
 export const publicImageOrders = ["random", "latest", "oldest"] as const;
@@ -64,7 +65,7 @@ export type ImageCardBaseDto = ShowImageCardDto & {
   device: Device;
   brightness: Brightness;
   theme: string | null;
-  author: string;
+  author: string | null;
   tags: string[];
   image_time: string;
 };
@@ -103,7 +104,7 @@ export type RandomImageSize = (typeof randomImageSizes)[number];
 export type RandomImageJsonItemDto = {
   id: string;
   title: string;
-  author: string;
+  author: string | null;
   device: Device;
   brightness: Brightness;
   theme: string | null;
@@ -148,7 +149,7 @@ export type EditableImageSnapshotDto = {
   device: Device;
   brightness: Brightness;
   theme: string | null;
-  author: string;
+  author: string | null;
   tags: string[];
   base_url: string;
   variants: ImageVariantsDto;
@@ -188,7 +189,7 @@ export type ImageDraftDto = {
   device: Device | "auto";
   brightness: Brightness | "auto";
   theme: string | null;
-  author: string;
+  author: string | null;
   title: string;
   description: string;
   source: string;

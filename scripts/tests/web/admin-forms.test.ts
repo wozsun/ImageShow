@@ -486,15 +486,15 @@ test("[Web/后台表单] 普通主题和作者 slug 保留原值并可显式清�
   assert.equal(draft.author, "none");
   assert.deepEqual(changedMetadataUpdate(item, draft, fieldsChangedFor(item, draft)), { id });
 
-  const cleared = { ...draft, theme: null, author: "" };
+  const cleared = { ...draft, theme: null, author: null };
   const update = changedMetadataUpdate(item, cleared, fieldsChangedFor(item, cleared));
-  assert.deepEqual(update, { id, theme: null, author: "" });
+  assert.deepEqual(update, { id, theme: null, author: null });
   const attempt: ImageMetadataSaveAttempt = {
     activeIds: [id],
     items: [update],
     response: null
   };
-  const authority = [editableImage(id, { theme: null, author: "" })];
+  const authority = [editableImage(id, { theme: null, author: null })];
   state = reconcileImageMetadataSession(
     { ...state, drafts: { [id]: cleared } },
     attempt,
@@ -502,7 +502,7 @@ test("[Web/后台表单] 普通主题和作者 slug 保留原值并可显式清�
   );
   const saved = state.drafts[id]!;
   assert.equal(saved.theme, null);
-  assert.equal(saved.author, "");
+  assert.equal(saved.author, null);
   assert.deepEqual(
     changedMetadataUpdate(authority[0]!, saved, fieldsChangedFor(authority[0]!, saved)),
     { id }

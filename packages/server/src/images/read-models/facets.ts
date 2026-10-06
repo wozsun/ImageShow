@@ -1,4 +1,4 @@
-import { unsetThemeFilter, type GalleryFacetsDto } from "@imageshow/shared/browser";
+import { unsetSelector, type GalleryFacetsDto } from "@imageshow/shared/browser";
 import { appConfig } from "@imageshow/shared";
 import { coalesce } from "../../core/coalesce.ts";
 import {
@@ -45,15 +45,15 @@ async function readFacetsFromPostgres(reader: DatabaseReader) {
     await reader.query(
       `SELECT
        ARRAY(
-         SELECT DISTINCT COALESCE(m.theme, '${unsetThemeFilter}')
+         SELECT DISTINCT COALESCE(m.theme, '${unsetSelector}')
            FROM metadata m
           WHERE m.status='ready'
           LIMIT $1
        ) AS themes,
        ARRAY(
-         SELECT DISTINCT m.author
-          FROM metadata m
-          WHERE m.status='ready' AND m.author IS NOT NULL
+         SELECT DISTINCT COALESCE(m.author, '${unsetSelector}')
+           FROM metadata m
+          WHERE m.status='ready'
           LIMIT $1
        ) AS authors`,
       [maximumRows + 1]

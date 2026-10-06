@@ -11,7 +11,7 @@ import {
   boundedHomeRevealIndexes,
   homeRevealItemLimits
 } from "../../../packages/web/src/pages/home/home-ui.ts";
-import { themesWithUnsetLast } from "../../../packages/web/src/lib/gallery/public-filter-options.ts";
+import { optionsWithUnsetLast } from "../../../packages/web/src/lib/gallery/public-filter-options.ts";
 import { galleryColumnCount } from "../../../packages/web/src/lib/gallery/gallery-columns.ts";
 import {
   advancePublicImageNavigation,
@@ -46,7 +46,7 @@ test("[Web/画廊] 首页目录、瀑布流、分页预载与滚动导航组成�
   const portrait = { slug: "portrait", image_count: 4 };
   const stage = { slug: "stage", image_count: 3 };
   assert.deepEqual(
-    themesWithUnsetLast([unset, portrait, stage]).map(({ slug }) => slug),
+    optionsWithUnsetLast([unset, portrait, stage]).map(({ slug }) => slug),
     ["portrait", "stage", "null"]
   );
   const revealItems = Array.from({ length: 40 }, (_, index) => ({
@@ -643,7 +643,7 @@ test("[Web/画廊] 公共详情保存为目标页建立新权威边界", () => {
   const secondBefore = beforeItems.find(({ id }) => id === secondId)!.item!;
 
   const staleAppend = dataWindow.claimRequest({ cursor: "cursor-60", kind: "append" })!;
-  const authoritativeSnapshot = editableImage(firstId, {title: "saved title",theme: "saved-theme",author: "",tags: ["saved-tag"],width: 100,height: 300,device: "pc",brightness: "dark",original: "https://example.com/saved.webp",base_url:"/images",variants:{large:{width:1600,height:900,byte_size:1024},medium:{width:1200,height:675,byte_size:800},small:{width:600,height:338,byte_size:200}}});
+  const authoritativeSnapshot = editableImage(firstId, {title: "saved title",theme: "saved-theme",author: null,tags: ["saved-tag"],width: 100,height: 300,device: "pc",brightness: "dark",original: "https://example.com/saved.webp",base_url:"/images",variants:{large:{width:1600,height:900,byte_size:1024},medium:{width:1200,height:675,byte_size:800},small:{width:600,height:338,byte_size:200}}});
   const refreshIntent = dataWindow.prepareImageRefresh(
     firstId,
     authoritativeSnapshot

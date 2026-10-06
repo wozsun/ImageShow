@@ -1,23 +1,24 @@
-import { unsetThemeFilter } from "@imageshow/shared/browser";
+import { unsetSelector } from "@imageshow/shared/browser";
 import { SlugComboInput } from "./SlugComboInput.js";
 import type { FacetOption } from "../../lib/types.js";
 import { parseFacetSlug } from "../../lib/ui/facet-input.js";
 
-function parseThemeInput(value: string) {
+function parseNamedSlug(value: string) {
   const slug = parseFacetSlug(value);
-  return slug === unsetThemeFilter ? "" : slug;
+  return slug === unsetSelector ? "" : slug;
 }
 
-export function ThemeInput({
-  themes,
+/** Theme or author input: offers named slugs only, and typing the unset selector clears it. */
+export function NamedSlugInput({
+  options,
   value,
-  className,
   placeholder,
   ...rest
 }: {
+  options: FacetOption[];
+  noun: string;
   value: string | null;
   onChange: (value: string) => void;
-  themes: FacetOption[];
   placeholder?: string;
   disabled?: boolean;
   ariaLabel?: string;
@@ -28,12 +29,10 @@ export function ThemeInput({
 }) {
   return (
     <SlugComboInput
-      options={themes.filter((item) => item.slug !== unsetThemeFilter)}
-      noun="主题"
-      parseSlug={parseThemeInput}
+      options={options.filter((item) => item.slug !== unsetSelector)}
+      parseSlug={parseNamedSlug}
       value={value ?? ""}
       placeholder={value === null ? "未设置" : placeholder}
-      className={className}
       {...rest}
     />
   );

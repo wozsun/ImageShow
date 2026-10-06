@@ -190,7 +190,7 @@ async function invalidateIngestionVocabulary(
     const changed = items.some(
       (item) =>
         (item.theme != null && !themes.has(item.theme)) ||
-        (item.author !== undefined && item.author !== "" && !authors.has(item.author)) ||
+        (item.author != null && !authors.has(item.author)) ||
         item.tags?.some((tag) => !tags.has(tag))
     );
     if (!changed) return;
@@ -208,7 +208,7 @@ export function invalidateImageDataAfterIngestion(
   options: Readonly<{ completedAt?: number }> = {}
 ) {
   const hasTags = items.some((item) => item.tags.length > 0);
-  const hasAuthors = items.some((item) => item.author !== "");
+  const hasAuthors = items.some((item) => item.author !== null);
   const completedAt = options.completedAt;
   const adminImagesInFlight = new Set(
     client

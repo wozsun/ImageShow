@@ -5,7 +5,7 @@ import {
   parseGalleryTagFilter,
   resolveTagExpression,
   TagFilterError,
-  unsetThemeFilter,
+  unsetSelector,
   type TagExpression,
   type Brightness,
   type Device
@@ -81,31 +81,24 @@ export function createImageFilterPlan(input: {
   return { axes, theme, tag, author, signature };
 }
 
-function matchesSelectorGroup(
-  value: string | null,
-  group: ImageSelectorGroup,
-  nullSelector: string | null
-) {
+function matchesSelectorGroup(value: string | null, group: ImageSelectorGroup) {
   const excluded = group.exclude.length > 0;
   const terms = excluded ? group.exclude : group.include;
   if (!terms.length) return true;
-  const matched = value === null
-    ? nullSelector !== null && terms.includes(nullSelector)
-    : terms.some((term) => term !== nullSelector && term === value);
+  const matched = terms.includes(value ?? unsetSelector);
   return excluded ? !matched : matched;
 }
 
 /**
  * In-memory form of buildImageFilterSql for a bounded candidate list, so a
- * plan has one meaning whether it runs in PostgreSQL, Redis or here. The
- * ready-image cache stores a missing author as "".
+ * plan has one meaning whether it runs in PostgreSQL, Redis or here.
  */
 export function imageMatchesFilterPlan(
   image: {
     device: Device;
     brightness: Brightness;
     theme: string | null;
-    author: string;
+    author: string | null;
     tags: readonly string[];
   },
   plan: ImageFilterPlan
@@ -115,8 +108,8 @@ export function imageMatchesFilterPlan(
   ))) {
     return false;
   }
-  if (!matchesSelectorGroup(image.theme, plan.theme, unsetThemeFilter)
-    || !matchesSelectorGroup(image.author || null, plan.author, null)) {
+  if (!matchesSelectorGroup(image.theme, plan.theme)
+    || !matchesSelectorGroup(image.author, plan.author)) {
     return false;
   }
   if (!plan.tag) return true;

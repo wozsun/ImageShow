@@ -185,6 +185,14 @@ test("[Web/内容接入] 内容接入模块保持 view、草稿、上传与清�
   assert.equal(hiddenManifestLink?.downloadUrl, importedUrl);
   assert.equal(hiddenManifestLink?.draft.original, "");
   assert.equal(retainedManifestLink?.draft.original, importedUrl);
+  // Without defaults a new draft carries JSON null, which draft sync can send as is.
+  for (const draft of [
+    createUrlImportJobs([importedUrl], importDefaults, false, "local")[0]?.draft,
+    hiddenManifestLink?.draft
+  ]) {
+    assert.equal(draft?.theme, null);
+    assert.equal(draft?.author, null);
+  }
 
   const nextAttempt = ingestionJob({ id: "job-2", attemptKey: "attempt-2" });
   assert.deepEqual(

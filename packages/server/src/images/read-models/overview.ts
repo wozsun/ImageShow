@@ -15,8 +15,6 @@ export async function getOverviewStats(): Promise<AdminOverviewDto> {
       pool.query(`
       SELECT
         count(*) FILTER (WHERE status='ready')::int AS gallery,
-        count(*) FILTER (WHERE status='ready' AND theme IS NULL)::int AS theme_unset,
-        count(*) FILTER (WHERE status='deleted')::int AS trash,
         count(*)::int AS total,
         count(*) FILTER (WHERE sb.type='local')::int AS local,
         count(*) FILTER (WHERE sb.type<>'local')::int AS nonlocal,
@@ -27,6 +25,11 @@ export async function getOverviewStats(): Promise<AdminOverviewDto> {
         COALESCE(sum(s_byte_size) FILTER (WHERE sb.type<>'local'), 0)::bigint AS nonlocal_small_bytes,
         COALESCE(sum(m_byte_size) FILTER (WHERE sb.type<>'local'), 0)::bigint AS nonlocal_medium_bytes,
         count(DISTINCT theme) FILTER (WHERE status='ready')::int AS theme_count,
+        count(DISTINCT author) FILTER (WHERE status='ready')::int AS author_count,
+        (SELECT count(DISTINCT it.tag_slug)::int
+           FROM image_tag it
+           JOIN metadata tagged ON tagged.id=it.image_id
+          WHERE tagged.status='ready') AS tag_count,
         count(*) FILTER (WHERE status='ready' AND device='pc')::int AS pc,
         count(*) FILTER (WHERE status='ready' AND device='mb')::int AS mb,
         count(*) FILTER (WHERE status='ready' AND brightness='dark')::int AS dark,
@@ -65,8 +68,6 @@ export async function getOverviewStats(): Promise<AdminOverviewDto> {
   );
   return {
     gallery: row.gallery,
-    theme_unset: row.theme_unset,
-    trash: row.trash,
     total: row.total,
     local: row.local,
     nonlocal: row.nonlocal,
@@ -77,6 +78,8 @@ export async function getOverviewStats(): Promise<AdminOverviewDto> {
     nonlocal_small_bytes: Number(row.nonlocal_small_bytes),
     nonlocal_medium_bytes: Number(row.nonlocal_medium_bytes),
     theme_count: row.theme_count,
+    tag_count: row.tag_count,
+    author_count: row.author_count,
     backend_count: backendResult.rows[0].n,
     pc: row.pc,
     mb: row.mb,

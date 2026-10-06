@@ -81,7 +81,7 @@ await runIntegrationScenario(async (runtime) => {
     device: "auto" as const,
     brightness: "auto" as const,
     theme: null,
-    author: "",
+    author: null,
     title: "current domain",
     description: "",
     source: "",

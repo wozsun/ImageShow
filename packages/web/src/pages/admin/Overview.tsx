@@ -127,19 +127,9 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
     );
   const imageCards: OverviewMetric[] = [
     { label: "图库", value: data?.gallery, hint: "已分类展示", to: `${adminBasePath}/images` },
-    {
-      label: "未设置主题",
-      value: data?.theme_unset,
-      hint: "缺少主题",
-      to: `${adminBasePath}/images?view=unset`
-    },
-    {
-      label: "回收站",
-      value: data?.trash,
-      hint: "可恢复",
-      to: `${adminBasePath}/images?view=deleted`
-    },
-    { label: "主题", value: data?.theme_count, hint: "图库主题数", to: `${adminBasePath}/themes` }
+    { label: "主题", value: data?.theme_count, hint: "图库主题数", to: `${adminBasePath}/themes` },
+    { label: "标签", value: data?.tag_count, hint: "图库标签数", to: `${adminBasePath}/tags` },
+    { label: "作者", value: data?.author_count, hint: "图库作者数", to: `${adminBasePath}/authors` }
   ];
   const deviceCards: OverviewMetric[] = [
     { label: "桌面", value: data?.pc },

@@ -14,9 +14,9 @@ export type PrepareImageAttributeClear = (
 ) => ImageAttributeClearPlan | null;
 
 export function imageAttributeClearPatch(field: ClearableImageAttribute): Partial<ImageDraft> {
-  if (field === "all") return { tags: [], author: "", theme: null };
+  if (field === "all") return { tags: [], author: null, theme: null };
   if (field === "tags") return { tags: [] };
-  if (field === "author") return { author: "" };
+  if (field === "author") return { author: null };
   return { theme: null };
 }
 
@@ -42,11 +42,7 @@ export function mergeCommonImageAttributes(
   };
 }
 
-export function normalizeTheme(value: string | null) {
-  const theme = value?.trim().toLowerCase();
-  return theme || null;
-}
-
-export function normalizeAuthor(value: string) {
-  return value.trim().toLowerCase();
+/** Theme or author draft value as saved: a lowercase slug, or null when empty. */
+export function normalizeNamedSlug(value: string | null) {
+  return value?.trim().toLowerCase() || null;
 }

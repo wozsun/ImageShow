@@ -1,4 +1,4 @@
-import { unsetThemeFilter } from "@imageshow/shared/browser";
+import { unsetSelector } from "@imageshow/shared/browser";
 import type { GalleryStatsDto } from "@imageshow/shared/browser";
 import type {
   CSSProperties,
@@ -49,6 +49,11 @@ export function HomeBackground({
   );
 }
 
+/** Theme or author count without the unset selector. */
+function namedOptionCount(items: readonly { slug: string }[] = []) {
+  return items.filter((item) => item.slug !== unsetSelector).length;
+}
+
 export function HomeHero({
   revealed,
   bannerLabel,
@@ -65,14 +70,13 @@ export function HomeHero({
   onCatalogIntent: () => void;
 }) {
   const totalImages = stats?.total_images ?? 0;
-  const themeCount = stats?.themes.filter(
-    (item) => item.slug !== unsetThemeFilter
-  ).length ?? 0;
+  const themeCount = namedOptionCount(stats?.themes);
+  const authorCount = namedOptionCount(stats?.authors);
   const siteStats = [
     { label: "全站图片", value: totalImages, unit: "张", primary: true },
     { label: "主题", value: themeCount, unit: "个" },
     { label: "标签", value: stats?.tags.length ?? 0, unit: "个" },
-    { label: "作者", value: stats?.authors.length ?? 0, unit: "位" }
+    { label: "作者", value: authorCount, unit: "位" }
   ];
 
   const scrollToCatalog = () => {

@@ -98,9 +98,9 @@ async function detectImageBrightness(
   if (image.status !== "ready") return undefined;
   const storage = await resolveStorageAccess(image.storage_slug);
   signal.throwIfAborted();
-  let thumbnail: Buffer;
+  let smallVariant: Buffer;
   try {
-    thumbnail = await storage.driver.readBuffer("small", imageObjectKey(image.id), {
+    smallVariant = await storage.driver.readBuffer("small", imageObjectKey(image.id), {
       signal, expectedSize: Number(image.s_byte_size)
     });
   } catch (error) {
@@ -110,7 +110,7 @@ async function detectImageBrightness(
   }
   return withNormalizationAdmission(
     signal,
-    () => detectBrightness(thumbnail)
+    () => detectBrightness(smallVariant)
   );
 }
 
@@ -218,9 +218,7 @@ async function commitImageUpdate({
             ?? locked.brightness,
         theme: item.theme === undefined ? locked.theme : item.theme
       };
-      const nextAuthor = item.author === undefined
-        ? locked.author
-        : item.author || null;
+      const nextAuthor = item.author === undefined ? locked.author : item.author;
       const nextFields = {
         title: item.title ?? locked.title,
         description: item.description ?? locked.description,
@@ -264,7 +262,7 @@ async function commitImageUpdate({
       }
       if (
         authorChanged &&
-        nextAuthor &&
+        nextAuthor !== null &&
         (await ensureAuthorWithMutationLockHeld(transaction, nextAuthor))
       ) {
         createdEntityKinds.add("author");
@@ -424,12 +422,12 @@ export function withImageUpdateItemLocks<T>(
       }))
     ])
   );
-  const thumbnailLocks = items
+  const smallVariantLocks = items
     .filter(({ item }) => item.brightness === "auto")
     .map(({ item }) => imageStorageMutationLockKey(item.id))
     .sort()
     .map((key) => ({ key }));
-  const locks = [...vocabularyLocks, ...thumbnailLocks];
+  const locks = [...vocabularyLocks, ...smallVariantLocks];
   if (items.some(({ item }) => item.brightness === "auto")) {
     return withStorageLocationReadAndAdvisoryLocksOnClient(lockClient, signal, locks, work);
   }

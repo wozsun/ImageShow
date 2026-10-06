@@ -14,7 +14,7 @@ import {
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import { waitForMinimumPendingDuration } from "../../../lib/ui/async-action-timing.js";
 
-export type ImageAdminView = "ready" | "unset" | "deleted";
+export type ImageAdminView = "ready" | "deleted";
 
 export type ImageAdminConfirmAction = {
   kind: "purge";

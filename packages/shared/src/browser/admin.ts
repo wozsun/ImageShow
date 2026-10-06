@@ -32,8 +32,6 @@ export type AdminLogLevelDto = {
 
 export type AdminOverviewDto = {
   gallery: number;
-  theme_unset: number;
-  trash: number;
   total: number;
   local: number;
   nonlocal: number;
@@ -44,6 +42,8 @@ export type AdminOverviewDto = {
   nonlocal_small_bytes: number;
   nonlocal_medium_bytes: number;
   theme_count: number;
+  tag_count: number;
+  author_count: number;
   backend_count: number;
   pc: number;
   mb: number;

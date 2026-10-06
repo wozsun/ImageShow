@@ -129,7 +129,7 @@ export function adminImageListItem(
     device: "pc",
     brightness: "dark",
     theme: null,
-    author: "",
+    author: null,
     tags: [],
     width: 1600,
     height: 900,

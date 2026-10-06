@@ -1,5 +1,5 @@
 import { appConfig } from "@imageshow/shared";
-import { unsetThemeFilter, type Brightness, type Device } from "@imageshow/shared/browser";
+import { unsetSelector, type Brightness, type Device } from "@imageshow/shared/browser";
 import { withTransactionOnClient } from "../../core/database/transactions.ts";
 import { publicPgFallbackWorkLimitExceeded } from "../../core/database/public-fallback.ts";
 import type { DatabaseReader } from "../../core/database/pools.ts";
@@ -94,7 +94,7 @@ async function readFacetCounts(
       plan,
       ["theme"],
       (where, limit) =>
-        `SELECT coalesce(m.theme, '${unsetThemeFilter}') AS slug, count(*)::int AS image_count
+        `SELECT coalesce(m.theme, '${unsetSelector}') AS slug, count(*)::int AS image_count
          FROM metadata m WHERE ${where} GROUP BY m.theme LIMIT ${limit}`
     );
     const tagRows = await filteredRows<MemberCountRow>(
@@ -111,9 +111,8 @@ async function readFacetCounts(
       plan,
       ["author"],
       (where, limit) =>
-        `SELECT m.author AS slug, count(*)::int AS image_count
-         FROM metadata m WHERE ${where} AND m.author IS NOT NULL
-        GROUP BY m.author LIMIT ${limit}`
+        `SELECT coalesce(m.author, '${unsetSelector}') AS slug, count(*)::int AS image_count
+         FROM metadata m WHERE ${where} GROUP BY m.author LIMIT ${limit}`
     );
     return {
       themes: countsForGlobalMembers(themeRows, globalStats, "theme:"),
@@ -128,7 +127,7 @@ async function readFacetCounts(
     plan,
     ["theme"],
     (where, limit) =>
-      `SELECT coalesce(m.theme, '${unsetThemeFilter}') AS slug,
+      `SELECT coalesce(m.theme, '${unsetSelector}') AS slug,
             (count(*) FILTER (WHERE ${where}))::int AS image_count
        FROM metadata m WHERE m.status='ready' GROUP BY m.theme LIMIT ${limit}`
   );
@@ -147,10 +146,9 @@ async function readFacetCounts(
     plan,
     ["author"],
     (where, limit) =>
-      `SELECT m.author AS slug,
+      `SELECT coalesce(m.author, '${unsetSelector}') AS slug,
             (count(*) FILTER (WHERE ${where}))::int AS image_count
-       FROM metadata m WHERE m.status='ready' AND m.author IS NOT NULL
-      GROUP BY m.author LIMIT ${limit}`
+       FROM metadata m WHERE m.status='ready' GROUP BY m.author LIMIT ${limit}`
   );
   return {
     themes: countsBy(themeRows, (row) => row.slug),

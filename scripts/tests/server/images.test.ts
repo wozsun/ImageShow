@@ -233,19 +233,25 @@ test("[Server/图片] 完成结果统一分类图片与存储配置断连并保�
   });
 });
 
-test("[Server/主题] null 保留给未设置，写入必须使用 JSON null 且不限制标签作者", async () => {
-  const { imageThemeInput } = await import("../../../packages/server/src/images/metadata-theme.ts");
+test("[Server/主题] null 保留给未设置主题与作者，写入以 JSON null 表示未设置且不限制标签", async () => {
+  const { imageAuthorInput, imageThemeInput } =
+    await import("../../../packages/server/src/images/metadata-named-slugs.ts");
   const { themeCreateInput, tagCreateInput, authorSlugInput } =
     await import("../../../packages/server/src/routes/validation/vocabulary.ts");
-  assert.equal(imageThemeInput.parse(null), null);
-  assert.equal(imageThemeInput.parse(" Portrait "), "portrait");
-  for (const theme of ["null", " NULL "]) {
-    assert.equal(imageThemeInput.safeParse(theme).success, false);
-    assert.equal(themeCreateInput.safeParse({ slug: theme }).success, false);
+  for (const input of [imageThemeInput, imageAuthorInput]) {
+    assert.equal(input.parse(null), null);
+    assert.equal(input.parse(" Portrait "), "portrait");
+    for (const value of ["null", " NULL ", ""]) {
+      assert.equal(input.safeParse(value).success, false);
+    }
+  }
+  for (const slug of ["null", " NULL "]) {
+    assert.equal(themeCreateInput.safeParse({ slug }).success, false);
+    assert.equal(authorSlugInput.safeParse(slug).success, false);
   }
   assert.equal(themeCreateInput.parse({ slug: "none" }).slug, "none");
+  assert.equal(authorSlugInput.parse("none"), "none");
   assert.equal(tagCreateInput.parse({ slug: "null" }).slug, "null");
-  assert.equal(authorSlugInput.parse("null"), "null");
 });
 
 test("[Server/图片] 存储输入归一化 slug 并补齐缺省 S3 设置", () => {
@@ -826,7 +832,7 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
     action: "apply_metadata",
     action_request_id: secondImageId,
     action_watermark: "signed-watermark",
-    metadata: { theme: null, tags: [], author: "" },
+    metadata: { theme: null, tags: [], author: null },
     items: [{ session_id: sessionId, image_id: imageId }]
   };
   assert.deepEqual(ingestionQueueActionInput.parse(exactAttributeAction), exactAttributeAction);

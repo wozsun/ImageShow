@@ -1,4 +1,5 @@
 import type { ImageDraft } from "../../../../../lib/types.js";
+import { normalizeNamedSlug } from "../../../../../lib/image-draft.js";
 import type {
   IngestionJob,
   ManifestImportSource,
@@ -116,8 +117,8 @@ function createUrlImportDraft(
     original: retainOriginalLink ? downloadUrl : "",
     device: defaults.device,
     brightness: defaults.brightness,
-    theme: defaults.theme,
-    author: defaults.author,
+    theme: normalizeNamedSlug(defaults.theme),
+    author: normalizeNamedSlug(defaults.author),
     tags: [...defaults.tags]
   };
 }

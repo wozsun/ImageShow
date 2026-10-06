@@ -32,7 +32,7 @@ const draftSchema = z.strictObject({
   device: z.enum(["pc", "mb", "auto"]),
   brightness: z.enum(["dark", "light", "auto"]),
   theme: z.string().nullable(),
-  author: z.string(),
+  author: z.string().nullable(),
   title: z.string(),
   description: z.string(),
   source: z.string(),

@@ -1,5 +1,5 @@
 import {
-  unsetThemeFilter,
+  unsetSelector,
   parseGalleryTagFilter,
   tagFilterValues
 } from "@imageshow/shared/browser";
@@ -34,9 +34,9 @@ export function imageMatchesFilters(
   return (
     (!device || image.device === device) &&
     (!filters.brightness || image.brightness === filters.brightness) &&
-    matchesSelector([image.theme ?? unsetThemeFilter], filters.theme) &&
+    matchesSelector([image.theme ?? unsetSelector], filters.theme) &&
     (!tag || tag.anyOf.some((clause) => clause.every((slug) => image.tags.includes(slug)))) &&
-    matchesSelector([image.author], filters.author)
+    matchesSelector([image.author ?? unsetSelector], filters.author)
   );
 }
 

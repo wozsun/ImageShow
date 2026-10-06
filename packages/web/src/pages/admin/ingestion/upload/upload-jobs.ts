@@ -1,6 +1,6 @@
 import type { ImageDraft } from "../../../../lib/types.js";
 import type { IngestionJob, IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
-import { normalizeAuthor, normalizeTheme } from "../../../../lib/image-draft.js";
+import { normalizeNamedSlug } from "../../../../lib/image-draft.js";
 
 import {
   webIngestionBatchKey,
@@ -15,8 +15,8 @@ function createUploadDraft(defaults: IngestionAttributeDefaults): ImageDraft {
   return {
     device: defaults.device,
     brightness: defaults.brightness,
-    theme: defaults.theme.trim().toLowerCase(),
-    author: defaults.author.trim().toLowerCase(),
+    theme: normalizeNamedSlug(defaults.theme),
+    author: normalizeNamedSlug(defaults.author),
     title: "",
     description: "",
     source: "",
@@ -77,8 +77,8 @@ export function buildUploadIntentItemInput(
   }
   return {
     ...job.draft,
-    theme: normalizeTheme(job.draft.theme),
-    author: normalizeAuthor(job.draft.author),
+    theme: normalizeNamedSlug(job.draft.theme),
+    author: normalizeNamedSlug(job.draft.author),
     idempotency_key: job.attemptKey,
     batch_key: job.batchKey,
     storage_slug: job.storageSlug,

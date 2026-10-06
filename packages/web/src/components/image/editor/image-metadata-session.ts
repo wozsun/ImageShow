@@ -9,8 +9,7 @@ import type {
   ImageDraft
 } from "../../../lib/types.js";
 import {
-  normalizeAuthor,
-  normalizeTheme
+  normalizeNamedSlug
 } from "../../../lib/image-draft.js";
 
 export type ImageMetadataUpdate = ImageUpdateItemInputDto;
@@ -98,8 +97,8 @@ export function fieldsChangedFor(
     original: draft.original !== item.original,
     device: draft.device !== item.device,
     brightness: draft.brightness !== item.brightness,
-    theme: normalizeTheme(draft.theme) !== normalizeTheme(item.theme),
-    author: normalizeAuthor(draft.author) !== normalizeAuthor(item.author),
+    theme: normalizeNamedSlug(draft.theme) !== normalizeNamedSlug(item.theme),
+    author: normalizeNamedSlug(draft.author) !== normalizeNamedSlug(item.author),
     tags: tagsChanged(draft.tags, item.tags ?? [])
   };
 }
@@ -116,8 +115,8 @@ export function changedMetadataUpdate(
   if (changed.original) update.original = draft.original;
   if (changed.device) update.device = draft.device;
   if (changed.brightness) update.brightness = draft.brightness;
-  if (changed.theme) update.theme = normalizeTheme(draft.theme);
-  if (changed.author) update.author = normalizeAuthor(draft.author);
+  if (changed.theme) update.theme = normalizeNamedSlug(draft.theme);
+  if (changed.author) update.author = normalizeNamedSlug(draft.author);
   if (changed.tags) update.tags = draft.tags;
   return update;
 }
@@ -130,11 +129,8 @@ function valuesEqual(
   if (field === "tags") {
     return !tagsChanged(left as string[], right as string[]);
   }
-  if (field === "theme") {
-    return normalizeTheme(left as string) === normalizeTheme(right as string);
-  }
-  if (field === "author") {
-    return normalizeAuthor(left as string) === normalizeAuthor(right as string);
+  if (field === "theme" || field === "author") {
+    return normalizeNamedSlug(left as string | null) === normalizeNamedSlug(right as string | null);
   }
   return left === right;
 }

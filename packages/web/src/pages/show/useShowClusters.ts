@@ -1,6 +1,6 @@
 import {
   readableFilterSearch,
-  unsetThemeFilter,
+  unsetSelector,
   type PublicImageListResponseDto,
   type ShowClusterGroup,
   type ShowOrder
@@ -97,7 +97,7 @@ export function useShowClusters(group: ShowClusterGroup, order: ShowOrder, enabl
       .slice(0, maximumClusters)
       .map((entry) => ({
         slug: entry.slug,
-        name: names.get(entry.slug) || (entry.slug === unsetThemeFilter ? "未设置" : entry.slug),
+        name: names.get(entry.slug) || (entry.slug === unsetSelector ? "未设置" : entry.slug),
         total: entry.image_count
       }));
     // 后台刷新不重建星群；切换分组或排序才重新选取成员。

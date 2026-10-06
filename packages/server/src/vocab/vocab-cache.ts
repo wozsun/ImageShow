@@ -1,4 +1,4 @@
-import { unsetThemeFilter } from "@imageshow/shared/browser";
+import { unsetSelector } from "@imageshow/shared/browser";
 import { randomUUID } from "node:crypto";
 import { appConfig } from "@imageshow/shared";
 import { coalesce } from "../core/coalesce.ts";
@@ -131,7 +131,7 @@ async function loadThemeVocab(
       ORDER BY sort_order DESC, slug ASC`,
     access
   );
-  rows.unshift({ slug: unsetThemeFilter, display_name: "未设置" });
+  rows.unshift({ slug: unsetSelector, display_name: "未设置" });
   await cacheEntityVocabulary("theme", THEME_VOCAB_KEY, revision, rows, access);
   return rows;
 }
@@ -146,6 +146,7 @@ async function loadAuthorVocab(
       ORDER BY sort_order DESC, slug ASC`,
     access
   );
+  rows.unshift({ slug: unsetSelector, display_name: "未设置", link: "" });
   await cacheEntityVocabulary("author", AUTHOR_VOCAB_KEY, revision, rows, access);
   return rows;
 }

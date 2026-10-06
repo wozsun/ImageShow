@@ -1,4 +1,4 @@
-import { imageThemeInput } from "../../images/metadata-theme.ts";
+import { imageAuthorInput, imageThemeInput } from "../../images/metadata-named-slugs.ts";
 import { z } from "zod";
 import { appConfig } from "@imageshow/shared";
 import {
@@ -41,12 +41,7 @@ const imageMetadataFieldInputs = {
   device: z.enum(classificationDevices),
   brightness: z.enum(classificationBrightnesses),
   theme: imageThemeInput,
-  author: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .max(slugMaxLength)
-    .refine((value) => value === "" || slugPattern.test(value), "author must be a lowercase slug"),
+  author: imageAuthorInput,
   title: z.string().trim().max(appConfig.imageMetadata.titleMaxLength),
   description: z.string().trim()
     .max(appConfig.imageMetadata.descriptionMaxLength),
@@ -61,7 +56,7 @@ export const imageMetadataCreateInput = z.strictObject({
   device: imageMetadataFieldInputs.device,
   brightness: imageMetadataFieldInputs.brightness,
   theme: imageMetadataFieldInputs.theme.default(null),
-  author: imageMetadataFieldInputs.author.default(""),
+  author: imageMetadataFieldInputs.author.default(null),
   title: imageMetadataFieldInputs.title.default(""),
   description: imageMetadataFieldInputs.description.default(""),
   source: imageMetadataFieldInputs.source.default(""),

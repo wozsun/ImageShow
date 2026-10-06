@@ -1,4 +1,4 @@
-import { unsetThemeFilter } from "@imageshow/shared/browser";
+import { unsetSelector } from "@imageshow/shared/browser";
 import type { FacetOptionDto, GalleryStatsFacetDto } from "@imageshow/shared/browser";
 import { displayNameOrSlug } from "../../lib/ui/formatters.js";
 import { publicFilterOptionState } from "../../lib/gallery/public-filter-options.js";
@@ -75,7 +75,7 @@ export function homeFacetOptions(
 }
 
 export function facetLabel(item: { slug: string; display_name?: string }) {
-  if (item.slug === unsetThemeFilter && !item.display_name?.trim()) return "未设置";
+  if (item.slug === unsetSelector && !item.display_name?.trim()) return "未设置";
   return displayNameOrSlug(item);
 }
 

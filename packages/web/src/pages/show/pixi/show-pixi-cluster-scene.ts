@@ -86,6 +86,10 @@ type SlotState = ClusterPoint & {
   engaged: boolean;
   /** 所展示的图片已被删除且没有可替换的图片：空着，直到轮换补上。 */
   vacant: boolean;
+  /** 现在这张图上过屏。 */
+  seen: boolean;
+  /** 上过屏的图转出画面的先后序号（0 = 没上过屏，或还在画面里）：轮换先换最早转出去的。 */
+  departed: number;
   width: number;
   height: number;
   screenWidth: number;
@@ -161,6 +165,9 @@ const maximumVisibleItems = 96;
 const labelCountOffset = 20;
 const labelHeight = 36;
 const reconcileIntervalMs = 200;
+// 同一个星团两次换图至少隔这么久：快速转动时每秒新请求的图片有上限；总览里星团很小，慢慢换即可。
+const activeImageSwapIntervalMs = 100;
+const overviewImageSwapIntervalMs = 6000;
 const wheelZoomRate = 0.0014;
 // 手指拖动走过这段距离才确认是单指拖动、开始收放导航；在此之前另一根手指落下就按捏合处理。
 const touchDragConfirmDistance = 32;
@@ -329,6 +336,7 @@ export class ShowPixiClusterScene implements ShowPixiSceneController {
   #focusedKey: string | null = null;
   #recycledCards = 0;
   #raisedCount = 0;
+  #departureCount = 0;
 
   constructor(options: ClusterSceneOptions) {
     this.#width = Math.max(1, options.width);
@@ -477,6 +485,8 @@ export class ShowPixiClusterScene implements ShowPixiSceneController {
       raised: 0,
       engaged: false,
       vacant: false,
+      seen: false,
+      departed: 0,
       screenWidth: 0,
       textureLod: null,
       renderScale: 1,
@@ -573,6 +583,11 @@ export class ShowPixiClusterScene implements ShowPixiSceneController {
 
   /** 槽位换一张图：卡片面积不变，宽高改按新图的比例。 */
   #assignSlot(slot: SlotState, image: ShowImage) {
+    // 换成另一张图（轮换或删除后补位）：它还没上过屏，不能马上被换掉。
+    if (slot.image.id !== image.id) {
+      slot.seen = false;
+      slot.departed = 0;
+    }
     slot.image = image;
     slot.vacant = false;
     Object.assign(slot, clusterCardSize(image));
@@ -1296,7 +1311,8 @@ export class ShowPixiClusterScene implements ShowPixiSceneController {
     const frozen = holding && cluster.fade < 0.02;
 
     // 作背景的星团不换图：换进来的图暂时看不到，也就不必加载。
-    if (moving && !holding) this.#rotateImages(cluster, active, elapsed);
+    // 换图跟着转动走，暂停播放或按住拖动时照常进行。
+    if (!holding) this.#rotateImages(cluster, active, elapsed);
     if (moving && !frozen) {
       cluster.rotation = rotate(
         cluster.rotation,
@@ -1508,8 +1524,20 @@ export class ShowPixiClusterScene implements ShowPixiSceneController {
     );
   }
 
-  /** 轮换：只给完全没画出来的槽位换图（转到背面或在视口之外），画面上看不到切换。 */
+  /**
+   * 轮换：图片上过屏、转出画面之后（转到背面或在视口之外），所在槽位换成队列里的下一张，画面上看不到切换。
+   * 换图由转动带动：自转或拖动把图片转出去，转回来的就是新的；没上过屏的图不会被换掉，
+   * 所以按时间排序时一张不漏地往后走，转得越多走得越远。
+   */
   #rotateImages(cluster: ClusterState, active: boolean, elapsed: number) {
+    for (const slot of cluster.slots) {
+      if (slot.drawn) {
+        slot.seen = true;
+        slot.departed = 0;
+      } else if (slot.seen && slot.departed === 0) {
+        slot.departed = ++this.#departureCount;
+      }
+    }
     // 整个分类的图片都已取得：一轮走完从头再来，不再为同一批图片请求续页。
     const complete = cluster.images.length >= cluster.total;
     if (complete && cluster.total > cluster.slots.length && cluster.next >= cluster.images.length) {
@@ -1530,17 +1558,32 @@ export class ShowPixiClusterScene implements ShowPixiSceneController {
     }
     if (remaining <= 0) return;
     cluster.imageSwapElapsedMs += elapsed * 1000;
-    // 总览里星团很小，慢慢换即可，也只换总览会画出来的位置。
-    if (cluster.imageSwapElapsedMs < (active ? 500 : 6000)) return;
-    const hidden = cluster.slots.filter((slot) => !slot.drawn && (active || slot.overview));
-    if (hidden.length === 0) return;
+    if (
+      cluster.imageSwapElapsedMs <
+      (active ? activeImageSwapIntervalMs : overviewImageSwapIntervalMs)
+    )
+      return;
+    // 空位最先补上，其次是最早转出去的：继续同向转动时它最先转回来。
+    // 总览里只换总览会画出来的位置；就在视口外一圈、仍持有卡片的位置马上可能回到画面，不换。
+    let stale: SlotState | undefined;
+    for (const slot of cluster.slots) {
+      if (slot.drawn || slot.resident || slot.card?.isInteractionActive) continue;
+      if (!active && !slot.overview) continue;
+      if (!slot.vacant && slot.departed === 0) continue;
+      if (!stale || (slot.vacant ? 0 : slot.departed) < (stale.vacant ? 0 : stale.departed)) {
+        stale = slot;
+      }
+    }
+    if (!stale) return;
     cluster.imageSwapElapsedMs = 0;
     const image = cluster.images[cluster.next]!;
     cluster.next += 1;
     cluster.lastConsumedId = image.id;
     // 一轮走完后从头再来时，队首可能还在屏幕上：跳过，不让同一张图同时出现两次。
     if (cluster.slots.some((slot) => slot.image.id === image.id)) return;
-    this.#assignSlot(hidden[Math.floor(Math.random() * hidden.length)]!, image);
+    // 转出去的卡片在下一次协调才回收：先回收，不为马上要丢掉的卡片加载新图。
+    this.#releaseSlot(stale);
+    this.#assignSlot(stale, image);
   }
 
   /** 低频协调：按需创建 / 回收卡片、分配贴图档位、发布键盘与读屏代理。 */

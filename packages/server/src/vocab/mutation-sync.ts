@@ -1,4 +1,4 @@
-import { slugMaxLength, slugPattern, unsetThemeFilter } from "@imageshow/shared/browser";
+import { slugMaxLength, slugPattern, unsetSelector } from "@imageshow/shared/browser";
 import { withAdvisoryLock } from "../core/database/advisory-locks.ts";
 import { ApiError } from "../core/api-error.ts";
 import {
@@ -41,10 +41,14 @@ export function assertVocabularySlug(
   entity: VocabularyEntity,
   slug: string
 ) {
-  if (entity === "theme" && slug === unsetThemeFilter) {
-    throw new ApiError(400, "invalid_theme", "null 是未设置主题的保留值，不能用作主题标识", {
-      slug
-    });
+  if (entity !== "tag" && slug === unsetSelector) {
+    const noun = entity === "theme" ? "主题" : "作者";
+    throw new ApiError(
+      400,
+      `invalid_${entity}`,
+      `null 是未设置${noun}的保留值，不能用作${noun}标识`,
+      { slug }
+    );
   }
   if (slug.length > slugMaxLength
     || !slugPattern.test(slug)) {

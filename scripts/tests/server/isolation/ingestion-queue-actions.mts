@@ -1560,8 +1560,8 @@ await runIntegrationScenario(async (runtime) => {
   const clearMetadataCases = [
     { theme: null },
     { tags: [] },
-    { author: "" },
-    { theme: null, tags: [], author: "" }
+    { author: null },
+    { theme: null, tags: [], author: null }
   ];
   for (const [index, metadata] of clearMetadataCases.entries()) {
     const session = await seedAttributes(`clear-field-${index}`);
@@ -1598,9 +1598,9 @@ await runIntegrationScenario(async (runtime) => {
     action: "apply_metadata",
     action_request_id: randomUUIDv7(),
     action_watermark: clearPage.action_watermark,
-    metadata: { author: "" }
+    metadata: { author: null }
   });
-  assert.equal((await readActive(frozenTarget)).metadata.author, "");
+  assert.equal((await readActive(frozenTarget)).metadata.author, null);
   assert.deepEqual((await readActive(handoffTarget)).metadata, handoffTarget.metadata);
   assert.deepEqual((await readActive(laterTarget)).metadata, laterTarget.metadata);
   const exactClear = {
@@ -1609,7 +1609,7 @@ await runIntegrationScenario(async (runtime) => {
     action_request_id: randomUUIDv7(),
     action_watermark: clearPage.action_watermark,
     items: [pairOf(handoffTarget)],
-    metadata: { theme: null, tags: [], author: "" }
+    metadata: { theme: null, tags: [], author: null }
   };
   const exactResult = await runAction(ingestionRepository, exactClear);
   assert.equal(exactResult.changed, 1, "原确认成员接管到旧水位之后仍可按精确身份处理");

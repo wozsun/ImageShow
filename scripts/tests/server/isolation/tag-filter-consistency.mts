@@ -195,6 +195,24 @@ await runIntegrationScenario(async (runtime) => {
     axis: { theme: "null", author: "!matrix-bob" },
     match: (row) => Boolean(row.mask & 3) && row.theme === null && row.author !== "matrix-bob"
   });
+  // The unset author selector mirrors theme=null, alone, mixed with names and excluded.
+  cases.push(
+    {
+      tags: ["matrix-a,matrix-b"],
+      axis: { author: "null" },
+      match: (row) => Boolean(row.mask & 3) && row.author === null
+    },
+    {
+      tags: ["matrix-a,matrix-b"],
+      axis: { author: "matrix-alice,null" },
+      match: (row) => Boolean(row.mask & 3) && (row.author === null || row.author === "matrix-alice")
+    },
+    {
+      tags: ["matrix-a,matrix-b"],
+      axis: { author: "!null", theme: "null" },
+      match: (row) => Boolean(row.mask & 3) && row.author !== null && row.theme === null
+    }
+  );
   const statsGroups = [
     ["matrix-a,matrix-b"],
     ["all:matrix-a"],
@@ -208,6 +226,7 @@ await runIntegrationScenario(async (runtime) => {
   const statsAxes: Array<Record<string, string>> = [
     {},
     { theme: "!matrix-city,!null", author: "!matrix-bob" },
+    { theme: "matrix-city", author: "null,matrix-alice" },
     {
       device: "pc",
       brightness: "dark",
@@ -225,9 +244,8 @@ await runIntegrationScenario(async (runtime) => {
   const axisMatches = (row: Row, axes: Record<string, string>, omitted?: string) =>
     Object.entries(axes).every(([field, value]) => {
       if (field === omitted) return true;
-      const actual =
-        row[field as "device" | "brightness" | "theme" | "author"] ??
-        (field === "theme" ? "null" : "");
+      // Only theme and author can be missing; both read as the unset selector.
+      const actual = row[field as "device" | "brightness" | "theme" | "author"] ?? "null";
       const terms = value.split(",");
       return terms[0]!.startsWith("!")
         ? terms.every((term) => actual !== term.slice(1))
@@ -253,6 +271,7 @@ await runIntegrationScenario(async (runtime) => {
           { device: "pc" as const },
           { tag: "all:matrix-a,matrix-b" },
           { theme: "null", author: "!matrix-bob" },
+          { author: "null" },
           { tag: "matrix-empty" }
         ]) {
           const plan = await resolveImageFilterPlan(query);
@@ -359,7 +378,7 @@ await runIntegrationScenario(async (runtime) => {
             }
             for (const [field, values] of Object.entries({
               theme: ["null", "matrix-city", "matrix-nature"],
-              author: ["matrix-alice", "matrix-bob"],
+              author: ["null", "matrix-alice", "matrix-bob"],
               device: ["pc", "mb"],
               brightness: ["dark", "light"]
             }))
@@ -519,7 +538,7 @@ await runIntegrationScenario(async (runtime) => {
             field === "themes"
               ? ["null", "matrix-city", "matrix-nature"]
               : field === "authors"
-                ? ["matrix-alice", "matrix-bob"]
+                ? ["null", "matrix-alice", "matrix-bob"]
                 : allTags.filter((slug) => slug !== "matrix-empty");
           assert.deepEqual(
             body[field].map((item: { slug: string }) => item.slug).sort(),

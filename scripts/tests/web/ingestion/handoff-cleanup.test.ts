@@ -1880,7 +1880,7 @@ test("[Web/内容接入] Upload 与 Import 接管只使用固定短路由和 1 +
     device: "auto" as const,
     brightness: "auto" as const,
     theme: null,
-    author: "",
+    author: null,
     title: "最大字段由 JSON 承载",
     description: "description",
     source: "",

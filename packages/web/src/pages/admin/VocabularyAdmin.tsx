@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   adminPermissions,
-  isThemeSlug,
-  unsetThemeFilter,
+  isNamedSlug,
+  unsetSelector,
   type AuthorDto,
   type AuthorMutationResponseDto,
   type AdminEntityListResponseDto,
@@ -205,13 +205,15 @@ function VocabularyAdminContent({
     setConfirmDelete(null);
   }, [canDelete]);
 
-  const slugInvalid =
-    slug.length > 0 && !(kind === "themes" ? isThemeSlug(slug) : slugPattern.test(slug));
-  const slugError = slugInvalid
-    ? kind === "themes" && slug === unsetThemeFilter
-      ? "null 是未设置主题的保留值，不能用作主题标识"
-      : slugFormatHint
-    : createError;
+  // Themes and authors reserve the unset selector; tags accept any slug.
+  const reservesUnset = kind !== "tags";
+  const slugValid = reservesUnset ? isNamedSlug(slug) : slugPattern.test(slug);
+  const slugInvalid = slug.length > 0 && !slugValid;
+  const slugError = !slugInvalid
+    ? createError
+    : reservesUnset && slug === unsetSelector
+      ? `null 是未设置${copy.noun}的保留值，不能用作${copy.noun}标识`
+      : slugFormatHint;
   const externalBusy = Boolean(mutation) || createAction.pending;
   const pageSize = settings.admin.image_page_size;
   const sorting = useSortOrderSave({

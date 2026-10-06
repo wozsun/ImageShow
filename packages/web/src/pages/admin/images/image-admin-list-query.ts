@@ -1,5 +1,4 @@
 import {
-  unsetThemeFilter,
   parseTagFilter,
   tagExpressionValues,
   readableFilterSearch,
@@ -72,7 +71,7 @@ function normalizedScope(
     view,
     device: filters.device || "",
     brightness: filters.brightness || "",
-    theme: view === "unset" ? unsetThemeFilter : filters.theme || "",
+    theme: filters.theme || "",
     tag: tagExpressionValues(parseTagFilter(filters.tag ? [filters.tag] : []).expression).join(","),
     author: filters.author || "",
     sort_by: sort.sort_by,
@@ -130,8 +129,7 @@ export function adminImageListQuery(
     page: String(page),
     limit: String(pageSize)
   });
-  if (view === "unset") params.set("theme", unsetThemeFilter);
-  else if (filters.theme) params.set("theme", filters.theme);
+  if (filters.theme) params.set("theme", filters.theme);
   if (filters.device) params.set("device", filters.device);
   if (filters.brightness) params.set("brightness", filters.brightness);
   if (filters.tag)

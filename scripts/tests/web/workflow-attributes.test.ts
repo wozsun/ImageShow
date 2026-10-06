@@ -21,12 +21,13 @@ import { installProperties, installPropertyDescriptors } from "../support/proper
 
 test("[Web/主题] 模糊候选键盘选择提交真实 slug，直接输入仍可新建", async (t) => {
   const h = await createConfigStreamHarness(t);
-  const { ThemeInput } = await import("../../../packages/web/src/components/form/ThemeInput.tsx");
+  const { NamedSlugInput } = await import("../../../packages/web/src/components/form/NamedSlugInput.tsx");
   const values: string[] = [];
   function Probe() {
     const [value, setValue] = h.React.useState("");
-    return h.React.createElement(ThemeInput, {
-      themes: [{ slug: "hangzhou", display_name: "杭州" }],
+    return h.React.createElement(NamedSlugInput, {
+      noun: "主题",
+      options: [{ slug: "hangzhou", display_name: "杭州" }],
       value,
       ariaLabel: "主题",
       publishTypedChanges: false,
@@ -95,7 +96,7 @@ for (const surface of ["默认属性", "图片编辑"] as const) {
       return surface === "默认属性"
         ? h.React.createElement(WorkflowDefaultFields, {
             ...vocabulary,
-            values: { ...draft, theme: draft.theme ?? "" },
+            values: { ...draft, theme: draft.theme ?? "", author: draft.author ?? "" },
             tags,
             onChange: {
               device() {},
@@ -152,7 +153,7 @@ for (const surface of ["默认属性", "图片编辑"] as const) {
 for (const kind of ["主题", "标签"] as const) {
   test(`[Web/词条搜索] ${kind}组词沿用已确认结果，选择后忽略迟到输入法事件`, async (t) => {
     const h = await createConfigStreamHarness(t);
-    const { ThemeInput } = await import("../../../packages/web/src/components/form/ThemeInput.tsx");
+    const { NamedSlugInput } = await import("../../../packages/web/src/components/form/NamedSlugInput.tsx");
     const { TagInput } = await import("../../../packages/web/src/components/form/TagInput.tsx");
     const options = [
       { slug: "forest", display_name: "测试森林" },
@@ -163,8 +164,9 @@ for (const kind of ["主题", "标签"] as const) {
       const [theme, setTheme] = h.React.useState("");
       const [tags, setTags] = h.React.useState<string[]>([]);
       return kind === "主题"
-        ? h.React.createElement(ThemeInput, {
-            themes: options,
+        ? h.React.createElement(NamedSlugInput, {
+            noun: "主题",
+            options,
             value: theme,
             publishTypedChanges: false,
             onChange(value) {
@@ -219,12 +221,13 @@ for (const kind of ["主题", "标签"] as const) {
 
 test("[Web/主题] 保留值输入按留空处理且不提示新建主题", async (t) => {
   const h = await createConfigStreamHarness(t);
-  const { ThemeInput } = await import("../../../packages/web/src/components/form/ThemeInput.tsx");
+  const { NamedSlugInput } = await import("../../../packages/web/src/components/form/NamedSlugInput.tsx");
   const values: string[] = [];
   function Probe() {
     const [value, setValue] = h.React.useState("portrait");
-    return h.React.createElement(ThemeInput, {
-      themes: [
+    return h.React.createElement(NamedSlugInput, {
+      noun: "主题",
+      options: [
         { slug: "null", display_name: "未设置" },
         { slug: "portrait", display_name: "人像" }
       ],
@@ -255,8 +258,8 @@ test("[Web/批量属性] 显式清空只更新指定分类，普通应用保留�
   const cases = {
     theme: { ...draft, theme: null },
     tags: { ...draft, tags: [] },
-    author: { ...draft, author: "" },
-    all: { ...draft, theme: null, tags: [], author: "" }
+    author: { ...draft, author: null },
+    all: { ...draft, theme: null, tags: [], author: null }
   };
   for (const field of Object.keys(cases) as ClearableImageAttribute[]) {
     const jobs = [
@@ -386,7 +389,7 @@ test("[Web/批量属性] 确认期间的本地接管按原身份清空，已覆�
   ]);
   for (const id of ["local", "signed", "signing"]) {
     const current = queue.jobsRef.current.find((job) => job.id === id)!;
-    assert.deepEqual(current.draft, { ...jobs[0]!.draft, theme: null, tags: [], author: "" });
+    assert.deepEqual(current.draft, { ...jobs[0]!.draft, theme: null, tags: [], author: null });
     assert.equal(current.serverDraftPending, true, "尚未接管的上传在原草稿 owner 中保留待同步修改");
   }
   for (const id of ["retry", "later"]) {
@@ -487,7 +490,7 @@ test("[Web/批量属性] 清空冻结水位，部分失败只重试失败身份�
   const first = await begin();
   assert.equal(body(0).action_watermark, "original-watermark");
   assert.equal(body(0).items, undefined);
-  assert.deepEqual(body(0).metadata, { theme: null, tags: [], author: "" });
+  assert.deepEqual(body(0).metadata, { theme: null, tags: [], author: null });
   await harness.respond(
     0,
     response([
@@ -572,7 +575,7 @@ for (const failure of [
     setCsrfToken("paged-clear-test");
     t.after(clearCsrfToken);
     await harness.render(React.createElement(Probe));
-    const frozen = actions.freeze("apply_metadata", { theme: null, tags: [], author: "" })!;
+    const frozen = actions.freeze("apply_metadata", { theme: null, tags: [], author: null })!;
     const notifications: string[] = [];
     const options = {
       onBatchResult: (result: IngestionQueueActionResultDto) =>

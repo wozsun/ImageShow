@@ -13,7 +13,6 @@ import {
 } from "../../../lib/ui/select-options.js";
 import { AnchoredMenuDismissSignalContext } from "../../../hooks/useAnchoredMenu.js";
 import { useDismissiblePanel } from "../../../hooks/useDismissiblePanel.js";
-import type { ImageAdminView } from "./useImageAdminOperations.js";
 
 export type ImageAdminFilterValues = {
   device: string;
@@ -80,7 +79,6 @@ function useImageAdminDoubleRowLayout(enabled: boolean) {
 export function ImageAdminFilters({
   value,
   vocabulary,
-  view,
   mobileLayout,
   disabled,
   onChange,
@@ -88,7 +86,6 @@ export function ImageAdminFilters({
 }: {
   value: ImageAdminFilterValues;
   vocabulary?: IngestionVocabularyDto;
-  view: ImageAdminView;
   mobileLayout: boolean;
   disabled: boolean;
   onChange: (key: keyof ImageAdminFilterValues, value: string) => void;
@@ -104,11 +101,10 @@ export function ImageAdminFilters({
     resetKey: mobileLayout,
     auxiliarySurfaceRef: clearFiltersRef
   });
-  const themeDisabled = disabled || view === "unset";
   const activeCount =
     (value.device ? 1 : 0) +
     (value.brightness ? 1 : 0) +
-    (view !== "unset" && value.theme ? 1 : 0) +
+    (value.theme ? 1 : 0) +
     (value.tag ? 1 : 0) +
     (value.author ? 1 : 0);
   const hasFilters = Boolean(
@@ -161,10 +157,10 @@ export function ImageAdminFilters({
       <div key="theme" className="image-list-filter-field image-list-filter-theme">
         <FacetSelector
           options={vocabulary?.themes ?? []}
-          value={view === "unset" ? "" : value.theme}
+          value={value.theme}
           onChange={(next) => onChange("theme", next)}
           noun="主题"
-          disabled={themeDisabled}
+          disabled={disabled}
           ariaLabel="主题"
           controlId="admin-image-theme-facet"
         />

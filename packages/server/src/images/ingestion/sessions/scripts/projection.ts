@@ -429,7 +429,7 @@ local function assert_draft(value, marker)
       and value.brightness ~= 'light'
       and value.brightness ~= 'auto')
     or (value.theme ~= cjson.null and type(value.theme) ~= 'string')
-    or type(value.author) ~= 'string'
+    or (value.author ~= cjson.null and type(value.author) ~= 'string')
     or type(value.title) ~= 'string'
     or type(value.description) ~= 'string'
     or type(value.source) ~= 'string'

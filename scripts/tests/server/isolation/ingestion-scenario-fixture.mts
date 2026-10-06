@@ -39,7 +39,7 @@ export async function createIngestionScenarioFixture(runtime: IntegrationRuntime
     device: "auto",
     brightness: "auto",
     theme: null,
-    author: "",
+    author: null,
     title: "service batch",
     description: "",
     source: "",

@@ -1,9 +1,8 @@
 import { WorkflowAttributeActions } from "./WorkflowAttributeActions.js";
 import type { PrepareImageAttributeClear } from "../../lib/image-draft.js";
-import { AuthorInput } from "./AuthorInput.js";
+import { NamedSlugInput } from "./NamedSlugInput.js";
 import { SelectMenu } from "./SelectMenu.js";
 import { TagInput } from "./TagInput.js";
-import { ThemeInput } from "./ThemeInput.js";
 import type { SelectOption } from "../../lib/ui/select-options.js";
 import type { FacetOption } from "../../lib/types.js";
 
@@ -83,20 +82,22 @@ export function WorkflowDefaultFields({
         disabled={disabled}
       />
       <div className="workflow-default-pair">
-        <ThemeInput
+        <NamedSlugInput
           className={`workflow-default-theme${changedClass("theme")}`}
           value={values.theme}
           onChange={onChange.theme}
-          themes={themes}
+          options={themes}
+          noun="主题"
           placeholder={placeholders.theme}
           ariaLabel={ariaLabels.theme}
           disabled={disabled}
         />
-        <AuthorInput
+        <NamedSlugInput
           className={`workflow-default-author${changedClass("author")}`}
           value={values.author}
           onChange={onChange.author}
-          authors={authors}
+          options={authors}
+          noun="作者"
           placeholder={placeholders.author}
           ariaLabel={ariaLabels.author}
           disabled={disabled}

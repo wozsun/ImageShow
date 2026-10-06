@@ -40,7 +40,6 @@ export async function ensureThemeWithMutationLockHeld(
   client: PoolClient,
   slug: string
 ) {
-  if (!slug) return false;
   assertVocabularySlug("theme", slug);
   return insertTheme(client, slug);
 }

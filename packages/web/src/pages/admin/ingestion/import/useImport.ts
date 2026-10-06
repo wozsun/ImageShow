@@ -6,7 +6,7 @@ import {
 import { ingestionAcceptanceBinding } from "../queue/model/acceptance-binding.js";
 import { findIngestionAttempt, type IngestionJob, type IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
 import { isApiClientError } from "../../../../lib/api/client.js";
-import { normalizeAuthor, normalizeTheme } from "../../../../lib/image-draft.js";
+import { normalizeNamedSlug } from "../../../../lib/image-draft.js";
 
 import {
   bindTerminalAcceptanceForCancellation,
@@ -33,8 +33,8 @@ function buildImportAcceptItemInput(job: IngestionJob) {
   }
   return {
     ...job.draft,
-    theme: normalizeTheme(job.draft.theme),
-    author: normalizeAuthor(job.draft.author),
+    theme: normalizeNamedSlug(job.draft.theme),
+    author: normalizeNamedSlug(job.draft.author),
     idempotency_key: job.attemptKey,
     batch_key: job.batchKey,
     source_type: job.manifestSource ?? ("url" as const),

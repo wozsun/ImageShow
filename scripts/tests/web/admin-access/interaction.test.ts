@@ -284,7 +284,7 @@ test("[Web/后台访问] 公开详情切图和切换视图隔离迟到响应并�
     }))
   );
   const payload = (source: string) => ({ item: {
-    device: "mb", author: "", brightness: "dark", image_time: "2026-09-01T00:00:00.000Z",
+    device: "mb", author: null, brightness: "dark", image_time: "2026-09-01T00:00:00.000Z",
     description: "", source, original_url: null, base_url: "https://new.example.test/images"
   } });
   const sourceLink = () => h.document.querySelector(".image-detail-source")?.getAttribute("href");
@@ -1639,7 +1639,6 @@ test("[Web/后台访问] 后台图片筛选在临界视口保持清空、无障�
           React.createElement(ImageAdminFilters, {
             value: adminFilters,
             vocabulary,
-            view: "ready",
             mobileLayout,
             disabled: adminDisabled,
             onChange(key, value) {

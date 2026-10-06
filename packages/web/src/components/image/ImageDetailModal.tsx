@@ -195,7 +195,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
 
   const { themeLabel, tagLabels } = taxonomyDisplay(item);
 
-  const authorSlug = item.author || "";
+  const authorSlug = item.author ?? "";
   const authorOption = authorSlug ? authorMap.get(authorSlug) : undefined;
   const authorLabel = authorOption ? displayNameOrSlug(authorOption) : authorSlug;
   const authorLink = authorOption?.link || "";

@@ -27,7 +27,6 @@ import {
   effectiveImageAdminPage,
   imageAdminPaginationScopeKey,
   imageAdminTotalPages,
-  resetImageAdminPage,
   resolveImageAdminScopeTotal
 } from "../../../../packages/web/src/pages/admin/images/image-admin-list-query.ts";
 import { emptyImageAdminFilters } from "../../../../packages/web/src/pages/admin/images/ImageAdminFilters.tsx";
@@ -264,9 +263,9 @@ test("[Web/后台访问] 后台图片数字页由单一目标查询直达并隔�
   };
   const scope = imageAdminPaginationScopeKey("ready", filters, 60);
   const pageSizeScope = imageAdminPaginationScopeKey("ready", filters, 30);
-  const unsetScope = imageAdminPaginationScopeKey("unset", filters, 60);
+  const deletedScope = imageAdminPaginationScopeKey("deleted", filters, 60);
   assert.notEqual(scope, pageSizeScope);
-  assert.notEqual(scope, unsetScope);
+  assert.notEqual(scope, deletedScope);
   assert.equal(
     effectiveImageAdminPage(
       {
@@ -287,45 +286,9 @@ test("[Web/后台访问] 后台图片数字页由单一目标查询直达并隔�
         total: 6_000,
         totalUpdatedAt: 1
       },
-      unsetScope
+      deletedScope
     ),
     1
-  );
-  const hiddenThemeScope = imageAdminPaginationScopeKey(
-    "unset",
-    {
-      ...emptyImageAdminFilters,
-      theme: "night"
-    },
-    60
-  );
-  const emptyUnsetScope = imageAdminPaginationScopeKey(
-    "unset",
-    emptyImageAdminFilters,
-    60
-  );
-  assert.equal(
-    hiddenThemeScope,
-    emptyUnsetScope,
-    "无主题视图的隐藏主题值不得建立第二个查询 scope"
-  );
-  assert.deepEqual(
-    resetImageAdminPage(
-      {
-        scopeKey: hiddenThemeScope,
-        page: 8,
-        total: 480,
-        totalUpdatedAt: 12
-      },
-      hiddenThemeScope
-    ),
-    {
-      scopeKey: hiddenThemeScope,
-      page: 1,
-      total: 480,
-      totalUpdatedAt: 12
-    },
-    "只清除无主题视图的隐藏主题值时也必须显式返回第一页"
   );
   assert.equal(imageAdminTotalPages(0, 60), 1);
   assert.equal(imageAdminTotalPages(6_000, 60), 100);
@@ -507,37 +470,8 @@ test("[Web/后台访问] 后台图片数字页由单一目标查询直达并隔�
   assert.equal(target.searchParams.get("author"), "alice");
   assert.equal(target.searchParams.get("sort_by"), "image_time");
   assert.equal(target.searchParams.get("order"), "latest");
-
-  const unsetOptions = adminImageListQuery(
-    "unset",
-    filters,
-    unsetScope,
-    1,
-    60
-  );
-  const previousUnsetFetch = globalThis.fetch;
-  let unsetUrl = "";
-  globalThis.fetch = async (input) => {
-    unsetUrl = String(input);
-    return new Response(JSON.stringify({ ok: true, items: [], total: 0 }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" }
-    });
-  };
-  try {
-    const { QueryClient } = await import("@tanstack/react-query");
-    await unsetOptions.queryFn({
-      client: new QueryClient(),
-      signal: new AbortController().signal
-    });
-  } finally {
-    globalThis.fetch = previousUnsetFetch;
-  }
-  const unsetTarget = new URL(unsetUrl, "https://imageshow.test");
-  assert.equal(unsetTarget.searchParams.get("status"), "ready");
-  assert.equal(unsetTarget.searchParams.get("theme"), "null");
-  assert.equal(unsetTarget.searchParams.get("page"), "1");
 });
+
 test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试并一次夹紧", async (t) => {
   const { window, document } = parseHTML(
     "<!doctype html><html><body><div id=root></div></body></html>"
@@ -764,7 +698,7 @@ test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试
     assert.equal(latest.totalPages, 100);
     assert.equal(latest.total, 6_000);
     assert.equal(latest.items.length, 0);
-    props = { ...props, view: "unset" };
+    props = { ...props, filters: { ...emptyImageAdminFilters, theme: "null" } };
     await React.act(async () => root.render(tree()));
     await waitFor(() => resolveUnsetPage !== null && page75Aborted);
     assert.equal(latest.pageNumber, 1, "scope 变化的同一渲染必须立即使用第 1 页");
@@ -799,7 +733,7 @@ test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试
     );
 
     const beforeRouteReturn = requests.length;
-    props = { ...props, view: "ready" };
+    props = { ...props, filters: emptyImageAdminFilters };
     await React.act(async () => root.render(tree()));
     await waitFor(() => latest.pageNumber === 1 && latest.total === 6_000);
     assert.equal(
@@ -1020,7 +954,7 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
         status: 200,
         headers: { "content-type": "application/json" }
       });
-    const image = (serial: string): AdminImageListItemDto => ({...galleryCard(`00000000-0000-7000-8000-${serial}`),device: "pc", brightness: "dark", author: "", image_time: "2026-09-01T00:00:00.000Z",description: "",original_url: null,source: null,status: "deleted",purge_pending: false,storage_slug: "local",original: "",deleted_at: "2026-08-15T00:00:00.000Z",created_at: "2026-08-14T00:00:00.000Z",updated_at: "2026-08-15T00:00:00.000Z",base_url:"/images",variants:{large:{width:1600,height:900,byte_size:1024},medium:{width:1200,height:675,byte_size:800},small:{width:600,height:338,byte_size:200}}});
+    const image = (serial: string): AdminImageListItemDto => ({...galleryCard(`00000000-0000-7000-8000-${serial}`),device: "pc", brightness: "dark", author: null, image_time: "2026-09-01T00:00:00.000Z",description: "",original_url: null,source: null,status: "deleted",purge_pending: false,storage_slug: "local",original: "",deleted_at: "2026-08-15T00:00:00.000Z",created_at: "2026-08-14T00:00:00.000Z",updated_at: "2026-08-15T00:00:00.000Z",base_url:"/images",variants:{large:{width:1600,height:900,byte_size:1024},medium:{width:1200,height:675,byte_size:800},small:{width:600,height:338,byte_size:200}}});
     const waitFor = async (condition: () => boolean, message: string) => {
       for (let attempt = 0; attempt < 120; attempt += 1) {
         await React.act(async () => {

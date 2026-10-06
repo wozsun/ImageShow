@@ -215,7 +215,7 @@ function presentImageBase(
     device: row.device,
     brightness: row.brightness,
     theme: row.theme,
-    author: row.author ?? "",
+    author: row.author,
     tags: row.tags,
     base_url,
     storage_slug: row.storage_slug
@@ -320,7 +320,7 @@ export async function publicImageDetail(
   const base_url = publicImageBaseUrl(configs.get(row.storage_slug)!);
   return {
     device: row.device,
-    author: row.author ?? "",
+    author: row.author,
     brightness: row.brightness,
     ...(view === "show" ? { theme: row.theme, tags: row.tags } : {}),
     image_time: serializePublicImageTime(row),

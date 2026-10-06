@@ -142,7 +142,7 @@ function validSnapshot(value: unknown): value is ReadyImageCountSnapshot {
     countSumWithin(snapshot.devices, matching, total) &&
     countSumWithin(snapshot.brightnesses, matching, total) &&
     countSumWithin(snapshot.themes, matching, total) &&
-    countSumWithin(snapshot.authors, 0, total)
+    countSumWithin(snapshot.authors, matching, total)
   );
 }
 
@@ -231,7 +231,7 @@ function assertGlobalStats(stats: Map<string, number>, expectedTotal: number) {
     deviceTotal !== total ||
     brightnessTotal !== total ||
     themeTotal !== total ||
-    authorTotal > total
+    authorTotal !== total
   ) {
     throw new Error("Ready-image cache statistics dimensions are inconsistent");
   }

@@ -42,7 +42,7 @@ export type ImportManifestItemDto = {
   original: string;
   source?: string;
   image_time?: string;
-  author?: string;
+  author?: string | null;
   tags?: string[];
   title?: string;
   description?: string;

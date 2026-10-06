@@ -59,7 +59,6 @@ export async function ensureAuthorWithMutationLockHeld(
   client: Pool | PoolClient,
   slug: string
 ) {
-  if (!slug) return false;
   assertVocabularySlug("author", slug);
   const result = await client.query(
     `INSERT INTO author(slug, sort_order)

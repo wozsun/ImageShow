@@ -13,7 +13,7 @@ export function servingReadyCacheItem(overrides: Record<string, unknown> = {}) {
     brightness: "dark",
     theme: null,
     storage_slug: "local",
-    author: "",
+    author: null,
     tags: [],
     l_width: 1920, l_height: 1080, l_byte_size: 123456, l_md5: "0123456789abcdef0123456789abcdef",
     m_width: 1920, m_height: 1080, m_byte_size: 123456, m_md5: "0123456789abcdef0123456789abcdef",

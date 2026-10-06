@@ -1,4 +1,5 @@
 import type { ImageDraft } from "../../../../lib/types.js";
+import { normalizeNamedSlug } from "../../../../lib/image-draft.js";
 import type {
   IngestionCommonAttributeField,
   IngestionJob,
@@ -39,8 +40,8 @@ function createManifestItemDraft(
     original: retainOriginalLink ? item.original : "",
     device: valueOrDefault(item.device, defaults.device),
     brightness: valueOrDefault(item.brightness, defaults.brightness),
-    theme: valueOrDefault(item.theme, defaults.theme),
-    author: valueOrDefault(item.author, defaults.author),
+    theme: normalizeNamedSlug(valueOrDefault(item.theme, defaults.theme)),
+    author: normalizeNamedSlug(valueOrDefault(item.author, defaults.author)),
     tags: [...new Set([...(item.tags ?? []), ...defaults.tags])]
   };
 }

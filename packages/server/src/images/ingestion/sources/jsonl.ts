@@ -1,4 +1,4 @@
-import { imageThemeInput } from "../../metadata-theme.ts";
+import { imageAuthorInput, imageThemeInput } from "../../metadata-named-slugs.ts";
 import { z } from "zod";
 import { appConfig } from "@imageshow/shared";
 import {
@@ -31,7 +31,7 @@ const jsonlRowSchema = z
     original: httpsUrl,
     source: pageUrl.optional(),
     image_time: z.string().trim().min(1).max(64).optional(),
-    author: slug.optional(),
+    author: imageAuthorInput.optional(),
     tags: normalizedImageTagSlugsSchema.optional(),
     title: z.string().trim().max(appConfig.imageMetadata.titleMaxLength).optional(),
     description: z.string().trim().max(appConfig.imageMetadata.descriptionMaxLength).optional(),
