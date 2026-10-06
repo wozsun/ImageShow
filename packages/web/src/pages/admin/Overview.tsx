@@ -18,6 +18,13 @@ import { formatBytes } from "../../lib/ui/formatters.js";
 import { preloadIntentProps } from "../../lib/ui/preload-intent.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
+import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
+import { WorkspaceScrollBody } from "../../components/layout/WorkspaceScrollBody.js";
+import {
+  ActionFeedbackOutlet,
+  useActionFeedbackTarget
+} from "../../components/feedback/ActionFeedbackRegion.js";
+import { createActionFeedback, type ActionFeedbackState } from "../../lib/ui/action-feedback.js";
 import { useAdminImageDetailCapability } from "../../components/image/useAdminImageDetailCapability.js";
 import "../../styles/admin/overview.css";
 
@@ -70,11 +77,12 @@ function OverviewMetricCards({ items }: { items: OverviewMetric[] }) {
 }
 
 export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
-  const [detailLoadError, setDetailLoadError] = useState("");
+  const feedbackTarget = useActionFeedbackTarget("overview");
+  const [detailLoadError, setDetailLoadError] = useState<ActionFeedbackState | null>(null);
   const detailCapability = useAdminImageDetailCapability<AdminOverviewDto["recent"][number]>(
     (error) => {
       reportAdminUiError("overview.detail_load", error);
-      setDetailLoadError("图片详情加载失败，请重新加载页面");
+      setDetailLoadError(createActionFeedback("图片详情加载失败，请重新加载页面", "error"));
     }
   );
   const client = useQueryClient();
@@ -200,76 +208,79 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
     }
   ];
   return (
-    <section className="workspace overview">
-      <header className="workspace-head">
-        <div>
-          <h1>概览</h1>
-          <p>图片库与存储概况 · 共 {data?.total ?? 0} 张图片</p>
-        </div>
-      </header>
+    <section className="workspace workspace-contained overview">
+      <WorkspaceHeader
+        title="概览"
+        description={`图片库与存储概况 · 共 ${data?.total ?? 0} 张图片`}
+        feedbackTarget={feedbackTarget}
+      />
 
-      <div className="overview-grid">
-        <div className="overview-main">
-          <OverviewMetricCards items={imageCards} />
+      <WorkspaceScrollBody>
+        <div className="overview-grid">
+          <div className="overview-main">
+            <OverviewMetricCards items={imageCards} />
 
-          <div className="overview-section">
-            <h2>设备与亮度</h2>
-            <OverviewMetricCards items={deviceCards} />
+            <div className="overview-section">
+              <h2>设备与亮度</h2>
+              <OverviewMetricCards items={deviceCards} />
+            </div>
+
+            <div className="overview-section">
+              <h2>存储与大小</h2>
+              <OverviewMetricCards items={storageCards} />
+            </div>
           </div>
 
-          <div className="overview-section">
-            <h2>存储与大小</h2>
-            <OverviewMetricCards items={storageCards} />
+          <div className="overview-side">
+            {!!data?.top_themes?.length && (
+              <div className="overview-section">
+                <h2>热门主题</h2>
+                <div className="overview-themes">
+                  {data.top_themes.map((item) => (
+                    <span className="overview-theme-chip" key={item.theme}>
+                      {item.theme}
+                      <b>{item.count}</b>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!!data?.recent?.length && (
+              <div className="overview-section">
+                <h2>最近上传</h2>
+                <div className="overview-recent">
+                  {data.recent.map((img) => (
+                    <button
+                      type="button"
+                      className="overview-recent-item"
+                      key={img.id}
+                      disabled={detailCapability.pendingItemId === img.id}
+                      aria-busy={detailCapability.pendingItemId === img.id || undefined}
+                      aria-label={`查看图片详情：${img.title || img.id}`}
+                      title={img.title || img.id}
+                      {...preloadIntentProps(detailCapability.preload)}
+                      onClick={(event) => {
+                        setDetailLoadError(null);
+                        void detailCapability.open(img, event.currentTarget);
+                      }}
+                    >
+                      <ThumbnailImage src={imageVariantUrl(img, "small")} alt="" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
-
-        <div className="overview-side">
-          {!!data?.top_themes?.length && (
-            <div className="overview-section">
-              <h2>热门主题</h2>
-              <div className="overview-themes">
-                {data.top_themes.map((item) => (
-                  <span className="overview-theme-chip" key={item.theme}>
-                    {item.theme}
-                    <b>{item.count}</b>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {!!data?.recent?.length && (
-            <div className="overview-section">
-              <h2>最近上传</h2>
-              <div className="overview-recent">
-                {data.recent.map((img) => (
-                  <button
-                    type="button"
-                    className="overview-recent-item"
-                    key={img.id}
-                    disabled={detailCapability.pendingItemId === img.id}
-                    aria-busy={detailCapability.pendingItemId === img.id || undefined}
-                    aria-label={`查看图片详情：${img.title || img.id}`}
-                    title={img.title || img.id}
-                    {...preloadIntentProps(detailCapability.preload)}
-                    onClick={(event) => {
-                      setDetailLoadError("");
-                      void detailCapability.open(img, event.currentTarget);
-                    }}
-                  >
-                    <ThumbnailImage src={imageVariantUrl(img, "small")} alt="" />
-                  </button>
-                ))}
-              </div>
-              {detailLoadError && (
-                <p className="admin-error" role="alert">
-                  {detailLoadError}
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+      </WorkspaceScrollBody>
+      {detailLoadError && (
+        <ActionFeedbackOutlet
+          feedback={detailLoadError}
+          target={feedbackTarget}
+          onClose={() => setDetailLoadError(null)}
+        />
+      )}
       {detailCapability.item && detailCapability.Modal && (
         <detailCapability.Modal
           item={detailCapability.item}

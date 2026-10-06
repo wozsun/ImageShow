@@ -34,6 +34,7 @@ import {
   ImportSourceResultSummary
 } from "./ImportSourceResultPanel.js";
 import { parseImportUrlInput } from "../queue/model/import-job-source.js";
+import { FieldError } from "../../../../components/form/FieldError.js";
 
 export type { ImportSourceSubmission } from "./import-source-adapters.js";
 export type { ImportSourceMode } from "./import-source-model.js";
@@ -215,6 +216,10 @@ export function ImportSourceDialog({
     error: { icon: "close-line", label: "解析失败" }
   };
 
+  const inputError = parseError || (limitState.overLimit
+    ? `已输入 ${limitState.count} 条，最多允许 ${limitState.maxItems} 条，请拆分后再导入`
+    : "");
+
   return (
     <DialogFrame
       className="modal import-source-overlay"
@@ -298,6 +303,7 @@ export function ImportSourceDialog({
                   aria-labelledby={`${inputId}-tab-${mode}`}
                   aria-describedby={`${inputId}-hint`}
                   className="import-source-textarea"
+                  aria-invalid={Boolean(inputError) || undefined}
                   value={text}
                   disabled={parseAction.pending}
                   onChange={(event) => changeText(event.target.value)}
@@ -308,12 +314,7 @@ export function ImportSourceDialog({
                   <ImportSourceResultSummary result={parsedResult} />
                 )}
               </div>
-              {(parseError || limitState.overLimit) && (
-                <p className="form-error" role="alert" title={parseError || undefined}>
-                  {parseError ||
-                    `已输入 ${limitState.count} 条，最多允许 ${limitState.maxItems} 条，请拆分后再导入`}
-                </p>
-              )}
+              <FieldError message={inputError} announce />
               {parsedResult && (
                 <ImportSourceResultPanel result={parsedResult} />
               )}

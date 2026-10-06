@@ -4,14 +4,11 @@
   --admin-color-log-empty: #9aa4b2;
 }
 
-.log-page {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
+/* 日志文件工具栏位于页头最后一行；页头到查看框保持 12px。 */
 .log-page > .workspace-head {
   flex: 0 0 auto;
+  min-width: 0;
+  margin-bottom: 12px;
 }
 
 .log-head-actions {
@@ -32,12 +29,10 @@
 }
 
 .log-toolbar {
-  flex: 0 0 auto;
   display: flex;
   align-items: end;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
 }
 
 .log-toolbar .log-control {
@@ -109,5 +104,15 @@
 
   .log-meta {
     justify-content: flex-start;
+  }
+
+  /* 窄屏整页滚动，查看框随内容展开、不再自行滚动，长串在任意位置折行；末尾留出页面边距。 */
+  .log-viewer-frame {
+    margin-bottom: var(--workspace-inline-padding);
+  }
+  .workspace-has-toolbar .log-viewer {
+    height: auto;
+    overflow: visible;
+    overflow-wrap: anywhere;
   }
 }

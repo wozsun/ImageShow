@@ -55,7 +55,7 @@ const AccountSettings = lazy(() =>
   }))
 );
 const SettingsPage = lazy(() =>
-  adminRouteModuleLoaders.site().then((module) => ({
+  adminRouteModuleLoaders.settings().then((module) => ({
     default: module.SettingsPage
   }))
 );
@@ -114,6 +114,7 @@ function AuthenticatedAdminLayout({
   const canManageStorage = permissions.includes(adminPermissions.storageManage);
   const canManageUsers = permissions.includes(adminPermissions.usersManage);
   const canManageLogs = permissions.includes(adminPermissions.logsManage);
+  const overviewPage = <Overview canManageStorage={canManageStorage} />;
   const navigation = adminNavigationForPermissions(role, permissions);
 
   const resolvedColorScheme = useAdminColorScheme(colorScheme);
@@ -196,13 +197,14 @@ function AuthenticatedAdminLayout({
         <RouteLoadBoundary resetKey={routeLocation.pathname}>
           <Suspense fallback={<div className="center">加载中</div>}>
             <Routes>
-              <Route index element={<Overview canManageStorage={canManageStorage} />} />
+              <Route index element={overviewPage} />
+              <Route path="overview" element={overviewPage} />
               <Route path="images" element={<ImageAdmin />} />
               <Route path="tags" element={<VocabularyAdmin key="tags" kind="tags" />} />
               <Route path="themes" element={<VocabularyAdmin key="themes" kind="themes" />} />
               <Route path="authors" element={<VocabularyAdmin key="authors" kind="authors" />} />
               <Route path="account" element={<AccountSettings />} />
-              {canManageSettings && <Route path="site" element={<SettingsPage />} />}
+              {canManageSettings && <Route path="settings" element={<SettingsPage />} />}
               {canManageStorage && <Route path="storage" element={<StorageSettings />} />}
               {canManageUsers && <Route path="users" element={<UserAdmin />} />}
               <Route path="check" element={<CheckPage />} />

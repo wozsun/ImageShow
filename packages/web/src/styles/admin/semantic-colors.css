@@ -86,9 +86,7 @@
   --admin-color-success-surface-emphasis: light-dark(#dff3e5, #1e352d);
   --admin-color-success-surface-hover: light-dark(#cdeedb, #254833);
   --admin-color-success-border: light-dark(#9fd3ad, #4d795b);
-  --admin-color-success-border-soft: light-dark(#a9bdb0, #5a695f);
   --admin-color-success-border-strong: light-dark(#78b78a, #3f6f67);
-  --admin-color-success-progress: light-dark(#ccebd7, #284633);
   --admin-color-success-action: light-dark(#2f8f5b, #72c68b);
   --admin-color-success-action-hover: light-dark(#11522d, #8fd8a3);
 
@@ -103,7 +101,6 @@
   --admin-color-warning-surface-subtle: light-dark(#fff9e9, #28241b);
   --admin-color-warning-surface-emphasis: light-dark(#fff1cc, #322811);
   --admin-color-warning-surface-strong: light-dark(#f9e7af, #322811);
-  --admin-color-warning-progress: light-dark(#f7e7ae, #413212);
   --admin-color-warning-border: light-dark(#f0d38a, #7d661c);
   --admin-color-warning-border-soft: light-dark(#d8bc70, #86745d);
   --admin-color-warning-border-strong: light-dark(#ecc659, #9e7f24);
@@ -115,7 +112,6 @@
   --admin-color-danger-surface: light-dark(#fff2f0, #231719);
   --admin-color-danger-button-surface: light-dark(#ffeded, #231719);
   --admin-color-danger-surface-hover: light-dark(#ffe7e3, #2e1e20);
-  --admin-color-danger-progress: light-dark(#f7cece, #3f2628);
   --admin-color-danger-border: light-dark(#e8aaa4, #75494c);
   --admin-color-danger-border-strong: light-dark(#de8b83, #8b5357);
   --admin-color-danger-border-subtle: light-dark(#ead5d5, #472e30);
@@ -126,7 +122,6 @@
   --admin-color-pending-text: light-dark(#245eaa, #79c0ff);
   --admin-color-pending-text-strong: light-dark(#294f78, #a5d6ff);
   --admin-color-pending-surface: light-dark(#e2efff, #102035);
-  --admin-color-pending-progress: light-dark(#d3e4ff, #173152);
   --admin-color-pending-border: light-dark(#86afe8, #315d8c);
   --admin-color-pending-text-soft: light-dark(#2f6ea9, #6ba3d4);
   --admin-color-pending-surface-soft: light-dark(#eaf3ff, #0d1b2c);

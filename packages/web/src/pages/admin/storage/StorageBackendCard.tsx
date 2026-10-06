@@ -1,5 +1,6 @@
 import { AsyncActionButton } from "../../../components/actions/AsyncActionButton.js";
 import { SortOrderInput } from "../../../components/actions/SortOrderInput.js";
+import type { ActionFeedbackTarget } from "../../../components/feedback/ActionFeedbackRegion.js";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import {
   useAsyncActionStatus,
@@ -16,6 +17,7 @@ export function StorageBackendCard({
   hasNonLocalBackend,
   busy,
   sortBusy,
+  sortFeedbackTarget,
   defaultStatus,
   defaultActionPending,
   onSortSave,
@@ -29,6 +31,7 @@ export function StorageBackendCard({
   hasNonLocalBackend: boolean;
   busy: string;
   sortBusy: boolean;
+  sortFeedbackTarget: ActionFeedbackTarget;
   defaultStatus: AsyncActionStatus;
   defaultActionPending: boolean;
   onSortSave: (value: number) => Promise<number>;
@@ -147,6 +150,7 @@ export function StorageBackendCard({
               itemLabel={`存储后端 ${backend.slug}`}
               value={backend.sort_order}
               disabled={cardBusy}
+              feedbackTarget={sortFeedbackTarget}
               onSave={onSortSave}
             />
           )}

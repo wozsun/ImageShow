@@ -21,8 +21,9 @@ import {
   useActionFeedbackTarget
 } from "../../../components/feedback/ActionFeedbackRegion.js";
 import { WorkspaceHeader } from "../../../components/layout/WorkspaceHeader.js";
-import { StorageBackendModal } from "./StorageBackendModal.js";
+import { StorageBackendModal, type StorageFormOutcome } from "./StorageBackendModal.js";
 import { QueryErrorState } from "../../../components/feedback/QueryErrorState.js";
+import { WorkspaceScrollBody } from "../../../components/layout/WorkspaceScrollBody.js";
 import {
   invalidateDataAfterSortOrderSave,
   invalidateStorageData
@@ -108,15 +109,15 @@ export function StorageSettings() {
   ) =>
     (await executeStorageAction(key, action)).succeeded;
 
-  const testConfig = async (body: unknown): Promise<boolean> => {
-    if (busy) return false;
+  const testConfig = async (body: unknown): Promise<StorageFormOutcome> => {
+    if (busy) return { succeeded: false };
     setBusy("test");
     try {
       await api(`${adminApiBasePath}/storage/test`, { method: "POST", body: JSON.stringify(body) });
-      return true;
+      return { succeeded: true };
     } catch (error) {
       reportAdminUiError("storage.connection_test", error);
-      return false;
+      return { succeeded: false, error };
     } finally {
       await client
         .invalidateQueries({
@@ -240,80 +241,83 @@ export function StorageSettings() {
         : null;
 
   return (
-    <section className="workspace">
+    <section className="workspace workspace-contained">
       <WorkspaceHeader
         title="存储管理"
         description="命名存储后端：本地与多个对象存储桶可并存"
         feedbackTarget={feedbackTarget}
       />
-      <p className="hint">
-        每张图片记录自己所在的存储后端，可定义多个（同类型也可，例如两个对象存储桶）。新上传写入“默认”后端。
-      </p>
-      <p className="storage-default-note">
-        当前默认上传后端{" "}
-        <strong>
-          {defaultBackend
-            ? storageBackendDisplay(defaultBackend)
-            : storageBackendLabel(defaultSlug)}
-        </strong>
-      </p>
-      {query.isLoading && <p className="muted">加载中</p>}
-      {query.isError && (
-        <QueryErrorState
-          error={query.error}
-          onRetry={() => void query.refetch()}
-          reportContext="storage.load"
-        />
-      )}
-      <div className="storage-card-grid">
-        {backends.map((backend) => {
-          return (
-            <StorageBackendCard
-              key={backend.slug}
-              backend={backend}
-              hasNonLocalBackend={hasNonLocalBackend}
-              busy={busy}
-              sortBusy={sorting.isSaving(backend.slug)}
-              defaultStatus={defaultActionSlug === backend.slug
-                ? defaultAction.status
-                : "idle"}
-              defaultActionPending={defaultAction.pending}
-              onSortSave={(value) => sorting.save(backend.slug, value)}
-              onEdit={() => openEditor(backend)}
-              onSetDefault={() => setDefault(backend.slug)}
-              onToggleEnabled={() =>
-                runStorageAction(`enable:${backend.slug}`, () =>
-                  api(`${adminApiBasePath}/storage/backends/${backend.slug}`, {
-                    method: "POST",
-                    body: JSON.stringify({ enabled: !backend.enabled })
+      <WorkspaceScrollBody>
+        <p className="hint">
+          每张图片记录自己所在的存储后端，可定义多个（同类型也可，例如两个对象存储桶）。新上传写入“默认”后端。
+        </p>
+        <p className="storage-default-note">
+          当前默认上传后端{" "}
+          <strong>
+            {defaultBackend
+              ? storageBackendDisplay(defaultBackend)
+              : storageBackendLabel(defaultSlug)}
+          </strong>
+        </p>
+        {query.isLoading && <p className="muted">加载中</p>}
+        {query.isError && (
+          <QueryErrorState
+            error={query.error}
+            onRetry={() => void query.refetch()}
+            reportContext="storage.load"
+          />
+        )}
+        <div className="storage-card-grid">
+          {backends.map((backend) => {
+            return (
+              <StorageBackendCard
+                key={backend.slug}
+                backend={backend}
+                hasNonLocalBackend={hasNonLocalBackend}
+                busy={busy}
+                sortBusy={sorting.isSaving(backend.slug)}
+                sortFeedbackTarget={feedbackTarget}
+                defaultStatus={defaultActionSlug === backend.slug
+                  ? defaultAction.status
+                  : "idle"}
+                defaultActionPending={defaultAction.pending}
+                onSortSave={(value) => sorting.save(backend.slug, value)}
+                onEdit={() => openEditor(backend)}
+                onSetDefault={() => setDefault(backend.slug)}
+                onToggleEnabled={() =>
+                  runStorageAction(`enable:${backend.slug}`, () =>
+                    api(`${adminApiBasePath}/storage/backends/${backend.slug}`, {
+                      method: "POST",
+                      body: JSON.stringify({ enabled: !backend.enabled })
+                    })
+                  )
+                }
+                onRetryCleanup={() =>
+                  setActionDialog({
+                    kind: "retry-cleanup",
+                    backend
                   })
-                )
-              }
-              onRetryCleanup={() =>
-                setActionDialog({
-                  kind: "retry-cleanup",
-                  backend
-                })
-              }
-              onRemovalAction={() =>
-                setActionDialog({
-                  kind: backend.deletion.action,
-                  backend
-                })
-              }
-            />
-          );
-        })}
-        <button
-          type="button"
-          className="storage-add-card"
-          disabled={operationBusy}
-          onClick={() => openEditor("new")}
-        >
-          <AdminIcon name="add-line" />
-          <span>新增存储后端</span>
-        </button>
-      </div>
+                }
+                onRemovalAction={() =>
+                  setActionDialog({
+                    kind: backend.deletion.action,
+                    backend
+                  })
+                }
+              />
+            );
+          })}
+          <button
+            type="button"
+            className="storage-add-card"
+            disabled={operationBusy}
+            onClick={() => openEditor("new")}
+          >
+            <AdminIcon name="add-line" />
+            <span>新增存储后端</span>
+          </button>
+        </div>
+      </WorkspaceScrollBody>
       {editingTarget && (
         <StorageBackendModal
           key={editingTarget === "new" ? "new" : editingTarget.slug}
@@ -322,7 +326,7 @@ export function StorageSettings() {
           onClose={closeEditor}
           onTest={testConfig}
           onSave={(slug, payload, isCreate) =>
-            runStorageAction(isCreate ? "create" : `save:${slug}`, () =>
+            executeStorageAction(isCreate ? "create" : `save:${slug}`, () =>
               isCreate
                 ? api(`${adminApiBasePath}/storage/backends`, {
                     method: "POST",

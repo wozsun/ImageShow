@@ -300,7 +300,7 @@ test("[Server/图片] 存储输入归一化 slug 并补齐缺省 S3 设置", () 
         slug: "archive",
         s3: { endpoint: "http://s3.example.com" }
       }),
-    { code: "validation_error", message: "endpoint must use HTTPS" }
+    { code: "validation_error", message: "Endpoint 须使用 HTTPS" }
   );
 });
 
@@ -382,19 +382,9 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
       assert.ok(error instanceof ApiError);
       assert.equal(error.status, 400);
       assert.equal(error.code, "validation_error");
-      assert.equal(
-        error.message,
-        "标识 slug 不能为空；" +
-          "标识 slug 只能包含小写字母、数字、连字符，且不能以连字符开头或结尾"
-      );
+      assert.equal(error.message, "标识 slug 不能为空");
       assert.deepEqual(error.details, {
-        formErrors: [],
-        fieldErrors: {
-          slug: [
-            "标识 slug 不能为空",
-            "标识 slug 只能包含小写字母、数字、连字符，且不能以连字符开头或结尾"
-          ]
-        }
+        issues: [{ field: "slug", message: "标识 slug 不能为空" }]
       });
       return true;
     }
@@ -418,10 +408,12 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
       error.message === "标识 slug 只能包含小写字母、数字、连字符，且不能以连字符开头或结尾" &&
       JSON.stringify(error.details) ===
         JSON.stringify({
-          formErrors: [],
-          fieldErrors: {
-            slug: ["标识 slug 只能包含小写字母、数字、连字符，且不能以连字符开头或结尾"]
-          }
+          issues: [
+            {
+              field: "slug",
+              message: "标识 slug 只能包含小写字母、数字、连字符，且不能以连字符开头或结尾"
+            }
+          ]
         })
   );
   assert.equal(

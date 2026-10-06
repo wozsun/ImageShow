@@ -31,6 +31,7 @@ type OverlayScrollbarProps = {
   contentRef?: RefObject<HTMLElement | null>;
   containerRef?: RefObject<HTMLElement | null>;
   topInsetRef?: RefObject<HTMLElement | null>;
+  bottomInsetRef?: RefObject<HTMLElement | null>;
   pageEdge?: boolean;
   tone?: "default" | "dark";
   layer?: "default" | "menu";
@@ -42,6 +43,7 @@ export function OverlayScrollbar({
   contentRef,
   containerRef,
   topInsetRef,
+  bottomInsetRef,
   pageEdge,
   tone = "default",
   layer = "default",
@@ -68,8 +70,11 @@ export function OverlayScrollbar({
   useLayoutEffect(() => {
     const target = pageEdge ? targetRef?.current : null;
     if (!target) return;
-    target.classList.add("page-edge-scroll-host");
-    return () => target.classList.remove("page-edge-scroll-host");
+    // 用 data 属性而非类名标记：React 更新元素 className 时会覆盖命令式加上的类名。
+    target.dataset.pageEdgeScrollHost = "";
+    return () => {
+      delete target.dataset.pageEdgeScrollHost;
+    };
   }, [pageEdge, targetRef]);
 
   if (!enabled) return null;
@@ -79,6 +84,7 @@ export function OverlayScrollbar({
       contentRef={contentRef}
       containerRef={containerRef}
       topInsetRef={topInsetRef}
+      bottomInsetRef={bottomInsetRef}
       pageEdge={pageEdge}
       tone={tone}
       layer={layer}
@@ -91,6 +97,7 @@ function OverlayScrollbarHandle({
   contentRef,
   containerRef,
   topInsetRef,
+  bottomInsetRef,
   pageEdge,
   tone,
   layer
@@ -135,7 +142,7 @@ function OverlayScrollbarHandle({
     let observer: ResizeObserver | null = null;
 
     if (targetRef && !el) return;
-    if (el) el.classList.add("overlay-scroll-host");
+    if (el) el.dataset.overlayScrollHost = "";
 
     const isLocked = () => windowMode && isPageScrollLocked();
     const read = () => {
@@ -143,9 +150,13 @@ function OverlayScrollbarHandle({
         const rect = el.getBoundingClientRect();
         const containerRect = containerRef?.current?.getBoundingClientRect();
         const insetHeight = Math.max(0, topInsetRef?.current?.getBoundingClientRect().height ?? 0);
-        const viewport = Math.max(0, el.clientHeight - insetHeight);
-        // 扣除固定头部后，总高度与视口高度仍保留相同的最大滚动距离。
-        const total = Math.max(viewport, el.scrollHeight - insetHeight);
+        const bottomInsetHeight = Math.max(
+          0,
+          bottomInsetRef?.current?.getBoundingClientRect().height ?? 0
+        );
+        const viewport = Math.max(0, el.clientHeight - insetHeight - bottomInsetHeight);
+        // 扣除固定头部与页脚后，总高度与视口高度仍保留相同的最大滚动距离。
+        const total = Math.max(viewport, el.scrollHeight - insetHeight - bottomInsetHeight);
         const edgeRight = pageEdge ? window.innerWidth : rect.right;
         const hitTop = rect.top + insetHeight;
         return {
@@ -268,6 +279,7 @@ function OverlayScrollbarHandle({
     if (contentRef?.current) observer.observe(contentRef.current);
     if (containerRef?.current) observer.observe(containerRef.current);
     if (topInsetRef?.current) observer.observe(topInsetRef.current);
+    if (bottomInsetRef?.current) observer.observe(bottomInsetRef.current);
     // 页面锁的权威状态由 html.modal-open 表达。只观察根元素 class，避免恢复
     // 对整个页面子树的监听，同时确保锁定开始和结束时立即更新滚动条。
     const pageLockObserver = windowMode ? new MutationObserver(scheduleRecompute) : null;
@@ -285,9 +297,9 @@ function OverlayScrollbarHandle({
       pageLockObserver?.disconnect();
       if (frame !== undefined) window.cancelAnimationFrame(frame);
       window.clearTimeout(hideTimer.current);
-      if (el) el.classList.remove("overlay-scroll-host");
+      if (el) delete el.dataset.overlayScrollHost;
     };
-  }, [containerRef, contentRef, pageEdge, targetRef, topInsetRef]);
+  }, [bottomInsetRef, containerRef, contentRef, pageEdge, targetRef, topInsetRef]);
 
   const onHandlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();

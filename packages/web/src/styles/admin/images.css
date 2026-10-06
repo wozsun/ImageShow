@@ -253,28 +253,52 @@
   padding: 0;
 }
 
-/* 图片管理页只在本文件维护桌面、窄桌面和移动端三档布局。 */
+/* 图片管理页只在本文件维护桌面、窄桌面和移动端三档布局。
+   导入 / 上传与列表工具栏同在页头的一整块操作区内：桌面包装层不参与布局，工具栏折到页头第二行；
+   窄屏整块随列表收起与唤出（useWorkspaceToolbarCollapse）。 */
+.workspace-head.image-admin-head {
+  flex-wrap: wrap;
+  margin-bottom: 0;
+}
+.image-admin-toolbar {
+  display: contents;
+}
+.image-list-controls {
+  flex: 1 0 100%;
+  min-width: 0;
+}
 .image-admin-head-tools {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 12px;
 }
+/* 标题与副标题的几何与共用页头（WorkspaceHeader）一致：标题行 36px；页面反馈临时替换副标题。 */
 .image-admin-head-copy {
   flex: 1 1 0;
   min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "title"
+    "status";
 }
-.image-admin-title-row {
-  min-width: 0;
+.image-admin-head-copy > h1 {
+  grid-area: title;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
 }
 .image-admin-head-copy > p {
+  grid-area: status;
   min-height: 20px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.image-list-controls {
-  flex: 0 0 auto;
+.image-admin-head-copy > .image-admin-feedback-region {
+  grid-area: status;
+  margin-top: 4px;
 }
 .image-list-filter-bar {
   --image-list-filter-control-height: 40px;
@@ -357,11 +381,6 @@
   min-width: 0;
   margin-left: 0;
   justify-content: flex-end;
-}
-.image-list-toolbar-actions > .image-admin-feedback-region {
-  flex: 1 1 300px;
-  width: min(460px, 100%);
-  max-width: 460px;
 }
 .image-list-batch-actions {
   display: flex;
@@ -463,37 +482,53 @@
 }
 
 @media (max-width: 760px) {
-  .image-admin-title-row {
+  /* 列表顶部间距由操作区底部内边距提供。 */
+  .admin-image-grid {
+    padding-top: 0;
+  }
+  /* 视图切换与标题同行。行距与共用页头窄屏一致：标题到副标题 12px。 */
+  .image-admin-head-copy {
     display: grid;
     grid-template-columns: max-content minmax(0, 1fr);
+    grid-template-rows: 36px 20px;
+    grid-template-areas:
+      "title switch"
+      "status status";
     align-items: center;
-    gap: 12px;
+    column-gap: 12px;
+    row-gap: 12px;
   }
-  .image-admin-title-row > h1 {
-    min-height: 36px;
-    display: flex;
-    align-items: center;
-  }
-  .image-admin-title-row > .image-admin-feedback-region {
-    width: 100%;
-    max-width: none;
-    justify-self: stretch;
-    overflow: hidden;
+  .image-admin-head .image-admin-head-copy > p,
+  .image-admin-head-copy > .image-admin-feedback-region {
+    margin: 0;
   }
   .image-admin-head .image-admin-view-switch {
-    width: 100%;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-area: switch;
+    justify-self: end;
   }
   .image-admin-head .image-admin-view-switch button {
-    width: 100%;
+    min-width: 76px;
+  }
+  /* 回收站视图没有导入 / 上传时只保留列表工具栏；副标题到操作区的 16px 由吸顶标题区提供。 */
+  .image-admin-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .image-admin-head-tools:empty {
+    display: none;
+  }
+  /* 竖排时不沿用桌面换行用的 100% 基准，否则按高度解析会把操作区算矮。 */
+  .image-list-controls {
+    flex: 0 0 auto;
+  }
+  /* 操作区到列表的间距只由操作区底部内边距提供。 */
+  .image-list-toolbar {
+    margin-bottom: 0;
   }
   .image-admin-head-tools {
     flex-direction: column;
     align-items: stretch;
-  }
-  .image-admin-head-tools .image-admin-view-switch {
-    order: -1;
   }
   .image-admin-head-tools .ingestion-triggers {
     width: 100%;
@@ -704,6 +739,27 @@
   }
   .image-list-batch-actions > button:only-child {
     grid-column: 1 / -1;
+  }
+}
+
+/* 标题与两枚切换按钮约需 252px 视口；更窄时切换回到状态行下方并独占一行。 */
+@media (max-width: 260px) {
+  .image-admin-head-copy {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 36px 20px auto;
+    grid-template-areas:
+      "title"
+      "status"
+      "switch";
+  }
+  .image-admin-head .image-admin-view-switch {
+    justify-self: stretch;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 4px;
+  }
+  .image-admin-head .image-admin-view-switch button {
+    min-width: 0;
   }
 }
 

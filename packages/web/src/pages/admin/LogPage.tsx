@@ -24,6 +24,8 @@ import {
   useActionFeedbackTarget
 } from "../../components/feedback/ActionFeedbackRegion.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
+import { useWorkspaceToolbarCollapse } from "../../hooks/useWorkspaceToolbarCollapse.js";
+import { WorkspaceToolbarScrollbar } from "../../components/layout/WorkspaceToolbarScrollbar.js";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 import "../../styles/admin/logs.css";
@@ -67,6 +69,7 @@ export function LogPage() {
   const refreshLogsStatus = useAsyncActionStatus();
   const [feedback, setFeedback] = useState<ActionFeedbackState | null>(null);
   const feedbackTarget = useActionFeedbackTarget("admin-logs");
+  const workspaceToolbarRef = useWorkspaceToolbarCollapse();
   const query = useQuery<AdminLogPayloadDto>({
     queryKey: [...queryKeys.logs, selectedFile],
     queryFn: ({ signal }) => api(logsPath(selectedFile), { signal })
@@ -152,7 +155,10 @@ export function LogPage() {
   };
 
   return (
-    <section className="workspace workspace-contained log-page">
+    <section
+      ref={workspaceToolbarRef}
+      className="workspace workspace-contained workspace-has-toolbar log-page"
+    >
       <WorkspaceHeader
         title="日志"
         description="查看应用日志，并实时调整写入等级"
@@ -179,27 +185,32 @@ export function LogPage() {
             />
           </>
         }
+        toolbarRow={
+          <div className="log-toolbar">
+            <label className="log-control">
+              日志文件
+              <SelectMenu
+                value={effectiveFile}
+                onChange={setSelectedFile}
+                options={fileOptions}
+                ariaLabel="日志文件"
+                disabled={query.isFetching && !query.data}
+              />
+            </label>
+            <div className="log-meta">
+              {selectedSummary && <span>{formatBytes(selectedSummary.size)}</span>}
+              {selectedSummary && <span>{formatDate(selectedSummary.modified_at)}</span>}
+              {query.data && <span>读取 {formatBytes(query.data.bytes_read)}</span>}
+              {query.data?.truncated && <span>已截取最近 {formatBytes(query.data.limit_bytes)}</span>}
+            </div>
+          </div>
+        }
       />
-      <div className="log-toolbar">
-        <label className="log-control">
-          日志文件
-          <SelectMenu
-            value={effectiveFile}
-            onChange={setSelectedFile}
-            options={fileOptions}
-            ariaLabel="日志文件"
-            disabled={query.isFetching && !query.data}
-          />
-        </label>
-        <div className="log-meta">
-          {selectedSummary && <span>{formatBytes(selectedSummary.size)}</span>}
-          {selectedSummary && <span>{formatDate(selectedSummary.modified_at)}</span>}
-          {query.data && <span>读取 {formatBytes(query.data.bytes_read)}</span>}
-          {query.data?.truncated && <span>已截取最近 {formatBytes(query.data.limit_bytes)}</span>}
-        </div>
-      </div>
-      <div className="log-viewer-frame">
-        <pre ref={logViewerRef} className={`log-viewer${query.data?.content ? "" : " is-empty"}`}>
+      <div className="log-viewer-frame" data-workspace-content="">
+        <pre
+          ref={logViewerRef}
+          className={`log-viewer${query.data?.content ? "" : " is-empty"}`}
+        >
           {query.data?.content || (query.isFetching ? "正在读取日志..." : "暂无日志")}
         </pre>
         <OverlayScrollbar targetRef={logViewerRef} tone="dark" />
@@ -211,6 +222,7 @@ export function LogPage() {
           onClose={feedback ? () => setFeedback(null) : undefined}
         />
       )}
+      <WorkspaceToolbarScrollbar />
     </section>
   );
 }

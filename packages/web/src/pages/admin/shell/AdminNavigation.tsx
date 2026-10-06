@@ -1,5 +1,5 @@
 import { Fragment, useState } from "react";
-import { NavLink } from "react-router";
+import { NavLink, useLocation } from "react-router";
 import {
   adminPermissions,
   type AdminPermission,
@@ -7,7 +7,7 @@ import {
   type AdminRole
 } from "@imageshow/shared/browser";
 import { AdminIcon, type AdminIconName } from "../../../components/icon/AdminIcon.js";
-import { adminBasePath } from "../../../lib/constants.js";
+import { adminBasePath, adminOverviewPath } from "../../../lib/constants.js";
 import { AdminNavGroup } from "./AdminNavGroup.js";
 import { type AdminRouteModuleKey } from "./admin-route-modules.js";
 import { useAdminRoutePreloadIntent } from "./useAdminRoutePreloadIntent.js";
@@ -18,6 +18,8 @@ type AdminNavigationLink = {
   label: string;
   icon: AdminIconName;
   end?: boolean;
+  /** 另一个同样显示本页的地址，例如后台入口直接显示概览。 */
+  alsoActiveAt?: string;
   permission?: AdminPermission;
   desktopClassName?: string;
   routeModule?: AdminRouteModuleKey;
@@ -54,10 +56,10 @@ const adminNavigationModel = {
   main: [
     {
       kind: "link",
-      to: adminBasePath,
+      to: adminOverviewPath,
+      alsoActiveAt: adminBasePath,
       icon: "dashboard-line",
       label: "概览",
-      end: true,
       routeModule: "overview"
     },
     {
@@ -106,11 +108,11 @@ const adminNavigationModel = {
       items: [
         {
           kind: "link",
-          to: `${adminBasePath}/site`,
+          to: `${adminBasePath}/settings`,
           icon: "settings-3-line",
           label: "站点配置",
           permission: adminPermissions.settingsManage,
-          routeModule: "site"
+          routeModule: "settings"
         },
         {
           kind: "link",
@@ -208,6 +210,9 @@ function NavigationLink({
   variant: "desktop" | "mobile";
 }) {
   const preloadIntent = useAdminRoutePreloadIntent(item.routeModule);
+  const { pathname } = useLocation();
+  const activeAtAlternatePath = item.alsoActiveAt !== undefined
+    && pathname.replace(/\/+$/, "") === item.alsoActiveAt;
   return (
     <NavLink
       to={item.to}
@@ -216,7 +221,7 @@ function NavigationLink({
       className={({ isActive }) =>
         [
           variant === "desktop" ? item.desktopClassName : "",
-          isActive ? "active" : ""
+          isActive || activeAtAlternatePath ? "active" : ""
         ]
           .filter(Boolean)
           .join(" ")

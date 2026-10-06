@@ -281,7 +281,7 @@ export function ImageMetadataEditorDialog({
   };
   return (
     <DialogFrame
-      className="modal edit-modal image-editor-overlay"
+      className="modal edit-modal is-mobile-fullscreen"
       ariaLabel={title}
       busy={busy}
       paused={Boolean((canMigrateStorage && migrating)

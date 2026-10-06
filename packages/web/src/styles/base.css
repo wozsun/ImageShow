@@ -168,10 +168,11 @@ html.has-overlay-scrollbar body::-webkit-scrollbar {
   pointer-events: auto;
 }
 
-.overlay-scroll-host {
+[data-overlay-scroll-host] {
   scrollbar-width: none;
 }
-.overlay-scroll-host::-webkit-scrollbar {
+[data-overlay-scroll-host]::-webkit-scrollbar {
+  display: none;
   width: 0;
   height: 0;
 }
@@ -248,10 +249,14 @@ textarea:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
-/*通用的非法字段红框：任何被标记 aria-invalid 的输入（如不符合策略的密码、含非法字符的 slug）。*/
-input[aria-invalid="true"] {
+/*通用的非法字段红框：任何被标记 aria-invalid 的输入、多行文本与下拉选择（如不符合策略的密码、含非法字符的 slug、保存失败的配置项）。*/
+:is(input, textarea, .select-trigger)[aria-invalid="true"] {
   border-color: var(--color-control-invalid);
   box-shadow: 0 0 0 1px var(--color-control-invalid);
+}
+/*聚焦时焦点描边也用错误色，正在修改的出错字段不被描边盖住红框。*/
+:is(input, textarea, .select-trigger)[aria-invalid="true"]:focus-visible {
+  outline-color: var(--color-control-invalid);
 }
 
 /*只读标签 chip 的基础样式：画廊看图弹窗与后台可编辑标签编辑器共用。*/

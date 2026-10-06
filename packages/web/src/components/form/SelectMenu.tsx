@@ -20,6 +20,7 @@ export function SelectMenu({
   onOpenChange,
   disabled = false,
   ariaLabel,
+  ariaInvalid,
   className,
   menuClassName
 }: {
@@ -29,6 +30,7 @@ export function SelectMenu({
   onOpenChange?: (open: boolean) => void;
   disabled?: boolean;
   ariaLabel?: string;
+  ariaInvalid?: boolean;
   className?: string;
   menuClassName?: string;
 }) {
@@ -127,6 +129,7 @@ export function SelectMenu({
         className={`select-trigger ${open && !closing ? "is-open" : ""}`}
         type="button"
         aria-label={ariaLabel}
+        aria-invalid={ariaInvalid || undefined}
         aria-haspopup="listbox"
         aria-expanded={open && !closing}
         aria-controls={open ? menuId : undefined}

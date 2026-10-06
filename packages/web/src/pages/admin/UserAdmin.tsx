@@ -5,7 +5,10 @@ import { api, isApiClientError } from "../../lib/api/client.js";
 import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
 import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
-import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
+import { WorkspaceScrollBody } from "../../components/layout/WorkspaceScrollBody.js";
+import { WorkspaceToolbar } from "../../components/layout/WorkspaceToolbar.js";
+import { useWorkspaceToolbarCollapse } from "../../hooks/useWorkspaceToolbarCollapse.js";
+import { WorkspaceToolbarScrollbar } from "../../components/layout/WorkspaceToolbarScrollbar.js";
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
 import { DialogFrame } from "../../components/feedback/DialogFrame.js";
 import { adminApiBasePath, slugFormatHint, slugPattern } from "../../lib/constants.js";
@@ -23,6 +26,7 @@ import {
 import type { AdminUser } from "../../lib/types.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
+import { FieldError } from "../../components/form/FieldError.js";
 import "../../styles/admin/entity.css";
 
 const generatePasswordPresentation = {
@@ -63,7 +67,7 @@ export function UserAdmin() {
   const resetPasswordTriggerRef = useRef<HTMLButtonElement | null>(null);
   const createAction = useAsyncActionStatus({ resultDurationMs: null });
   const generatePasswordStatus = useAsyncActionStatus();
-  const listRef = useRef<HTMLDivElement | null>(null);
+  const workspaceToolbarRef = useWorkspaceToolbarCollapse();
   const usernameInvalid = username.length > 0 && !slugPattern.test(username);
   const usernameError = usernameInvalid ? slugFormatHint : createError;
   const usernameValid = username.trim().length > 0 && slugPattern.test(username.trim());
@@ -146,83 +150,85 @@ export function UserAdmin() {
   };
 
   return (
-    <section className="workspace">
+    <section
+      ref={workspaceToolbarRef}
+      className="workspace workspace-contained workspace-has-toolbar"
+    >
       <WorkspaceHeader
         title="用户管理"
         description={`共 ${users.length} 个管理员${isFetching ? " · 加载中" : ""} · 在此新增与管理图片管理员`}
       />
-      <form className="admin-create-form" onSubmit={create}>
-        <div className="admin-create-field entity-slug-field">
-          <input
-            className="entity-create-slug"
-            value={username}
-            onChange={(event) => {
-              setUsername(event.target.value.toLowerCase());
-              setCreateError("");
-            }}
-            placeholder="用户名"
+      <WorkspaceToolbar>
+        <form className="admin-create-form" onSubmit={create}>
+          <div className="admin-create-field entity-slug-field">
+            <input
+              className="entity-create-slug"
+              value={username}
+              onChange={(event) => {
+                setUsername(event.target.value.toLowerCase());
+                setCreateError("");
+              }}
+              placeholder="用户名"
+              disabled={createFormBusy}
+              maxLength={32}
+              autoComplete="off"
+              aria-invalid={Boolean(usernameError)}
+            />
+            <FieldError message={usernameError} announce />
+          </div>
+          <div className="admin-create-field user-password-field">
+            <PasswordInput
+              value={password}
+              onChange={setPassword}
+              placeholder={`密码（${passwordPolicyHint}）`}
+              disabled={createFormBusy}
+              maxLength={128}
+              autoComplete="new-password"
+              ariaInvalid={passwordInvalid}
+            />
+            <FieldError message={passwordInvalid ? passwordPolicyHint : null} />
+          </div>
+          <AsyncActionButton
+            type="button"
+            className="button secondary"
+            status={generatePasswordStatus.status}
+            presentation={generatePasswordPresentation}
             disabled={createFormBusy}
-            maxLength={32}
-            autoComplete="off"
-            aria-invalid={Boolean(usernameError)}
+            onClick={() => void generatePassword()}
           />
-          {usernameError && (
-            <p className="admin-field-error" role="alert">
-              {usernameError}
-            </p>
+          <button
+            className="button"
+            type="submit"
+            disabled={createFormBusy || !usernameValid || !isValidAdminPassword(password)}
+          >
+            <AdminIcon name="user-add-line" />
+            <StableButtonLabel idle="新建图片管理员" busyText="新建中" busy={createAction.pending} />
+          </button>
+        </form>
+      </WorkspaceToolbar>
+      <WorkspaceScrollBody>
+        <div className="entity-admin-grid">
+          {users.map((user) => (
+            <UserCard
+              key={user.username}
+              user={user}
+              onResetPassword={(trigger) => {
+                resetPasswordTriggerRef.current = trigger;
+                setResetting(user);
+              }}
+              onDelete={() => setConfirmDelete(user)}
+            />
+          ))}
+          {listFailed && (
+            <QueryErrorState
+              error={listError}
+              onRetry={() => void refetch()}
+              reportContext="user_admin.load"
+            />
           )}
+          {!listFailed && !users.length && !isFetching && <p className="muted">还没有管理员</p>}
         </div>
-        <div className="admin-create-field user-password-field">
-          <PasswordInput
-            value={password}
-            onChange={setPassword}
-            placeholder={`密码（${passwordPolicyHint}）`}
-            disabled={createFormBusy}
-            maxLength={128}
-            autoComplete="new-password"
-            ariaInvalid={passwordInvalid}
-          />
-          {passwordInvalid && <p className="admin-field-error">{passwordPolicyHint}</p>}
-        </div>
-        <AsyncActionButton
-          type="button"
-          className="button secondary"
-          status={generatePasswordStatus.status}
-          presentation={generatePasswordPresentation}
-          disabled={createFormBusy}
-          onClick={() => void generatePassword()}
-        />
-        <button
-          className="button"
-          type="submit"
-          disabled={createFormBusy || !usernameValid || !isValidAdminPassword(password)}
-        >
-          <AdminIcon name="user-add-line" />
-          <StableButtonLabel idle="新建图片管理员" busyText="新建中" busy={createAction.pending} />
-        </button>
-      </form>
-      <div className="entity-admin-grid admin-scroll-list" ref={listRef}>
-        {users.map((user) => (
-          <UserCard
-            key={user.username}
-            user={user}
-            onResetPassword={(trigger) => {
-              resetPasswordTriggerRef.current = trigger;
-              setResetting(user);
-            }}
-            onDelete={() => setConfirmDelete(user)}
-          />
-        ))}
-        {listFailed && (
-          <QueryErrorState
-            error={listError}
-            onRetry={() => void refetch()}
-            reportContext="user_admin.load"
-          />
-        )}
-        {!listFailed && !users.length && !isFetching && <p className="muted">还没有管理员</p>}
-      </div>
-      <OverlayScrollbar targetRef={listRef} />
+      </WorkspaceScrollBody>
       {confirmDelete && (
         <ConfirmDialog
           title="删除管理员"
@@ -243,6 +249,7 @@ export function UserAdmin() {
           onError={(error) => reportAdminUiError("user_admin.reset_password", error)}
         />
       )}
+      <WorkspaceToolbarScrollbar />
     </section>
   );
 }
@@ -372,7 +379,7 @@ function ResetPasswordModal({
                 autoFocus
                 ariaInvalid={passwordInvalid}
               />
-              {passwordInvalid && <p className="admin-field-error">{passwordPolicyHint}</p>}
+              <FieldError message={passwordInvalid ? passwordPolicyHint : null} />
             </label>
           </div>
           <footer>

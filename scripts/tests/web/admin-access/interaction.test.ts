@@ -411,7 +411,7 @@ test("[Web/后台访问] 图片管理保留连续选择、直接分页和管理�
     "images",
     "logs",
     "overview",
-    "site",
+    "settings",
     "storage",
     "users",
     "vocabulary"
@@ -424,7 +424,7 @@ test("[Web/后台访问] 图片管理保留连续选择、直接分页和管理�
   );
   assert.deepEqual(
     [...navigationModules("super", [adminPermissions.logsManage])].filter(
-      (module) => ["logs", "site", "storage", "users"].includes(module)
+      (module) => ["logs", "settings", "storage", "users"].includes(module)
     ),
     ["logs"],
     "页面能力应独立过滤导航与预加载入口"

@@ -1963,7 +1963,7 @@ test("[Web/后台表单] 权威保存完成后列表读取挂起不锁住编辑�
     h.document.querySelector<HTMLButtonElement>('button[title="关闭"]')!.click()
   );
   await h.React.act(async () =>
-    dispatchDomEvent(h.window, h.document.querySelector(".image-editor-overlay")!, "animationend")
+    dispatchDomEvent(h.window, h.document.querySelector(".image-editor-modal")!.closest("[data-dialog-frame]")!, "animationend")
   );
   assert.equal(closed, 1, "派生查询未返回时也能正常关闭已保存编辑器");
   await h.render(null);
@@ -2093,7 +2093,7 @@ for (const count of [1, 2]) {
     await clock.advanceBy(500);
     await h.flush();
     await h.React.act(async () =>
-      dispatchDomEvent(h.window, h.document.querySelector(".image-editor-overlay")!, "animationend")
+      dispatchDomEvent(h.window, h.document.querySelector(".image-editor-modal")!.closest("[data-dialog-frame]")!, "animationend")
     );
     assert.equal(closed, 1, "所有活动成员删除成功后关闭编辑窗口");
     assert.deepEqual(
@@ -2216,12 +2216,12 @@ test("[Web/后台表单] 本地存储公开 URL 回显、修改保存与清空�
         target: backend,
         busy: "",
         onClose() {},
-        onTest: async () => true,
+        onTest: async () => ({ succeeded: true }),
         onSave: async (slug, payload, creating) => {
           assert.equal(slug, "local");
           assert.equal(creating, false);
           saved.push(payload);
-          return true;
+          return { succeeded: true };
         }
       })
     )
@@ -2373,6 +2373,13 @@ test("[Web/后台表单] 词条两种视图按字段保护 dirty，clean 跟随�
   const clock = installControlledClock(t, h.window);
   const { VocabularyAdminItem } =
     await import("../../../packages/web/src/pages/admin/VocabularyAdminItem.tsx");
+  const { useActionFeedbackTarget } =
+    await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
+  // 词条的排序输入把提示投递到所在页面的反馈目标；本用例不触发排序提示，由宿主提供稳定目标。
+  function Item(props: Omit<Parameters<typeof VocabularyAdminItem>[0], "sortFeedbackTarget">) {
+    const sortFeedbackTarget = useActionFeedbackTarget("vocabulary-test");
+    return h.React.createElement(VocabularyAdminItem, { ...props, sortFeedbackTarget });
+  }
   for (const kind of ["themes", "tags", "authors"] as const) {
     let item: {
       slug: string;
@@ -2401,7 +2408,7 @@ test("[Web/后台表单] 词条两种视图按字段保护 dirty，clean 跟随�
     let viewMode: "card" | "list" = "card";
     const columns: VocabularyColumnId[] = ["slug", "display", ...(kind === "authors" ? ["link" as const] : []), "count", "sort", "actions"];
     const render = async () =>
-      h.render(h.React.createElement(VocabularyAdminItem, { ...props, item, columns, viewMode }));
+      h.render(h.React.createElement(Item, { ...props, item, columns, viewMode }));
     await render();
     const display = () => h.document.querySelector<HTMLInputElement>(".vocabulary-display-input")!;
     const change = async (value: string) =>
@@ -2447,12 +2454,18 @@ test("[Web/后台表单] 词条图标在视图切换中保留保存状态、失�
   const h = await createConfigStreamHarness(t);
   const clock = installControlledClock(t, h.window);
   const { VocabularyAdminItem } = await import("../../../packages/web/src/pages/admin/VocabularyAdminItem.tsx");
+  const { useActionFeedbackTarget } =
+    await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
+  function Item(props: Omit<Parameters<typeof VocabularyAdminItem>[0], "sortFeedbackTarget">) {
+    const sortFeedbackTarget = useActionFeedbackTarget("vocabulary-test");
+    return h.React.createElement(VocabularyAdminItem, { ...props, sortFeedbackTarget });
+  }
   for (const kind of ["themes", "tags", "authors"] as const) {
     const item = { slug: kind, display_name: "before", link: "", image_count: 0, sort_order: 1 };
     const columns: VocabularyColumnId[] = ["slug", "display", ...(kind === "authors" ? ["link" as const] : []), "count", "sort", "actions"];
     let deleted = 0;
     let errors = 0;
-    const render = (viewMode: "card" | "list", canDelete = true) => h.render(h.React.createElement(VocabularyAdminItem, {
+    const render = (viewMode: "card" | "list", canDelete = true) => h.render(h.React.createElement(Item, {
       kind, item, columns, viewMode, canDelete, sortBusy: false,
       onChanged() {}, onDelete() { deleted++; }, onError() { errors++; }, onSortSave: async (value) => value
     }));
@@ -2535,10 +2548,16 @@ test("[Web/后台表单] 站点配置完整草稿支持保存与重载确认，�
   t.after(() => {
     AbortSignal.timeout = originalTimeout;
   });
+  const { ActionFeedbackProvider } =
+    await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
   let settings = structuredClone(appConfig.runtimeDefaults) as RuntimeConfig;
   client.setQueryData(queryKeys.runtimeConfig, { config: settings, settings, revision: settings.site.header_name.padEnd(43, "_") });
   await h.render(
-    h.React.createElement(QueryClientProvider, { client }, h.React.createElement(SettingsPage))
+    h.React.createElement(
+      QueryClientProvider,
+      { client },
+      h.React.createElement(ActionFeedbackProvider, null, h.React.createElement(SettingsPage))
+    )
   );
   const input = () =>
     h.document.querySelector<HTMLInputElement>('input[aria-label="页头名称"]')!;

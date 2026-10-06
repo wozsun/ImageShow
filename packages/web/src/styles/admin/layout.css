@@ -29,6 +29,27 @@ body:has(.admin > .workspace-contained) {
   min-height: 0;
   overflow: hidden;
 }
+/* 页头固定的工作区：页面不整体滚动，页头与操作区留在原位，其余内容在主滚动区内滚动。 */
+.workspace-contained {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+/* 主滚动区延伸到视口底边，页面底部留白放进滚动内容末尾，滚动时内容不在离底边一段距离处截断。 */
+.workspace-contained:has(> .workspace-scroll-body) {
+  padding-bottom: 0;
+}
+.workspace-scroll-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: var(--workspace-inline-padding);
+}
+/* 滚动区不与页头外边距合并，首项的上外边距会额外拉开距离。 */
+.workspace-scroll-body > :first-child {
+  margin-top: 0;
+}
 
 @media (min-width: 761px) {
   .workspace-paged {
@@ -36,6 +57,9 @@ body:has(.admin > .workspace-contained) {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+  }
+  /* 翻页按钮下方比上方（12px 内边距 + 分隔线）略宽；需高于 .workspace 的内边距简写。 */
+  .workspace.workspace-paged {
     padding-bottom: 16px;
   }
   .workspace-paged > .admin-scroll-region {
@@ -428,9 +452,9 @@ body:has(.admin > .workspace-contained) {
 .muted {
   color: var(--admin-color-text-secondary);
 }
-.workspace > .page-edge-scroll-host {
+.workspace > [data-page-edge-scroll-host] {
   margin-inline-end: calc(-1 * var(--workspace-inline-padding));
-  padding-inline-end: calc(var(--workspace-inline-padding) + 2px);
+  padding-inline-end: var(--workspace-inline-padding);
 }
 .workspace-head {
   gap: 16px;
@@ -441,17 +465,10 @@ body:has(.admin > .workspace-contained) {
   justify-content: space-between;
   align-items: flex-start;
 }
-.workspace-head > .actions {
-  margin-left: auto;
-  justify-content: flex-end;
-}
 .workspace h1 {
   margin: 0;
   font-size: 28px;
   white-space: nowrap;
-}
-.workspace-head > div:first-child {
-  min-width: 0;
 }
 .workspace h2 {
   margin: 0 0 12px;
@@ -465,7 +482,8 @@ body:has(.admin > .workspace-contained) {
   color: var(--admin-color-text-secondary);
 }
 
-/* 标题和反馈组成一个不可拆散的首行；操作组在外层拥有独立轨道。 */
+/* 页头网格：标题区（标题、标题附件、描述与页面反馈）与操作区是兄弟节点，桌面上两者的包装层
+   都不参与布局，各项直接按本网格排布；窄屏布局见 responsive.css。页面反馈与描述共用一个区域。 */
 .workspace-grid-head {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -475,37 +493,68 @@ body:has(.admin > .workspace-contained) {
   align-items: center;
   row-gap: 0;
 }
-.workspace-grid-head.has-actions {
+/* 标题附件与操作组互斥：二者都覆写网格列与区域，页头只接受其一。 */
+.workspace-grid-head.has-accessory {
   grid-template-columns: minmax(0, 1fr) max-content;
   grid-template-areas:
+    "heading accessory"
+    "description accessory";
+}
+/* 操作组高于标题与描述时，多出的高度落在第三行，标题与描述的位置与无操作页头一致。 */
+.workspace-grid-head.has-actions {
+  grid-template-columns: minmax(0, 1fr) max-content;
+  grid-template-rows: auto auto 1fr;
+  grid-template-areas:
     "heading actions"
-    "description actions";
+    "description actions"
+    ". actions";
 }
-.workspace-header-title-row {
-  grid-area: heading;
+/* 页面工具栏在桌面独占页头最后一行。 */
+.workspace-grid-head.has-toolbar-row {
+  grid-template-areas:
+    "heading"
+    "description"
+    "toolbar";
+}
+.workspace-grid-head.has-actions.has-toolbar-row {
+  grid-template-rows: auto auto 1fr auto;
+  grid-template-areas:
+    "heading actions"
+    "description actions"
+    ". actions"
+    "toolbar toolbar";
+}
+.workspace-pinned,
+.workspace-toolbar-rail,
+.workspace-header-toolbar {
+  display: contents;
+}
+.workspace-header-toolbar-row {
+  grid-area: toolbar;
   min-width: 0;
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  align-items: center;
-  gap: 16px;
+  margin-top: 16px;
 }
-.workspace-header-title-row > h1 {
+.workspace-pinned > h1 {
+  grid-area: heading;
   min-height: 36px;
   display: flex;
   align-items: center;
 }
-.workspace-grid-head > p {
+.workspace-title-accessory {
+  grid-area: accessory;
+  align-self: start;
+  justify-self: end;
+}
+.workspace-pinned > p {
   grid-area: description;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.workspace-header-title-row > .action-feedback-region {
-  width: min(460px, 100%);
-  max-width: 100%;
-  justify-self: end;
-  overflow: hidden;
+.workspace-pinned > .action-feedback-region {
+  grid-area: description;
+  margin-top: 4px;
 }
 .workspace-header-actions {
   grid-area: actions;

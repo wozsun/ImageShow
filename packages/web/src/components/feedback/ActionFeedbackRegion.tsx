@@ -17,10 +17,7 @@ export type ActionFeedbackTarget = {
   readonly label: string;
 };
 
-export type ActionFeedbackRegionVariant = "page" | "card";
-
 type ActionFeedbackRegionRegistry = {
-  fallbackHost: HTMLElement | null;
   hosts: ReadonlyMap<ActionFeedbackTarget, HTMLElement>;
   register: (target: ActionFeedbackTarget, host: HTMLElement | null) => void;
 };
@@ -39,16 +36,7 @@ export function useActionFeedbackTarget(label?: string) {
   return target;
 }
 
-function resolveActionFeedbackHost(
-  target: ActionFeedbackTarget,
-  hosts: ReadonlyMap<ActionFeedbackTarget, HTMLElement>,
-  fallbackHost: HTMLElement | null
-) {
-  return hosts.get(target) ?? fallbackHost;
-}
-
 export function ActionFeedbackProvider({ children }: { children: ReactNode }) {
-  const [fallbackHost, setFallbackHost] = useState<HTMLElement | null>(null);
   const [hosts, setHosts] = useState<ReadonlyMap<ActionFeedbackTarget, HTMLElement>>(
     () => new Map()
   );
@@ -67,26 +55,15 @@ export function ActionFeedbackProvider({ children }: { children: ReactNode }) {
 
   const registry = useMemo<ActionFeedbackRegionRegistry>(
     () => ({
-      fallbackHost,
       hosts,
       register
     }),
-    [fallbackHost, hosts, register]
-  );
-
-  const fallback = createPortal(
-    <div
-      ref={setFallbackHost}
-      className="action-feedback-region action-feedback-fallback-region"
-      data-feedback-fallback="true"
-    />,
-    document.body
+    [hosts, register]
   );
 
   return (
     <ActionFeedbackRegionContext value={registry}>
       {children}
-      {fallback}
     </ActionFeedbackRegionContext>
   );
 }
@@ -99,13 +76,12 @@ function useActionFeedbackRegistry() {
   return registry;
 }
 
+/** 页面反馈区，放在页头副标题所在的网格区域，消息出现时临时替换副标题。 */
 export function ActionFeedbackRegion({
   target,
-  variant,
   className = ""
 }: {
   target: ActionFeedbackTarget;
-  variant: ActionFeedbackRegionVariant;
   className?: string;
 }) {
   const { register } = useActionFeedbackRegistry();
@@ -115,31 +91,25 @@ export function ActionFeedbackRegion({
     },
     [register, target]
   );
-  const classes = [
-    "action-feedback-region",
-    `is-${variant}`,
-    className
-  ].filter(Boolean).join(" ");
+  const classes = ["action-feedback-region", className].filter(Boolean).join(" ");
   return <div ref={bindHost} className={classes} data-feedback-region={target.label} />;
 }
 
 export function ActionFeedbackOutlet({
   feedback,
   target,
-  onClose,
-  announce = true
+  onClose
 }: {
   feedback: ActionFeedbackState;
   target: ActionFeedbackTarget;
   onClose?: () => void;
-  announce?: boolean;
 }) {
-  const { fallbackHost, hosts } = useActionFeedbackRegistry();
-  const host = resolveActionFeedbackHost(target, hosts, fallbackHost);
+  const { hosts } = useActionFeedbackRegistry();
+  const host = hosts.get(target);
   if (!host) return null;
 
   return createPortal(
-    <ActionFeedback feedback={feedback} onClose={onClose} announce={announce} />,
+    <ActionFeedback feedback={feedback} onClose={onClose} />,
     host,
     feedback.id
   );

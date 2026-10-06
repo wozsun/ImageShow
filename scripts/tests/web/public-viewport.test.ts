@@ -56,7 +56,7 @@ test("[Web/公开视口] 直达、站内往返和后退保持唯一 viewport，�
     assert.equal(metas.length, 1);
     assert.equal(
       metas[0].getAttribute("content"),
-      "width=device-width, initial-scale=1.0" + (immersive ? ", viewport-fit=cover" : "")
+      "width=device-width, initial-scale=1.0, maximum-scale=1" + (immersive ? ", viewport-fit=cover" : "")
     );
     assert.equal(h.document.documentElement.hasAttribute("data-public-viewport"), immersive);
   };

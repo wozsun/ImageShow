@@ -38,6 +38,8 @@ test("[Web/后台访问] 概览渲染当前、历史与未知 Redis 占用且重
     await import("../../../../packages/web/src/pages/admin/Overview.tsx").finally(() =>
       cssHooks.deregister()
     );
+  const { ActionFeedbackProvider } =
+    await import("../../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
 
   const overviewResult = (redisCache: AdminOverviewDto["redis_cache"]): AdminOverviewDto => ({
     gallery: 7,
@@ -149,7 +151,11 @@ test("[Web/后台访问] 概览渲染当前、历史与未知 Redis 占用且重
           React.createElement(
             MemoryRouter,
             { initialEntries: ["/admin"] },
-            React.createElement(Overview, { canManageStorage: true })
+            React.createElement(
+              ActionFeedbackProvider,
+              null,
+              React.createElement(Overview, { canManageStorage: true })
+            )
           )
         )
       );
@@ -292,7 +298,11 @@ test("[Web/后台访问] 概览渲染当前、历史与未知 Redis 占用且重
           React.createElement(
             MemoryRouter,
             { initialEntries: ["/admin"] },
-            React.createElement(Overview, { canManageStorage: true })
+            React.createElement(
+              ActionFeedbackProvider,
+              null,
+              React.createElement(Overview, { canManageStorage: true })
+            )
           )
         )
       );

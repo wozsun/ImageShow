@@ -24,6 +24,7 @@ type NumberInputProps = {
   disabled?: boolean;
   className?: string;
   ariaLabel?: string;
+  ariaInvalid?: boolean;
 };
 
 export function NumberInput({
@@ -35,7 +36,8 @@ export function NumberInput({
   placeholder,
   disabled,
   className,
-  ariaLabel
+  ariaLabel,
+  ariaInvalid
 }: NumberInputProps) {
   const [draft, setDraft] = useState(String(value));
   const [editing, setEditing] = useState(false);
@@ -64,6 +66,7 @@ export function NumberInput({
       inputMode={step === "any" ? "decimal" : "numeric"}
       className={className}
       aria-label={ariaLabel}
+      aria-invalid={ariaInvalid || undefined}
       min={min}
       max={max}
       step={step}

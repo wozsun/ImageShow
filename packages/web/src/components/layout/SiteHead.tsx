@@ -10,6 +10,10 @@ function isAdminRoute(pathname: string) {
     || pathname.startsWith(`${adminBasePath}/`);
 }
 
+// maximum-scale=1 阻止 iOS Safari 在输入框字号小于 16px 时聚焦自动放大整页；iOS 仍允许用户双指缩放。
+// 与 index.html 的初始值保持一致。
+const baseViewportContent = "width=device-width, initial-scale=1.0, maximum-scale=1";
+
 export function SiteHead() {
   const { pathname } = useLocation();
   const { data } = useSiteConfig();
@@ -18,11 +22,10 @@ export function SiteHead() {
   useLayoutEffect(() => {
     const immersive = /^\/(?:home|gallery|show|embed\/(?:home|gallery|show))?\/?$/i.test(pathname);
     const viewport = ensureMeta("viewport");
-    viewport.content =
-      "width=device-width, initial-scale=1.0" + (immersive ? ", viewport-fit=cover" : "");
+    viewport.content = baseViewportContent + (immersive ? ", viewport-fit=cover" : "");
     document.documentElement.toggleAttribute("data-public-viewport", immersive);
     return () => {
-      viewport.content = "width=device-width, initial-scale=1.0";
+      viewport.content = baseViewportContent;
       document.documentElement.removeAttribute("data-public-viewport");
     };
   }, [pathname]);

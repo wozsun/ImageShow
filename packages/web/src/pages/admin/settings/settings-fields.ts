@@ -1,6 +1,7 @@
 import {
   builtInSiteIconPath,
   variantSettingLimits,
+  type ApiValidationIssueDto,
   type RuntimeConfig
 } from "@imageshow/shared/browser";
 
@@ -99,7 +100,7 @@ type LeafPaths<T> = {
     : K
 }[keyof T & string];
 
-type SettingsFieldPath = LeafPaths<RuntimeConfig>;
+export type SettingsFieldPath = LeafPaths<RuntimeConfig>;
 type ValueAtPath<T, P extends string> = P extends `${infer K}.${infer Rest}`
   ? K extends keyof T ? ValueAtPath<T[K], Rest> : never
   : P extends keyof T ? T[P] : never;
@@ -605,6 +606,58 @@ export type SettingsField = FieldDefinition<string> | FieldDefinition<number>
   | FieldDefinition<boolean> | FieldDefinition<[number, number]> | FieldDefinition<string[]>;
 
 export const settingsFieldEntries = Object.entries(settingsFields) as [SettingsFieldPath, SettingsField][];
+
+export type SettingsValidationFailure = {
+  fieldErrors: ReadonlyMap<SettingsFieldPath, string>;
+  message: string;
+};
+
+// 服务端问题路径可能带数组下标（如多行来源的某一行），按最长前缀对应到表单字段。
+function settingsFieldForIssuePath(issuePath: string) {
+  let match: SettingsField | null = null;
+  let matchPath: SettingsFieldPath | null = null;
+  for (const [path, field] of settingsFieldEntries) {
+    if (
+      (issuePath === path || issuePath.startsWith(`${path}.`)) &&
+      (!matchPath || path.length > matchPath.length)
+    ) {
+      match = field;
+      matchPath = path;
+    }
+  }
+  return matchPath && match ? { path: matchPath, field: match } : null;
+}
+
+/**
+ * 把保存配置时的校验问题对应到表单字段：每个字段取第一条问题用于标出对应输入框；页面反馈在只有
+ * 一处问题时写明字段与问题，多处时列出字段名，对应不上字段的问题原样列出。
+ */
+export function settingsValidationFailure(
+  issues: readonly ApiValidationIssueDto[]
+): SettingsValidationFailure | null {
+  const fieldErrors = new Map<SettingsFieldPath, string>();
+  const summaries: string[] = [];
+  const unmatched: string[] = [];
+  for (const { field, message } of issues) {
+    const match = settingsFieldForIssuePath(field);
+    if (!match) {
+      unmatched.push(message);
+      continue;
+    }
+    if (fieldErrors.has(match.path)) continue;
+    fieldErrors.set(match.path, message);
+    summaries.push(match.field.label);
+  }
+  const total = fieldErrors.size + unmatched.length;
+  if (total === 0) return null;
+  const [onlyPath] = fieldErrors.keys();
+  const message = total === 1
+    ? onlyPath
+      ? `${summaries[0]}：${fieldErrors.get(onlyPath)}`
+      : unmatched[0]
+    : `${total} 项配置有误：${[...summaries, ...unmatched].join("、")}`;
+  return { fieldErrors, message };
+}
 
 export function settingsFieldValue(config: RuntimeConfig, path: SettingsFieldPath): unknown {
   return path.split(".").reduce<unknown>((value, key) => (value as Record<string, unknown>)[key], config);

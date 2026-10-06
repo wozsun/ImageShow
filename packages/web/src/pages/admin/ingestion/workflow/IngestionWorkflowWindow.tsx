@@ -563,7 +563,7 @@ export function IngestionWorkflowWindow({
 
   return (
     <DialogFrame
-      className="ingestion-overlay"
+      className="ingestion-overlay is-mobile-fullscreen"
       ariaLabel={modeTitle}
       paused={Boolean(detailItem
         || preview

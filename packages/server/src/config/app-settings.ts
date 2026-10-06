@@ -6,6 +6,7 @@ import {
   type SiteConfigDto
 } from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
+import { validationIssues } from "../core/validation-issues.ts";
 import { assertLocalImageHostForSite } from "../storage/backends/registry.ts";
 import { parseRuntimeConfig } from "./runtime-config.ts";
 import {
@@ -98,12 +99,13 @@ export function saveAppSettings(value: unknown, revision: string) {
       config = parseRuntimeConfig(value);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        const issue = error.issues[0];
+        // 消息只描述问题、不拼接内部路径；字段由后台页面换成字段名并标出对应输入框。
+        const issues = validationIssues(error);
         throw new ApiError(
           400,
           "validation_error",
-          issue ? `${issue.path.join(".")}: ${issue.message}` : "配置值无效",
-          error.flatten()
+          issues.length === 1 ? issues[0].message : `${issues.length} 项配置有误`,
+          { issues }
         );
       }
       throw error;

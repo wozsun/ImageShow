@@ -22,11 +22,17 @@ export function assertLocalPublicUrlDomain(publicBaseUrl: string, siteDomain: st
   }
 }
 
+// 校验提示直接展示在后台存储后端表单对应字段下方，名称与界面一致。
 const httpsEndpoint = z
   .string()
   .trim()
-  .max(2048)
-  .refine(isHttpsEndpoint, "endpoint must use HTTPS");
+  .max(2048, "Endpoint 不能超过 2048 个字符")
+  .refine(isHttpsEndpoint, "Endpoint 须使用 HTTPS");
+
+const timeoutSeconds = (label: string, min: number, max: number) => {
+  const message = `${label}须为 ${min}–${max} 之间的整数秒`;
+  return z.coerce.number({ error: message }).int(message).min(min, message).max(max, message);
+};
 
 const s3SettingsPatchShape = {
   endpoint: httpsEndpoint.optional(),
@@ -38,12 +44,12 @@ const s3SettingsPatchShape = {
   root_path: z
     .string()
     .trim()
-    .regex(/^\/?(?:[a-zA-Z0-9._-]+\/?)*$/, "root_path must be a simple absolute path")
+    .regex(/^\/?(?:[a-zA-Z0-9._-]+\/?)*$/, "根目录只能由字母、数字、点、下划线、连字符与 / 组成")
     .optional(),
   public_base_url: publicBaseUrlSchema.optional(),
-  connect_timeout_seconds: z.coerce.number().int().min(1).max(120).optional(),
-  idle_timeout_seconds: z.coerce.number().int().min(1).max(300).optional(),
-  task_timeout_seconds: z.coerce.number().int().min(15).max(3_600).optional()
+  connect_timeout_seconds: timeoutSeconds("连接超时", 1, 120).optional(),
+  idle_timeout_seconds: timeoutSeconds("流读取空闲超时", 1, 300).optional(),
+  task_timeout_seconds: timeoutSeconds("单次任务总超时", 15, 3_600).optional()
 };
 
 export const s3SettingsPatchSchema = z.strictObject(s3SettingsPatchShape);

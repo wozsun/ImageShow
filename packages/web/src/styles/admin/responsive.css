@@ -18,24 +18,14 @@
     height: 100dvh;
     overflow: hidden;
   }
+  /* 分页页面在窄屏由工作区整体滚动（见下方 .workspace-has-toolbar），翻页栏吸底，上下留白对称。 */
   .workspace-paged {
     flex: 1;
     min-height: 0;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    padding-bottom: 16px;
-  }
-  .workspace-paged > .admin-scroll-region {
-    flex: 1;
-    min-height: 0;
-    min-width: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
   }
   .workspace-paged > .admin-pagination {
     margin: 0 -16px;
-    padding: 12px 16px 0;
+    padding: 12px 16px;
     border-top: 1px solid var(--admin-color-border-card);
   }
   .admin {
@@ -116,38 +106,113 @@
     --workspace-inline-padding: 16px;
     padding: 16px;
   }
-  .workspace-head:not(.workspace-grid-head) {
-    align-items: stretch;
-    flex-direction: column;
-  }
   .workspace-grid-head {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
       "heading"
       "description";
     align-items: stretch;
-    row-gap: 8px;
+    row-gap: 0;
   }
-  /* 与桌面 .has-actions 使用同等选择器优先级，窄屏采用单列。 */
-  .workspace-grid-head.has-actions {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      "heading"
-      "description"
-      "actions";
+  .workspace-title-accessory {
+    align-self: center;
   }
-  .workspace-header-title-row {
-    grid-template-columns: max-content minmax(0, 1fr);
-    gap: 12px;
+  /* 标题到描述 12px。 */
+  .workspace-pinned > :is(p, .action-feedback-region) {
+    margin-top: 12px;
   }
-  .workspace-header-title-row > .action-feedback-region {
-    width: 100%;
-    max-width: none;
-    justify-self: stretch;
+  /* 窄屏操作组与页面工具栏合为一整块操作区。 */
+  .workspace-header-toolbar {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
   }
   .workspace-header-actions {
     width: 100%;
     align-self: stretch;
+  }
+  .workspace-header-toolbar-row {
+    margin-top: 0;
+  }
+  .workspace-toolbar > .admin-create-form {
+    margin-bottom: 0;
+  }
+
+  /* 操作区显隐（useWorkspaceToolbarCollapse，带 .workspace-has-toolbar 的页面）：整个工作区原生
+     滚动，标题区吸顶；操作区以 sticky top 吸在标题区下沿，所在轨道从标题区下沿开始绝对定位，
+     脚本只在滑动方向改变时设定轨道高度：轨道下沿随内容上移时把操作区推到标题区下方，下移时
+     操作区随之露出并被 sticky 停住。逐帧移动全部由浏览器完成，列表以等于操作区高度的上边距
+     让出位置。翻页栏吸底。 */
+  .workspace.workspace-has-toolbar {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+  /* 各部分按内容高度排列并整体滚动；内容区撑满剩余高度，内容很少时翻页栏仍在底部。 */
+  .workspace.workspace-has-toolbar > * {
+    flex: 0 0 auto;
+  }
+  .workspace-has-toolbar :is(.workspace-grid-head, .image-admin-head, .vocabulary-toolbar) {
+    display: contents;
+  }
+  .workspace-has-toolbar [data-workspace-pinned] {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    flex: none;
+    margin-inline: calc(-1 * var(--workspace-inline-padding));
+    padding: 16px var(--workspace-inline-padding);
+    background: var(--admin-color-canvas);
+  }
+  .workspace-has-toolbar .workspace-pinned {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "heading"
+      "description";
+  }
+  .workspace-has-toolbar .has-accessory > .workspace-pinned {
+    grid-template-columns: minmax(0, 1fr) max-content;
+    grid-template-areas:
+      "heading accessory"
+      "description description";
+  }
+  .workspace-has-toolbar .workspace-toolbar-rail {
+    position: absolute;
+    top: var(--workspace-pinned-height, 0px);
+    left: 0;
+    right: 0;
+    z-index: 2;
+    display: block;
+    pointer-events: none;
+  }
+  .workspace-has-toolbar .workspace-toolbar {
+    position: sticky;
+    top: var(--workspace-pinned-height, 0px);
+    /* 底部 10px 是操作区到列表的唯一间距，浮在列表上时按钮也不贴下沿。 */
+    padding: 0 var(--workspace-inline-padding) 10px;
+    background: var(--admin-color-canvas);
+    pointer-events: auto;
+  }
+  /* 内容区（data-workspace-content）桌面自行滚动；窄屏随工作区展开，并让出操作区高度。 */
+  .workspace-has-toolbar [data-workspace-content] {
+    flex: 1 0 auto;
+    height: auto;
+    max-height: none;
+    margin-top: var(--workspace-toolbar-height, 0px);
+    overflow: visible;
+  }
+  .workspace-has-toolbar > .admin-pagination {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    background: var(--admin-color-canvas);
   }
   :is(.admin, [data-admin-dialog]) button:not(:disabled) {
     transition-duration: var(--pressable-transition-duration, 0.08s);
@@ -180,8 +245,7 @@
 /* 后台共享的“减少动态效果”项放在所有尺寸规则之后，避免移动端
    :active 规则重新启用缩放。 */
 @media (prefers-reduced-motion: reduce) {
-  .action-feedback,
-  .action-feedback-progress {
+  .action-feedback {
     animation: none;
   }
   .admin-color-scheme-icon {

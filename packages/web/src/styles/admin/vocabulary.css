@@ -1,18 +1,13 @@
+/* 卡片 / 列表切换作为标题附件位于标题右侧；新建表单是页头下方的操作区。 */
 .vocabulary-toolbar {
   container: vocabulary-toolbar / inline-size;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  column-gap: 10px;
   flex: 0 0 auto;
   margin-bottom: 16px;
 }
-.vocabulary-toolbar > .workspace-head {
-  grid-column: 1 / -1;
-  grid-row: 1;
+.vocabulary-create-toolbar {
+  min-width: 0;
 }
-.vocabulary-toolbar > .admin-create-form {
-  grid-column: 1;
-  grid-row: 2;
+.vocabulary-create-toolbar > .admin-create-form {
   min-width: 0;
   margin-bottom: 0;
 }
@@ -20,10 +15,6 @@
   white-space: nowrap;
 }
 .vocabulary-view-switch {
-  grid-column: 2;
-  grid-row: 2;
-  align-self: start;
-  justify-self: end;
   width: 64px;
   height: 36px;
 }
@@ -47,9 +38,9 @@
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
-.vocabulary-scroll.page-edge-scroll-host {
+.vocabulary-scroll[data-page-edge-scroll-host] {
   margin-inline-end: calc(-1 * var(--workspace-inline-padding));
-  padding-inline-end: calc(var(--workspace-inline-padding) + 2px);
+  padding-inline-end: var(--workspace-inline-padding);
 }
 .vocabulary-collection {
   --vocabulary-columns: minmax(120px, 1fr) minmax(160px, 2fr) 76px 150px 36px;
@@ -252,32 +243,8 @@
   }
 }
 
-/* 按 170px 标识、280px 输入框及按钮间距预留单行空间；作者多一个链接框。 */
-@container vocabulary-toolbar (max-width: 660px) {
-  .vocabulary-toolbar > .workspace-head {
-    grid-column: 1;
-  }
-  .vocabulary-toolbar > .admin-create-form {
-    grid-column: 1 / -1;
-  }
-  .vocabulary-view-switch {
-    grid-row: 1;
-  }
-}
-@container vocabulary-toolbar (max-width: 950px) {
-  .vocabulary-toolbar[data-kind="authors"] > .workspace-head {
-    grid-column: 1;
-  }
-  .vocabulary-toolbar[data-kind="authors"] > .admin-create-form {
-    grid-column: 1 / -1;
-  }
-  .vocabulary-toolbar[data-kind="authors"] > .vocabulary-view-switch {
-    grid-row: 1;
-  }
-}
-
 @media (min-width: 761px) {
-  .vocabulary-toolbar > .admin-create-form {
+  .vocabulary-create-toolbar > .admin-create-form {
     flex-wrap: nowrap;
   }
   .vocabulary-toolbar .entity-slug-field,
@@ -287,7 +254,7 @@
   .vocabulary-toolbar .entity-create-slug {
     width: 100%;
   }
-  .vocabulary-toolbar > .admin-create-form > input {
+  .vocabulary-create-toolbar > .admin-create-form > input {
     flex-basis: 280px;
     min-width: 0;
   }
@@ -297,7 +264,7 @@
 
   /* 三个字段先一起收缩，再将链接与新建操作整组移到第二行。 */
   @container vocabulary-toolbar (max-width: 640px) {
-    .vocabulary-toolbar[data-kind="authors"] > .admin-create-form {
+    .vocabulary-toolbar[data-kind="authors"] .admin-create-form {
       display: grid;
       grid-template-columns: minmax(0, 170px) minmax(0, 1fr) max-content;
       grid-template-areas:
@@ -313,7 +280,7 @@
     .vocabulary-toolbar[data-kind="authors"] .vocabulary-create-link {
       grid-area: link;
     }
-    .vocabulary-toolbar[data-kind="authors"] > .admin-create-form > input {
+    .vocabulary-toolbar[data-kind="authors"] .admin-create-form > input {
       width: 100%;
       max-width: none;
     }
@@ -325,14 +292,11 @@
 }
 
 @media (max-width: 760px) {
-  .vocabulary-toolbar > .workspace-head {
-    grid-column: 1;
-  }
-  .vocabulary-toolbar > .admin-create-form {
-    grid-column: 1 / -1;
-  }
   .vocabulary-view-switch {
-    grid-row: 1;
     width: 54px;
+  }
+  /* 内容区在集合内部，由外层撑满工作区剩余高度。 */
+  .workspace-has-toolbar > .vocabulary-content {
+    flex-grow: 1;
   }
 }

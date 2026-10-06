@@ -47,7 +47,7 @@ core / config
 ```
 
 - `src/index.ts` 只负责进程装配与生命周期；`http-app.ts` 和独立 CLI 的模块导入不得启动服务或产生初始化副作用。
-- `routes/` 只负责 HTTP、Host、鉴权、权限、输入和响应边界，业务工作委托给领域模块；`routes/validation/` 按图片、Ingestion、存储、用户和词表职责拥有请求 schema，并集中保留通用 HTTP 原语与 `validation_error` 映射，不建立总仓库或 barrel。
+- `routes/` 只负责 HTTP、Host、鉴权、权限、输入和响应边界，业务工作委托给领域模块；`routes/validation/` 按图片、Ingestion、存储、用户和词表职责拥有请求 schema，并集中保留通用 HTTP 原语，不建立总仓库或 barrel；`validation_error` 的 `details.issues` 映射由 `core/validation-issues.ts` 提供，供请求校验与站点配置保存共用。
 - HTTP schema 以领域 DTO / 输入类型作编译期约束；列表、统计、JSONL 和 cursor 等非 HTTP 契约由对应图片或 Ingestion 模块拥有，领域模块不得反向导入 `routes/validation/`。
 - `core/` 和运行配置 schema / store 提供基础设施，不依赖业务领域或路由。`config/` 唯一拥有 RuntimeConfig 写入协调、持久化和内存发布；`app-settings.ts` 拥有公开 / 后台投影与完整配置保存，组合存储注册表的 Host 冲突校验，基础配置模块不反向依赖该入口。
 - `core/http/` 拥有供路由与审计共用的请求上下文契约；`users/` 实现会话认证及持久化。审计基础设施不得通过会话读取助手反向依赖用户业务。

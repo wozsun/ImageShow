@@ -7,6 +7,9 @@ import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import { isValidAdminPassword, passwordPolicyHint } from "../../../lib/auth/password.js";
 import { useAuthSessionQuery } from "../../../hooks/useAuthSession.js";
 import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
+import { WorkspaceHeader } from "../../../components/layout/WorkspaceHeader.js";
+import { WorkspaceScrollBody } from "../../../components/layout/WorkspaceScrollBody.js";
+import { FieldError } from "../../../components/form/FieldError.js";
 
 const updatePasswordPresentation = {
   idle: { icon: "key-2-line", label: "修改密码" },
@@ -51,62 +54,62 @@ export function AccountSettings() {
   };
 
   return (
-    <section className="workspace">
-      <header className="workspace-head">
-        <div>
-          <h1>账户设置</h1>
-          <p>当前账户「{auth?.authenticated ? auth.username : "—"}」· 修改登录密码</p>
-        </div>
-      </header>
-      <form className="account-form" onSubmit={submit} autoComplete="off">
-        <label>
-          当前密码
-          <PasswordInput
-            value={current}
-            onChange={setCurrent}
-            placeholder="输入当前密码"
-            disabled={updatePasswordStatus.pending}
-            maxLength={128}
-            autoComplete="current-password"
+    <section className="workspace workspace-contained">
+      <WorkspaceHeader
+        title="账户设置"
+        description={`当前账户「${auth?.authenticated ? auth.username : "—"}」· 修改登录密码`}
+      />
+      <WorkspaceScrollBody>
+        <form className="account-form" onSubmit={submit} autoComplete="off">
+          <label>
+            当前密码
+            <PasswordInput
+              value={current}
+              onChange={setCurrent}
+              placeholder="输入当前密码"
+              disabled={updatePasswordStatus.pending}
+              maxLength={128}
+              autoComplete="current-password"
+            />
+          </label>
+          <label>
+            新密码
+            <PasswordInput
+              value={next}
+              onChange={setNext}
+              placeholder={passwordPolicyHint}
+              disabled={updatePasswordStatus.pending}
+              maxLength={128}
+              autoComplete="new-password"
+              ariaInvalid={nextInvalid}
+            />
+            <FieldError message={nextInvalid ? passwordPolicyHint : null} />
+          </label>
+          <label>
+            确认新密码
+            <PasswordInput
+              value={confirm}
+              onChange={setConfirm}
+              placeholder="再次输入新密码"
+              disabled={updatePasswordStatus.pending}
+              maxLength={128}
+              autoComplete="new-password"
+            />
+          </label>
+          {mismatch && (
+            <p className="admin-error" role="alert">
+              两次输入的新密码不一致。
+            </p>
+          )}
+          <AsyncActionButton
+            className="button"
+            type="submit"
+            status={updatePasswordStatus.status}
+            presentation={updatePasswordPresentation}
+            disabled={!canSubmit}
           />
-        </label>
-        <label>
-          新密码
-          <PasswordInput
-            value={next}
-            onChange={setNext}
-            placeholder={passwordPolicyHint}
-            disabled={updatePasswordStatus.pending}
-            maxLength={128}
-            autoComplete="new-password"
-            ariaInvalid={nextInvalid}
-          />
-          {nextInvalid && <p className="admin-field-error">{passwordPolicyHint}</p>}
-        </label>
-        <label>
-          确认新密码
-          <PasswordInput
-            value={confirm}
-            onChange={setConfirm}
-            placeholder="再次输入新密码"
-            disabled={updatePasswordStatus.pending}
-            maxLength={128}
-            autoComplete="new-password"
-          />
-        </label>
-        {mismatch && (
-          <p className="admin-error" role="alert">
-            两次输入的新密码不一致。
-          </p>
-        )}
-        <AsyncActionButton
-          className="button"
-          type="submit"
-          status={updatePasswordStatus.status}
-          presentation={updatePasswordPresentation}
-          disabled={!canSubmit}
-        />
-      </form>
+        </form>
+      </WorkspaceScrollBody>
     </section>
   );
 }

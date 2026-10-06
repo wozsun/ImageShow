@@ -1,3 +1,5 @@
+import { adminBasePath } from "@imageshow/shared/browser";
+
 export {
   adminApiBasePath,
   adminBasePath,
@@ -5,6 +7,9 @@ export {
   publicRootPath,
   slugPattern
 } from "@imageshow/shared/browser";
+
+// 后台入口 adminBasePath 直接显示概览、地址保持不变；导航中的“概览”使用显式地址。
+export const adminOverviewPath = `${adminBasePath}/overview`;
 
 export const slugFormatHint = "只能包含小写字母、数字、连字符";
 

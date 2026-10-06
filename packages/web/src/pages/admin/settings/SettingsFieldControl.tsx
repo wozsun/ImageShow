@@ -1,18 +1,24 @@
 import { NumberInput } from "../../../components/form/NumberInput.js";
 import { SelectMenu } from "../../../components/form/SelectMenu.js";
+import { FieldError } from "../../../components/form/FieldError.js";
 import type { SettingsField } from "./settings-fields.js";
 
+/** 单个配置项的表单控件；保存失败时 error 为该项的问题，控件标红并在下方写明。 */
 export function SettingsFieldControl({
   field,
   value,
   disabled,
+  error,
   onChange
 }: {
   field: SettingsField;
   value: unknown;
   disabled: boolean;
+  error?: string;
   onChange: (value: unknown) => void;
 }) {
+  const invalid = Boolean(error);
+  const errorText = <FieldError message={error} />;
   const className = [
     "settings-field",
     field.wide ? "settings-field-wide" : "",
@@ -40,11 +46,13 @@ export function SettingsFieldControl({
                 max={field.max}
                 placeholder={rangeText}
                 disabled={disabled}
+                ariaInvalid={invalid}
                 onChange={(next) => onChange(index === 0 ? [next, values[1]] : [values[0], next])}
               />
             </label>
           ))}
         </div>
+        {errorText}
         <span className="hint settings-field-range">范围：{rangeText}{field.hint && `；${field.hint}`}</span>
       </fieldset>
     );
@@ -69,6 +77,7 @@ export function SettingsFieldControl({
             </label>
           ))}
         </div>
+        {errorText}
         {hint}
       </fieldset>
     );
@@ -83,7 +92,7 @@ export function SettingsFieldControl({
           disabled={disabled}
           onChange={(event) => onChange(event.target.checked)}
         />
-        <span>{field.label}{hint}</span>
+        <span>{field.label}{errorText}{hint}</span>
       </label>
     );
   }
@@ -98,6 +107,7 @@ export function SettingsFieldControl({
           step={field.step}
           placeholder={rangeText}
           ariaLabel={field.label}
+          ariaInvalid={invalid}
           disabled={disabled}
           onChange={onChange}
         />
@@ -105,6 +115,7 @@ export function SettingsFieldControl({
         <SelectMenu
           value={String(value)}
           ariaLabel={field.label}
+          ariaInvalid={invalid}
           disabled={disabled}
           options={Object.entries(field.options).map(([key, label]) => ({ value: key, label }))}
           onChange={onChange}
@@ -112,6 +123,7 @@ export function SettingsFieldControl({
       ) : field.kind === "lines" ? (
         <textarea
           aria-label={field.label}
+          aria-invalid={invalid || undefined}
           rows={5}
           value={(value as string[]).join("\n")}
           disabled={disabled}
@@ -124,6 +136,7 @@ export function SettingsFieldControl({
       ) : field.kind === "textarea" ? (
         <textarea
           aria-label={field.label}
+          aria-invalid={invalid || undefined}
           rows={5}
           value={String(value)}
           maxLength={field.maxLength}
@@ -134,6 +147,7 @@ export function SettingsFieldControl({
       ) : (
         <input
           aria-label={field.label}
+          aria-invalid={invalid || undefined}
           value={String(value)}
           maxLength={field.maxLength}
           placeholder={field.placeholder}
@@ -141,6 +155,7 @@ export function SettingsFieldControl({
           onChange={(event) => onChange(event.target.value)}
         />
       )}
+      {errorText}
       {rangeText && <span className="hint settings-field-range">范围：{rangeText}</span>}
       {hint}
     </label>

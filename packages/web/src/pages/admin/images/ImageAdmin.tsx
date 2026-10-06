@@ -49,6 +49,10 @@ import {
   mobileViewportMediaQuery,
   useMediaQuery
 } from "../../../hooks/useMediaQuery.js";
+import { useWorkspaceToolbarCollapse } from "../../../hooks/useWorkspaceToolbarCollapse.js";
+import { WorkspaceToolbarScrollbar } from "../../../components/layout/WorkspaceToolbarScrollbar.js";
+import { WorkspaceToolbar } from "../../../components/layout/WorkspaceToolbar.js";
+import { workspaceScrollContainer } from "../../../lib/ui/workspace-scroll.js";
 import { useTwoStepConfirmation } from "../../../hooks/useTwoStepConfirmation.js";
 import {
   imageAdminConfirmationCopy,
@@ -90,6 +94,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
   const canPurgeImage = permissions.includes(adminPermissions.imageTrashPurge);
 
   const feedbackTarget = useActionFeedbackTarget("image-admin");
+  const workspaceToolbarRef = useWorkspaceToolbarCollapse();
   const gridRef = useRef<HTMLDivElement | null>(null);
   const frozenBatchTrashIdsRef = useRef<string[]>([]);
   const client = useQueryClient();
@@ -193,7 +198,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
     setView(routeView);
     clearImageSelection();
     resetTransientState();
-    gridRef.current?.scrollTo({ top: 0, left: 0 });
+    workspaceScrollContainer(gridRef.current)?.scrollTo({ top: 0, left: 0 });
   }, [
     clearImageSelection,
     resetTransientState,
@@ -216,7 +221,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
     navigation.resetPage();
     clearImageSelection();
     resetTransientState();
-    gridRef.current?.scrollTo({ top: 0, left: 0 });
+    workspaceScrollContainer(gridRef.current)?.scrollTo({ top: 0, left: 0 });
   };
   const changeFilter = (
     key: keyof ImageAdminFilterValues,
@@ -235,7 +240,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
     if (next.order !== sort.order) setPreferredOrder(next.order);
     clearImageSelection();
     resetTransientState();
-    gridRef.current?.scrollTo({ top: 0, left: 0 });
+    workspaceScrollContainer(gridRef.current)?.scrollTo({ top: 0, left: 0 });
   };
   const changeView = (next: typeof view) => {
     if (next === routeView || interfaceBusy) return;
@@ -248,7 +253,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
   useEffect(() => {
     clearImageSelection();
     // 每个数字页与筛选 scope 都从顶部开始，避免首屏卡片只露出残片。
-    gridRef.current?.scrollTo({ top: 0, left: 0 });
+    workspaceScrollContainer(gridRef.current)?.scrollTo({ top: 0, left: 0 });
   }, [clearImageSelection, pageNumber, scopeKey]);
   const preloadBatchEditor = () =>
     editorCapability.preload({
@@ -273,288 +278,289 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
     : hasCurrentPageData
       ? ` · 本页 ${items.length} 项`
       : "";
+  // 窄屏切换放在标题行，桌面留在工具区；两处共用同一组按钮。
+  const viewSwitch = (
+    <div className="image-admin-view-switch">
+      <button
+        type="button"
+        className={view === "ready" ? "active" : ""}
+        disabled={interfaceBusy}
+        onClick={() => changeView("ready")}
+      >
+        图库
+      </button>
+      <button
+        type="button"
+        className={view === "deleted" ? "active" : ""}
+        disabled={interfaceBusy}
+        onClick={() => changeView("deleted")}
+      >
+        回收站
+      </button>
+    </div>
+  );
   return (
     <section
-      className="workspace workspace-paged"
+      ref={workspaceToolbarRef}
+      className="workspace workspace-paged workspace-has-toolbar"
       onClick={(event) => selection.clearFromPageClick(event, interfaceBusy)}
     >
       <header className="workspace-head image-admin-head">
-        <div className="image-admin-head-copy">
-          <div className="image-admin-title-row">
-            <h1>图片</h1>
-            {mobileLayout && (
-              <ActionFeedbackRegion
-                className="image-admin-feedback-region"
-                target={feedbackTarget}
-                variant="page"
-              />
-            )}
-          </div>
+        <div className="image-admin-head-copy" data-workspace-pinned="">
+          <h1>图片</h1>
+          {mobileLayout && viewSwitch}
           <p role="status">
             {operationText ||
               `第 ${pageNumber} / ${totalPages} 页 · 共 ${total} 项${pageStatusSuffix}`}
           </p>
-        </div>
-        <div className="image-admin-head-tools">
-          <IngestionLauncher
-            settings={settings}
-            showTriggers={view === "ready"}
-            disabled={operationBusy || detailPending || editorPending}
-            onDone={finishIngestionBatch}
-            onLoadError={(error) => {
-              reportAdminUiError("image_admin.ingestion_load", error);
-              showFeedback("上传与导入功能加载失败，请重新加载页面", "error");
-            }}
+          <ActionFeedbackRegion
+            className="image-admin-feedback-region"
+            target={feedbackTarget}
           />
-          <div className="image-admin-view-switch">
-            <button
-              type="button"
-              className={view === "ready" ? "active" : ""}
-              disabled={interfaceBusy}
-              onClick={() => changeView("ready")}
-            >
-              图库
-            </button>
-            <button
-              type="button"
-              className={view === "deleted" ? "active" : ""}
-              disabled={interfaceBusy}
-              onClick={() => changeView("deleted")}
-            >
-              回收站
-            </button>
-          </div>
         </div>
-      </header>
-      <div className="image-list-controls">
-        <ImageAdminFilters
-          value={filters}
-          vocabulary={vocabulary}
-          mobileLayout={mobileLayout}
-          disabled={interfaceBusy}
-          onChange={changeFilter}
-          onClear={clearFilters}
-        />
-        <div className="image-list-toolbar">
-          <div className="inline-actions image-list-selection">
-            <span id={imageRangeSelectionHelpId} className="image-list-selection-help">
-              按住 Shift 点击卡片主体，或按 Shift+Enter，可将图片作为连续选择的区间端点。
-            </span>
-            <label className="image-list-check-label">
-              <input
-                id="admin-image-select-all"
-                type="checkbox"
-                checked={allSelected}
-                disabled={interfaceBusy}
-                onChange={(event) => selection.selectAll(
-                  event.target.checked,
-                  interfaceBusy
-                )}
-              />
-              全选
-            </label>
-            <span
-              className={`image-list-selection-status${selected.length ? "" : " is-empty"}`}
-              role="status"
-            >
-              {selected.length ? `已选 ${selected.length}` : "未选择图片"}
-            </span>
+        <WorkspaceToolbar className="image-admin-toolbar">
+          <div className="image-admin-head-tools">
+            <IngestionLauncher
+              settings={settings}
+              showTriggers={view === "ready"}
+              disabled={operationBusy || detailPending || editorPending}
+              onDone={finishIngestionBatch}
+              onLoadError={(error) => {
+                reportAdminUiError("image_admin.ingestion_load", error);
+                showFeedback("上传与导入功能加载失败，请重新加载页面", "error");
+              }}
+            />
+            {!mobileLayout && viewSwitch}
           </div>
-          <div className="image-list-toolbar-actions">
-            {!mobileLayout && (
-              <ActionFeedbackRegion
-                className="image-admin-feedback-region"
-                target={feedbackTarget}
-                variant="page"
-              />
-            )}
-            <div className="image-list-view-controls" role="group" aria-label="图片列表排序与缩略图显示">
-              <button
-                type="button"
-                className="state-toggle-button"
-                data-shifted={sort.sort_by === "created_at"}
-                disabled={interfaceBusy}
-                aria-label={`按${sortFieldLabel}时间排序；点击切换为${nextSortFieldLabel}时间`}
-                title={`按${sortFieldLabel}时间排序；点击切换为${nextSortFieldLabel}时间`}
-                onClick={() =>
-                  changeSort({
-                    ...sort,
-                    sort_by: sort.sort_by === "image_time" ? "created_at" : "image_time"
-                  })
-                }
-              >
-                <span className="state-toggle-label">{sortFieldLabel}</span>
-                <span className="state-toggle-thumb" aria-hidden="true" />
-              </button>
-              <span className="image-list-view-divider" aria-hidden="true" />
-              <button
-                type="button"
-                className="state-toggle-button"
-                data-shifted={sort.order === "oldest"}
-                disabled={interfaceBusy}
-                aria-label={`${sortOrderLabel}优先；点击切换为${nextSortOrderLabel}优先`}
-                title={`${sortOrderLabel}优先；点击切换为${nextSortOrderLabel}优先`}
-                onClick={() =>
-                  changeSort({
-                    ...sort,
-                    order: sort.order === "latest" ? "oldest" : "latest"
-                  })
-                }
-              >
-                <span className="state-toggle-label">{sortOrderLabel}</span>
-                <span className="state-toggle-thumb" aria-hidden="true" />
-              </button>
-              <span className="image-list-view-divider" aria-hidden="true" />
-              <button
-                type="button"
-                className="state-toggle-button"
-                data-shifted={thumbnailFit === "contain"}
-                disabled={interfaceBusy}
-                aria-label={thumbnailFitHelp}
-                aria-pressed={thumbnailFit === "contain"}
-                title={thumbnailFitHelp}
-                onClick={() => setThumbnailFit(thumbnailFit === "cover" ? "contain" : "cover")}
-              >
-                <span className="state-toggle-label">{thumbnailFitLabel}</span>
-                <span className="state-toggle-thumb" aria-hidden="true" />
-              </button>
-            </div>
-            <div className="image-list-batch-actions">
-              {view !== "deleted" && (
-                <button
-                  type="button"
-                  disabled={!selected.length
-                    || editorConflictBusy
-                    || selectedEditorPending}
-                  aria-busy={selectedEditorPending || undefined}
-                  {...preloadIntentProps(preloadBatchEditor)}
-                  onClick={(event) => {
-                    void editorCapability.open(
-                      {
-                        sources: selectedItems
-                      },
-                      event.currentTarget
-                    );
-                  }}
-                >
-                  <AdminIcon name="pencil-line" />
-                  批量编辑
-                </button>
-              )}
-              {view === "deleted" && (
-                <button
-                  type="button"
-                  disabled={!selected.length || interfaceBusy}
-                  onClick={() => {
-                    void restore([...selected]);
-                  }}
-                >
-                  <AdminIcon name="arrow-go-back-line" />
-                  批量恢复
-                </button>
-              )}
-              {canTrashReadyItems && (
-                <button
-                  ref={batchTrashConfirmation.targetRef}
-                  className={[
-                    "danger-button",
-                    "is-subtle",
-                    "two-step-confirm-text-button",
-                    batchTrashConfirmation.armed ? "is-armed" : ""
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  type="button"
-                  aria-label={
-                    batchTrashPending
-                      ? "正在删除"
-                      : batchTrashConfirmation.armed
-                        ? "确认删除"
-                        : "批量删除"
-                  }
-                  aria-pressed={batchTrashConfirmation.armed}
-                  aria-busy={batchTrashPending || undefined}
-                  disabled={batchTrashDisabled}
-                  onBlur={batchTrashConfirmation.onBlur}
-                  onClick={() => {
-                    batchTrashConfirmation.activate(
-                      () => {
-                        const ids = [...selected];
-                        if (!ids.length) return false;
-                        frozenBatchTrashIdsRef.current = ids;
-                      },
-                      () => {
-                        const ids = frozenBatchTrashIdsRef.current;
-                        frozenBatchTrashIdsRef.current = [];
-                        if (!ids.length) return;
-                        setBatchTrashPending(true);
-                        void trash(ids).finally(() => {
-                          setBatchTrashPending(false);
-                        });
-                      }
-                    );
-                  }}
-                >
-                  <AdminIcon
-                    name={
-                      batchTrashPending
-                        ? "delete-bin-5-line"
-                        : batchTrashConfirmation.armed
-                          ? "delete-bin-2-line"
-                          : "delete-bin-line"
-                    }
-                  />
-                  <StableButtonLabel
-                    idle={batchTrashConfirmation.armed
-                      ? "确认删除"
-                      : "批量删除"}
-                    busyText="正在删除"
-                    busy={batchTrashPending}
-                  />
-                </button>
-              )}
-              {view === "deleted" && canPurgeImage && (
-                <button
-                  className="danger-button is-subtle"
-                  type="button"
-                  disabled={interfaceBusy || (!selected.length && !items.length)}
-                  onClick={() => {
-                    setConfirmAction(
-                      selected.length
-                        ? {
-                            kind: "purge",
-                            request: {
-                              scope: "selected",
-                              ids: [...selected]
-                            }
-                          }
-                        : {
-                            kind: "purge",
-                            request: { scope: "all" }
-                          }
-                    );
-                  }}
-                >
-                  <AdminIcon name="delete-bin-6-line" />
-                  <StableButtonLabel
-                    idle={selected.length ? "删除已选图" : "清空回收站"}
-                    busyText={
-                      confirmAction?.kind === "purge"
-                        && confirmAction.request.scope === "selected"
-                        ? "正在删除"
-                        : "正在清空"
-                    }
-                    busy={actionBusy && (
-                      confirmAction?.kind === "purge"
+          <div className="image-list-controls">
+            <ImageAdminFilters
+              value={filters}
+              vocabulary={vocabulary}
+              mobileLayout={mobileLayout}
+              disabled={interfaceBusy}
+              onChange={changeFilter}
+              onClear={clearFilters}
+            />
+            <div className="image-list-toolbar">
+              <div className="inline-actions image-list-selection">
+                <span id={imageRangeSelectionHelpId} className="image-list-selection-help">
+                  按住 Shift 点击卡片主体，或按 Shift+Enter，可将图片作为连续选择的区间端点。
+                </span>
+                <label className="image-list-check-label">
+                  <input
+                    id="admin-image-select-all"
+                    type="checkbox"
+                    checked={allSelected}
+                    disabled={interfaceBusy}
+                    onChange={(event) => selection.selectAll(
+                      event.target.checked,
+                      interfaceBusy
                     )}
                   />
-                </button>
-              )}
+                  全选
+                </label>
+                <span
+                  className={`image-list-selection-status${selected.length ? "" : " is-empty"}`}
+                  role="status"
+                >
+                  {selected.length ? `已选 ${selected.length}` : "未选择图片"}
+                </span>
+              </div>
+              <div className="image-list-toolbar-actions">
+                <div className="image-list-view-controls" role="group" aria-label="图片列表排序与缩略图显示">
+                  <button
+                    type="button"
+                    className="state-toggle-button"
+                    data-shifted={sort.sort_by === "created_at"}
+                    disabled={interfaceBusy}
+                    aria-label={`按${sortFieldLabel}时间排序；点击切换为${nextSortFieldLabel}时间`}
+                    title={`按${sortFieldLabel}时间排序；点击切换为${nextSortFieldLabel}时间`}
+                    onClick={() =>
+                      changeSort({
+                        ...sort,
+                        sort_by: sort.sort_by === "image_time" ? "created_at" : "image_time"
+                      })
+                    }
+                  >
+                    <span className="state-toggle-label">{sortFieldLabel}</span>
+                    <span className="state-toggle-thumb" aria-hidden="true" />
+                  </button>
+                  <span className="image-list-view-divider" aria-hidden="true" />
+                  <button
+                    type="button"
+                    className="state-toggle-button"
+                    data-shifted={sort.order === "oldest"}
+                    disabled={interfaceBusy}
+                    aria-label={`${sortOrderLabel}优先；点击切换为${nextSortOrderLabel}优先`}
+                    title={`${sortOrderLabel}优先；点击切换为${nextSortOrderLabel}优先`}
+                    onClick={() =>
+                      changeSort({
+                        ...sort,
+                        order: sort.order === "latest" ? "oldest" : "latest"
+                      })
+                    }
+                  >
+                    <span className="state-toggle-label">{sortOrderLabel}</span>
+                    <span className="state-toggle-thumb" aria-hidden="true" />
+                  </button>
+                  <span className="image-list-view-divider" aria-hidden="true" />
+                  <button
+                    type="button"
+                    className="state-toggle-button"
+                    data-shifted={thumbnailFit === "contain"}
+                    disabled={interfaceBusy}
+                    aria-label={thumbnailFitHelp}
+                    aria-pressed={thumbnailFit === "contain"}
+                    title={thumbnailFitHelp}
+                    onClick={() => setThumbnailFit(thumbnailFit === "cover" ? "contain" : "cover")}
+                  >
+                    <span className="state-toggle-label">{thumbnailFitLabel}</span>
+                    <span className="state-toggle-thumb" aria-hidden="true" />
+                  </button>
+                </div>
+                <div className="image-list-batch-actions">
+                  {view !== "deleted" && (
+                    <button
+                      type="button"
+                      disabled={!selected.length
+                        || editorConflictBusy
+                        || selectedEditorPending}
+                      aria-busy={selectedEditorPending || undefined}
+                      {...preloadIntentProps(preloadBatchEditor)}
+                      onClick={(event) => {
+                        void editorCapability.open(
+                          {
+                            sources: selectedItems
+                          },
+                          event.currentTarget
+                        );
+                      }}
+                    >
+                      <AdminIcon name="pencil-line" />
+                      批量编辑
+                    </button>
+                  )}
+                  {view === "deleted" && (
+                    <button
+                      type="button"
+                      disabled={!selected.length || interfaceBusy}
+                      onClick={() => {
+                        void restore([...selected]);
+                      }}
+                    >
+                      <AdminIcon name="arrow-go-back-line" />
+                      批量恢复
+                    </button>
+                  )}
+                  {canTrashReadyItems && (
+                    <button
+                      ref={batchTrashConfirmation.targetRef}
+                      className={[
+                        "danger-button",
+                        "is-subtle",
+                        "two-step-confirm-text-button",
+                        batchTrashConfirmation.armed ? "is-armed" : ""
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      type="button"
+                      aria-label={
+                        batchTrashPending
+                          ? "正在删除"
+                          : batchTrashConfirmation.armed
+                            ? "确认删除"
+                            : "批量删除"
+                      }
+                      aria-pressed={batchTrashConfirmation.armed}
+                      aria-busy={batchTrashPending || undefined}
+                      disabled={batchTrashDisabled}
+                      onBlur={batchTrashConfirmation.onBlur}
+                      onClick={() => {
+                        batchTrashConfirmation.activate(
+                          () => {
+                            const ids = [...selected];
+                            if (!ids.length) return false;
+                            frozenBatchTrashIdsRef.current = ids;
+                          },
+                          () => {
+                            const ids = frozenBatchTrashIdsRef.current;
+                            frozenBatchTrashIdsRef.current = [];
+                            if (!ids.length) return;
+                            setBatchTrashPending(true);
+                            void trash(ids).finally(() => {
+                              setBatchTrashPending(false);
+                            });
+                          }
+                        );
+                      }}
+                    >
+                      <AdminIcon
+                        name={
+                          batchTrashPending
+                            ? "delete-bin-5-line"
+                            : batchTrashConfirmation.armed
+                              ? "delete-bin-2-line"
+                              : "delete-bin-line"
+                        }
+                      />
+                      <StableButtonLabel
+                        idle={batchTrashConfirmation.armed
+                          ? "确认删除"
+                          : "批量删除"}
+                        busyText="正在删除"
+                        busy={batchTrashPending}
+                      />
+                    </button>
+                  )}
+                  {view === "deleted" && canPurgeImage && (
+                    <button
+                      className="danger-button is-subtle"
+                      type="button"
+                      disabled={interfaceBusy || (!selected.length && !items.length)}
+                      onClick={() => {
+                        setConfirmAction(
+                          selected.length
+                            ? {
+                                kind: "purge",
+                                request: {
+                                  scope: "selected",
+                                  ids: [...selected]
+                                }
+                              }
+                            : {
+                                kind: "purge",
+                                request: { scope: "all" }
+                              }
+                        );
+                      }}
+                    >
+                      <AdminIcon name="delete-bin-6-line" />
+                      <StableButtonLabel
+                        idle={selected.length ? "删除已选图" : "清空回收站"}
+                        busyText={
+                          confirmAction?.kind === "purge"
+                            && confirmAction.request.scope === "selected"
+                            ? "正在删除"
+                            : "正在清空"
+                        }
+                        busy={actionBusy && (
+                          confirmAction?.kind === "purge"
+                        )}
+                      />
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
-      <div key={`grid:${scopeKey}:${pageNumber}`} className="admin-scroll-region" ref={gridRef}>
+        </WorkspaceToolbar>
+      </header>
+      <div
+        key={`grid:${scopeKey}:${pageNumber}`}
+        className="admin-scroll-region"
+        ref={gridRef}
+        data-workspace-content=""
+      >
         <div className="admin-image-grid" data-thumbnail-fit={thumbnailFit}>
           {items.map((item) => (
             <AdminImageCard
@@ -696,6 +702,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
           onClose={() => setFeedback(null)}
         />
       )}
+      <WorkspaceToolbarScrollbar />
     </section>
   );
 }

@@ -7,6 +7,7 @@ import type {
 import { api } from "../../lib/api/client.js";
 import { AsyncActionButton, type AsyncActionPresentation } from "../../components/actions/AsyncActionButton.js";
 import { SortOrderInput } from "../../components/actions/SortOrderInput.js";
+import type { ActionFeedbackTarget } from "../../components/feedback/ActionFeedbackRegion.js";
 import { SlugChip } from "../../components/data-display/SlugChip.js";
 import { adminApiBasePath } from "../../lib/constants.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
@@ -31,6 +32,7 @@ export function VocabularyAdminItem({
   onError,
   canDelete = false,
   sortBusy,
+  sortFeedbackTarget,
   onSortSave
 }: {
   kind: "themes" | "tags" | "authors";
@@ -42,6 +44,7 @@ export function VocabularyAdminItem({
   onError: (error: unknown) => void;
   canDelete?: boolean;
   sortBusy: boolean;
+  sortFeedbackTarget: ActionFeedbackTarget;
   onSortSave: (value: number) => Promise<number>;
 }) {
   const noun = kind === "themes" ? "主题" : kind === "tags" ? "标签" : "作者";
@@ -167,6 +170,7 @@ export function VocabularyAdminItem({
         itemLabel={`${noun} ${item.slug}`}
         value={item.sort_order}
         disabled={busy}
+        feedbackTarget={sortFeedbackTarget}
         onSave={onSortSave}
       />
     ),

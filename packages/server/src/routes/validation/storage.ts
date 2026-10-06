@@ -23,7 +23,7 @@ export const storageBackendMigrationInput = z
     message: "目标存储后端不能与源后端相同"
   });
 
-const storageDisplayInput = z.string().trim().max(64);
+const storageDisplayInput = z.string().trim().max(64, "显示名不能超过 64 个字符");
 const nonEmptySettingsObject = z
   .record(z.string(), z.unknown())
   .refine((value) => Object.keys(value).length > 0, "远端存储配置至少需要提供一个字段");

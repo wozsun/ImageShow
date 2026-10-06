@@ -5,18 +5,11 @@
   --settings-row-gap: 16px;
   --settings-field-height: calc(var(--settings-label-height) + var(--settings-field-gap) + var(--settings-control-height));
   --settings-textarea-height: calc(var(--settings-control-height) + var(--settings-row-gap) + var(--settings-field-height));
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
 }
 .settings-page > .workspace-head {
   flex: 0 0 auto;
 }
 .settings-scroll-region {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
   container: settings-page / inline-size;
 }
 

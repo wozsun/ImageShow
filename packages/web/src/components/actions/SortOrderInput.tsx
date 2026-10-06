@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { isSortOrder, sortOrderMin, sortOrderMax } from "@imageshow/shared/browser";
 import { Icon } from "../icon/Icon.js";
-import { ActionFeedbackOutlet, useActionFeedbackTarget } from "../feedback/ActionFeedbackRegion.js";
+import { ActionFeedbackOutlet, type ActionFeedbackTarget } from "../feedback/ActionFeedbackRegion.js";
 import { createActionFeedback, type ActionFeedbackState } from "../../lib/ui/action-feedback.js";
 
 function parseDraft(draft: string) {
@@ -10,15 +10,18 @@ function parseDraft(draft: string) {
   return /^[+-]?\d+$/.test(text) && Number.isSafeInteger(value) ? value : null;
 }
 
+/** 排序值输入；校验与保存错误显示在所在页面的反馈区（页头副标题位置）。 */
 export function SortOrderInput({
   value,
   itemLabel,
   disabled,
+  feedbackTarget,
   onSave
 }: {
   value: number;
   itemLabel: string;
   disabled: boolean;
+  feedbackTarget: ActionFeedbackTarget;
   onSave: (value: number) => Promise<number>;
 }) {
   const [form, setForm] = useState({ draft: String(value), savedValue: value });
@@ -26,7 +29,6 @@ export function SortOrderInput({
   const [pending, setPending] = useState(false);
   const runningRef = useRef(false);
   const mountedRef = useRef(false);
-  const feedbackTarget = useActionFeedbackTarget("sort-order");
   const parsed = parseDraft(form.draft);
   const busy = disabled || pending;
 

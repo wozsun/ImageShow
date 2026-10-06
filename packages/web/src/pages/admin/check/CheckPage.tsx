@@ -25,6 +25,10 @@ import {
   revisionFingerprint
 } from "../../../lib/ui/formatters.js";
 import { ReadyImageCachePanel } from "./ReadyImageCachePanel.js";
+import { WorkspaceHeader } from "../../../components/layout/WorkspaceHeader.js";
+import { WorkspaceScrollBody } from "../../../components/layout/WorkspaceScrollBody.js";
+import { useWorkspaceToolbarCollapse } from "../../../hooks/useWorkspaceToolbarCollapse.js";
+import { WorkspaceToolbarScrollbar } from "../../../components/layout/WorkspaceToolbarScrollbar.js";
 import "../../../styles/admin/check.css";
 
 const loadCheckMaintenanceCapability = createPageLifetimeModuleLoader(
@@ -152,82 +156,90 @@ export function CheckPage() {
     setResult(null);
     if (view !== "status") void runCheck(view);
   };
+  const workspaceToolbarRef = useWorkspaceToolbarCollapse();
   return (
-    <section className="workspace">
-      <header className="workspace-head">
-        <div>
-          <h1>检查</h1>
-          <p>检查数据库、Redis 与存储一致性</p>
-        </div>
-        <div className="check-actions">
-          <div className="actions">
-            {checkViews.map((check) => (
-              <button
-                type="button"
-                key={check.name}
-                className={checkView === check.name ? "active" : undefined}
-                aria-pressed={checkView === check.name}
-                disabled={
-                  Boolean(running) ||
-                  (redisInclusiveCheckBlocked
-                    && (check.name === "redis" || check.name === "all"))
-                }
-                onClick={() => selectCheckView(check.name)}
-              >
-                <AdminIcon name={check.name === "status" ? "dashboard-line" : "refresh-line"} />
-                <StableButtonLabel
-                  idle={check.label}
-                  busyText="运行中"
-                  busy={running === check.name}
+    <section
+      ref={workspaceToolbarRef}
+      className="workspace workspace-contained workspace-has-toolbar"
+    >
+      <WorkspaceHeader
+        title="检查"
+        description="检查数据库、Redis 与存储一致性"
+        actionsClassName="check-actions"
+        actions={
+          <>
+            <div className="actions">
+              {checkViews.map((check) => (
+                <button
+                  type="button"
+                  key={check.name}
+                  className={checkView === check.name ? "active" : undefined}
+                  aria-pressed={checkView === check.name}
+                  disabled={
+                    Boolean(running) ||
+                    (redisInclusiveCheckBlocked
+                      && (check.name === "redis" || check.name === "all"))
+                  }
+                  onClick={() => selectCheckView(check.name)}
+                >
+                  <AdminIcon name={check.name === "status" ? "dashboard-line" : "refresh-line"} />
+                  <StableButtonLabel
+                    idle={check.label}
+                    busyText="运行中"
+                    busy={running === check.name}
+                  />
+                </button>
+              ))}
+            </div>
+            {(canMigrateStorage || canMaintainStorage) && (
+              <Suspense fallback={null}>
+                <CheckStorageMaintenanceActions
+                  canMaintainStorage={canMaintainStorage}
+                  canMigrateStorage={canMigrateStorage}
+                  running={running}
+                  onPublishResult={setResult}
+                  onRunCheck={runCheck}
+                  onRunningChange={setRunning}
+                  onShowStorage={() => setCheckView("storage")}
                 />
-              </button>
-            ))}
-          </div>
-          {(canMigrateStorage || canMaintainStorage) && (
-            <Suspense fallback={null}>
-              <CheckStorageMaintenanceActions
-                canMaintainStorage={canMaintainStorage}
-                canMigrateStorage={canMigrateStorage}
-                running={running}
-                onPublishResult={setResult}
-                onRunCheck={runCheck}
-                onRunningChange={setRunning}
-                onShowStorage={() => setCheckView("storage")}
-              />
-            </Suspense>
-          )}
-        </div>
-      </header>
-      {(checkView === "status" || checkView === "all") && (
-        <>
-          <LightweightStatusCards query={statusQuery} />
-          {canRebuildCache ? (
-            <Suspense
-              fallback={
-                <ReadyImageCachePanel
+              </Suspense>
+            )}
+          </>
+        }
+      />
+      <WorkspaceScrollBody>
+        {(checkView === "status" || checkView === "all") && (
+          <>
+            <LightweightStatusCards query={statusQuery} />
+            {canRebuildCache ? (
+              <Suspense
+                fallback={
+                  <ReadyImageCachePanel
+                    query={statusQuery}
+                    projectionUsage={projectionUsage}
+                    projectionUsageNotice={projectionUsageNotice}
+                    reportQueryError={false}
+                  />
+                }
+              >
+                <ReadyImageCacheMaintenancePanel
                   query={statusQuery}
                   projectionUsage={projectionUsage}
                   projectionUsageNotice={projectionUsageNotice}
-                  reportQueryError={false}
                 />
-              }
-            >
-              <ReadyImageCacheMaintenancePanel
+              </Suspense>
+            ) : (
+              <ReadyImageCachePanel
                 query={statusQuery}
                 projectionUsage={projectionUsage}
                 projectionUsageNotice={projectionUsageNotice}
               />
-            </Suspense>
-          ) : (
-            <ReadyImageCachePanel
-              query={statusQuery}
-              projectionUsage={projectionUsage}
-              projectionUsageNotice={projectionUsageNotice}
-            />
-          )}
-        </>
-      )}
-      {result !== null && <CheckResult result={result} />}
+            )}
+          </>
+        )}
+        {result !== null && <CheckResult result={result} />}
+      </WorkspaceScrollBody>
+      <WorkspaceToolbarScrollbar />
     </section>
   );
 }

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { RuntimeConfigResponseDto, RuntimeConfigSaveRequestDto } from "@imageshow/shared/browser";
-import { api } from "../../../lib/api/client.js";
+import { api, apiValidationIssues } from "../../../lib/api/client.js";
 import { adminApiBasePath } from "../../../lib/constants.js";
 import { queryKeys } from "../../../lib/api/query-keys.js";
 import { invalidateRuntimeData } from "../../../lib/api/query-invalidation.js";
@@ -10,16 +10,25 @@ import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import { AsyncActionButton } from "../../../components/actions/AsyncActionButton.js";
 import { ConfirmDialog } from "../../../components/feedback/ConfirmDialog.js";
 import { QueryErrorState } from "../../../components/feedback/QueryErrorState.js";
-import { OverlayScrollbar } from "../../../components/layout/OverlayScrollbar.js";
+import { WorkspaceScrollBody } from "../../../components/layout/WorkspaceScrollBody.js";
 import { WorkspaceHeader } from "../../../components/layout/WorkspaceHeader.js";
 import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
+import { useWorkspaceToolbarCollapse } from "../../../hooks/useWorkspaceToolbarCollapse.js";
+import { WorkspaceToolbarScrollbar } from "../../../components/layout/WorkspaceToolbarScrollbar.js";
+import {
+  ActionFeedbackOutlet,
+  useActionFeedbackTarget
+} from "../../../components/feedback/ActionFeedbackRegion.js";
+import { createActionFeedback, type ActionFeedbackState } from "../../../lib/ui/action-feedback.js";
 import { SettingsFieldControl } from "./SettingsFieldControl.js";
 import {
   replaceSettingsField,
   settingsFieldEntries,
   settingsFieldValue,
   settingsGroupEntries,
-  settingsSections
+  settingsSections,
+  settingsValidationFailure,
+  type SettingsFieldPath
 } from "./settings-fields.js";
 import "../../../styles/admin/settings.css";
 
@@ -70,9 +79,16 @@ function SettingsPageContent({ snapshot }: { snapshot: RuntimeConfigResponseDto 
   const configRef = useRef(current);
   configRef.current = current;
   const [actionError, setActionError] = useState("");
+  const [actionFeedback, setActionFeedback] = useState<ActionFeedbackState | null>(null);
+  // 保存失败时各配置项的问题；对应输入框标红，修改该项后清除。
+  const [fieldErrors, setFieldErrors] = useState<ReadonlyMap<SettingsFieldPath, string>>(
+    () => new Map()
+  );
+  const feedbackTarget = useActionFeedbackTarget("settings");
   const [confirmation, setConfirmation] = useState<SettingsAction | null>(null);
   const actionRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const workspaceToolbarRef = useWorkspaceToolbarCollapse();
   const returnFocusRef = useRef<HTMLButtonElement | null>(null);
   const reloadStatus = useAsyncActionStatus();
   const saveStatus = useAsyncActionStatus();
@@ -98,6 +114,8 @@ function SettingsPageContent({ snapshot }: { snapshot: RuntimeConfigResponseDto 
     actionRef.current = controller;
     const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]);
     setActionError("");
+    setActionFeedback(null);
+    setFieldErrors(new Map());
     const status = action.kind === "reload" ? reloadStatus : saveStatus;
     return status.run(async () => {
       try {
@@ -125,12 +143,19 @@ function SettingsPageContent({ snapshot }: { snapshot: RuntimeConfigResponseDto 
         return true;
       } catch (error) {
         if (controller.signal.aborted) return false;
+        const validation = signal.aborted
+          ? null
+          : settingsValidationFailure(apiValidationIssues(error));
+        if (validation) setFieldErrors(validation.fieldErrors);
         const message = signal.aborted
           ? "请求超时，草稿已保留。可重试保存或读取配置文件确认结果。"
-          : error instanceof Error
-            ? error.message
-            : "操作失败，草稿已保留。";
+          : validation
+            ? validation.message
+            : error instanceof Error
+              ? error.message
+              : "操作失败，草稿已保留。";
         setActionError(message);
+        setActionFeedback(createActionFeedback(message, "error"));
         reportAdminUiError(`settings.${action.kind}`, error);
         return false;
       } finally {
@@ -160,8 +185,16 @@ function SettingsPageContent({ snapshot }: { snapshot: RuntimeConfigResponseDto 
       field={field}
       value={settingsFieldValue(config, path)}
       disabled={locked}
+      error={fieldErrors.get(path)}
       onChange={(value) => {
         if (locked || actionRef.current) return;
+        if (fieldErrors.has(path)) {
+          setFieldErrors((current) => {
+            const next = new Map(current);
+            next.delete(path);
+            return next;
+          });
+        }
         const next = { config: replaceSettingsField(configRef.current.config, path, value), revision: configRef.current.revision };
         configRef.current = next;
         setDraft(JSON.stringify(next.config) === JSON.stringify(serverConfig) ? null : next);
@@ -214,10 +247,14 @@ function SettingsPageContent({ snapshot }: { snapshot: RuntimeConfigResponseDto 
     ));
 
   return (
-    <section className="workspace workspace-contained settings-page">
+    <section
+      ref={workspaceToolbarRef}
+      className="workspace workspace-contained workspace-has-toolbar settings-page"
+    >
       <WorkspaceHeader
         title="站点配置"
         description={dirty ? "有未保存的修改" : "全部应用运行配置"}
+        feedbackTarget={feedbackTarget}
         actionsClassName="settings-head-actions"
         actions={(
           <>
@@ -240,8 +277,7 @@ function SettingsPageContent({ snapshot }: { snapshot: RuntimeConfigResponseDto 
           </>
         )}
       />
-      {actionError && <p className="hint" role="alert">{actionError}</p>}
-      <div className="settings-scroll-region" ref={scrollRef}>
+      <WorkspaceScrollBody ref={scrollRef} className="settings-scroll-region">
         <fieldset className="settings-grid" disabled={locked} aria-busy={busy}>
           <div className="settings-columns">
             <div className="settings-column">{renderSections("left")}</div>
@@ -249,8 +285,14 @@ function SettingsPageContent({ snapshot }: { snapshot: RuntimeConfigResponseDto 
           </div>
           {renderSections("wide")}
         </fieldset>
-      </div>
-      <OverlayScrollbar targetRef={scrollRef} pageEdge />
+      </WorkspaceScrollBody>
+      {actionFeedback && (
+        <ActionFeedbackOutlet
+          feedback={actionFeedback}
+          target={feedbackTarget}
+          onClose={() => setActionFeedback(null)}
+        />
+      )}
       {confirmation && (
         <ConfirmDialog
           title={confirmation.kind === "reload" ? "读取配置文件" : "变更站点域名"}
@@ -270,6 +312,7 @@ function SettingsPageContent({ snapshot }: { snapshot: RuntimeConfigResponseDto 
           onConfirm={() => runAction(confirmation)}
         />
       )}
+      <WorkspaceToolbarScrollbar />
     </section>
   );
 }

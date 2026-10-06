@@ -15,9 +15,13 @@ import { api, isApiClientError } from "../../lib/api/client.js";
 import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
+import { useActionFeedbackTarget } from "../../components/feedback/ActionFeedbackRegion.js";
+import { useWorkspaceToolbarCollapse } from "../../hooks/useWorkspaceToolbarCollapse.js";
+import { WorkspaceToolbarScrollbar } from "../../components/layout/WorkspaceToolbarScrollbar.js";
+import { WorkspaceToolbar } from "../../components/layout/WorkspaceToolbar.js";
+import { workspaceScrollContainer } from "../../lib/ui/workspace-scroll.js";
 import { AdminPagination } from "../../components/navigation/AdminPagination.js";
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
-import { useActionFeedbackTarget } from "../../components/feedback/ActionFeedbackRegion.js";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
 import {
   VocabularyAdminItem,
@@ -43,6 +47,7 @@ import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 import { useAdminPermissions } from "../../hooks/useAuthSession.js";
 import { useAdminPreference } from "../../hooks/useAdminPreferences.js";
 import { useSortOrderSave } from "../../hooks/useSortOrderSave.js";
+import { FieldError } from "../../components/form/FieldError.js";
 import "../../styles/admin/entity.css";
 import "../../styles/admin/vocabulary.css";
 
@@ -162,8 +167,9 @@ function VocabularyAdminContent({
   const [display, setDisplay] = useState("");
 
   const [link, setLink] = useState("");
-  const feedbackTarget = useActionFeedbackTarget(`${kind}-admin`);
   const [mutation, setMutation] = useState<VocabularyMutation>("");
+  const feedbackTarget = useActionFeedbackTarget(`${kind}-admin`);
+  const workspaceToolbarRef = useWorkspaceToolbarCollapse();
   const [createError, setCreateError] = useState("");
   const createAction = useAsyncActionStatus({ resultDurationMs: null });
   const [confirmDelete, setConfirmDelete] = useState<VocabularyEntry | null>(null);
@@ -177,7 +183,7 @@ function VocabularyAdminContent({
 
   const changeView = (nextView: "list" | "card") => {
     if (nextView === viewMode) return;
-    const viewport = listRef.current;
+    const viewport = workspaceScrollContainer(listRef.current);
     if (viewport && viewport.scrollTop > 0) {
       const viewportTop = viewport.getBoundingClientRect().top;
       const anchor = Array.from(viewport.querySelectorAll<HTMLElement>("[data-vocabulary-slug]"))
@@ -193,7 +199,7 @@ function VocabularyAdminContent({
   useLayoutEffect(() => {
     const anchor = scrollAnchorRef.current;
     scrollAnchorRef.current = null;
-    const viewport = listRef.current;
+    const viewport = workspaceScrollContainer(listRef.current);
     if (!viewport || !anchor?.element.isConnected) return;
     const viewportTop = viewport.getBoundingClientRect().top;
     const delta = anchor.element.getBoundingClientRect().top - viewportTop - anchor.offset;
@@ -307,76 +313,79 @@ function VocabularyAdminContent({
   };
 
   return (
-    <section className="workspace workspace-paged workspace-contained vocabulary-page">
+    <section
+      ref={workspaceToolbarRef}
+      className="workspace workspace-paged workspace-contained workspace-has-toolbar vocabulary-page"
+    >
       <div className="vocabulary-toolbar" data-kind={kind}>
         <WorkspaceHeader
           title={`${copy.noun}管理`}
           description={`第 ${page} / ${totalPages} 页 · 共 ${order.length} 个${copy.noun}${isPending ? " · 加载中" : ""}`}
           feedbackTarget={feedbackTarget}
+          titleAccessory={
+            <button
+              type="button"
+              className="state-toggle-button vocabulary-view-switch"
+              data-shifted={viewMode === "list"}
+              aria-pressed={viewMode === "list"}
+              aria-label={`${copy.noun}以${viewMode === "card" ? "卡片" : "列表"}显示；点击切换为${viewMode === "card" ? "列表" : "卡片"}`}
+              title={`切换为${viewMode === "card" ? "列表" : "卡片"}`}
+              onClick={() => changeView(viewMode === "card" ? "list" : "card")}
+            >
+              <span className="state-toggle-label">{viewMode === "card" ? "卡片" : "列表"}</span>
+              <span className="state-toggle-thumb" aria-hidden="true" />
+            </button>
+          }
         />
-        <form className="admin-create-form" onSubmit={create}>
-          <div className="admin-create-field entity-slug-field">
+        <WorkspaceToolbar className="vocabulary-create-toolbar">
+          <form className="admin-create-form" onSubmit={create}>
+            <div className="admin-create-field entity-slug-field">
+              <input
+                className="entity-create-slug"
+                value={slug}
+                onChange={(event) => {
+                  setSlug(event.target.value.toLowerCase());
+                  setCreateError("");
+                }}
+                placeholder={copy.slugPlaceholder}
+                disabled={externalBusy}
+                maxLength={32}
+                aria-invalid={Boolean(slugError)}
+              />
+              <FieldError message={slugError} announce />
+            </div>
             <input
-              className="entity-create-slug"
-              value={slug}
-              onChange={(event) => {
-                setSlug(event.target.value.toLowerCase());
-                setCreateError("");
-              }}
-              placeholder={copy.slugPlaceholder}
+              className="vocabulary-create-display"
+              value={display}
+              onChange={(event) => setDisplay(event.target.value)}
+              placeholder={copy.displayPlaceholder}
               disabled={externalBusy}
-              maxLength={32}
-              aria-invalid={Boolean(slugError)}
+              maxLength={64}
             />
-            {slugError && (
-              <p className="admin-field-error" role="alert">
-                {slugError}
-              </p>
+            {isAuthor && (
+              <input
+                className="vocabulary-create-link"
+                value={link}
+                onChange={(event) => setLink(event.target.value)}
+                placeholder="作者主页链接（HTTPS，可选）"
+                disabled={externalBusy}
+                maxLength={2048}
+              />
             )}
-          </div>
-          <input
-            className="vocabulary-create-display"
-            value={display}
-            onChange={(event) => setDisplay(event.target.value)}
-            placeholder={copy.displayPlaceholder}
-            disabled={externalBusy}
-            maxLength={64}
-          />
-          {isAuthor && (
-            <input
-              className="vocabulary-create-link"
-              value={link}
-              onChange={(event) => setLink(event.target.value)}
-              placeholder="作者主页链接（HTTPS，可选）"
-              disabled={externalBusy}
-              maxLength={2048}
-            />
-          )}
-          <button
-            className="button vocabulary-create-button"
-            type="submit"
-            disabled={operationBusy || !slug.trim() || slugInvalid}
-          >
-            <AdminIcon name="add-line" />
-            <StableButtonLabel
-              idle={`新建${copy.noun}`}
-              busyText="新建中"
-              busy={createAction.pending}
-            />
-          </button>
-        </form>
-        <button
-          type="button"
-          className="state-toggle-button vocabulary-view-switch"
-          data-shifted={viewMode === "list"}
-          aria-pressed={viewMode === "list"}
-          aria-label={`${copy.noun}以${viewMode === "card" ? "卡片" : "列表"}显示；点击切换为${viewMode === "card" ? "列表" : "卡片"}`}
-          title={`切换为${viewMode === "card" ? "列表" : "卡片"}`}
-          onClick={() => changeView(viewMode === "card" ? "list" : "card")}
-        >
-          <span className="state-toggle-label">{viewMode === "card" ? "卡片" : "列表"}</span>
-          <span className="state-toggle-thumb" aria-hidden="true" />
-        </button>
+            <button
+              className="button vocabulary-create-button"
+              type="submit"
+              disabled={operationBusy || !slug.trim() || slugInvalid}
+            >
+              <AdminIcon name="add-line" />
+              <StableButtonLabel
+                idle={`新建${copy.noun}`}
+                busyText="新建中"
+                busy={createAction.pending}
+              />
+            </button>
+          </form>
+        </WorkspaceToolbar>
       </div>
       <div className="vocabulary-content">
         <div
@@ -402,7 +411,11 @@ function VocabularyAdminContent({
               </div>
             ))}
           </div>
-          <div className="admin-scroll-region vocabulary-scroll" ref={listRef}>
+          <div
+            className="admin-scroll-region vocabulary-scroll"
+            ref={listRef}
+            data-workspace-content=""
+          >
             <div ref={listContentRef} className="vocabulary-items" role={viewMode === "list" ? "rowgroup" : undefined}>
               {table.getRowModel().rows.map((row) => {
                 const item = row.original;
@@ -415,6 +428,7 @@ function VocabularyAdminContent({
                     viewMode={viewMode}
                     canDelete={canDelete}
                     sortBusy={externalBusy || sorting.isSaving(item.slug)}
+                    sortFeedbackTarget={feedbackTarget}
                     onSortSave={(value) => sorting.save(item.slug, value)}
                     onChanged={async (item) => {
                       if (item) await acceptAuthorItem(item);
@@ -457,6 +471,7 @@ function VocabularyAdminContent({
           onConfirm={remove}
         />
       )}
+      <WorkspaceToolbarScrollbar />
     </section>
   );
 }

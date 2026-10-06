@@ -236,7 +236,7 @@ function StorageMaintenanceDialog({
     "从其他后端的同档一致副本恢复缺失文件，清理无引用对象，并维护已请求彻底删除的持久任务。普通回收站图片和有效内容接入仍会保留。";
   return (
     <DialogFrame
-      className="modal edit-modal"
+      className="modal edit-modal is-mobile-fullscreen"
       ariaLabel={title}
       busy={Boolean(running)}
       onClose={onClose}

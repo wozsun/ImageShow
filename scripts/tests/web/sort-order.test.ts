@@ -218,7 +218,7 @@ test("[Web/后台排序] 单项失败保留草稿并继续队列，刷新失败�
   assert.equal(h.input("a").value, "-5");
   assert.match(
     h.document.querySelector(
-      '.action-feedback-fallback-region .action-feedback-error[role="alert"]'
+      '.action-feedback-region .action-feedback-error[role="alert"]'
     )!.textContent!,
     /已保存.*列表刷新失败/
   );
@@ -318,7 +318,7 @@ test("[Web/后台排序] 整数输入边界、权威更新与卸载遵循草稿�
   const h = await createConfigStreamHarness(t);
   const { SortOrderInput } =
     await import("../../../packages/web/src/components/actions/SortOrderInput.tsx");
-  const { ActionFeedbackProvider } =
+  const { ActionFeedbackProvider, ActionFeedbackRegion, useActionFeedbackTarget } =
     await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
   const saved: number[] = [];
   let pending = Promise.withResolvers<number>();
@@ -326,17 +326,28 @@ test("[Web/后台排序] 整数输入边界、权威更新与卸载遵循草稿�
     saved.push(value);
     return pending.promise;
   };
+  // 排序输入的提示投递到所在页面的反馈区；这里由宿主组件提供同一个目标与区域。
+  function Host({ value }: { value: number }) {
+    const feedbackTarget = useActionFeedbackTarget("sort-order-test");
+    return h.React.createElement(
+      h.React.Fragment,
+      null,
+      h.React.createElement(ActionFeedbackRegion, { target: feedbackTarget }),
+      h.React.createElement(SortOrderInput, {
+        value,
+        itemLabel: "标签 x",
+        disabled: false,
+        feedbackTarget,
+        onSave
+      })
+    );
+  }
   const render = (value: number) =>
     h.render(
       h.React.createElement(
         ActionFeedbackProvider,
         null,
-        h.React.createElement(SortOrderInput, {
-          value,
-          itemLabel: "标签 x",
-          disabled: false,
-          onSave
-        })
+        h.React.createElement(Host, { value })
       )
     );
   const input = () => h.document.querySelector<HTMLInputElement>("input")!;
@@ -369,7 +380,7 @@ test("[Web/后台排序] 整数输入边界、权威更新与卸载遵循草稿�
     assert.equal(input().getAttribute("aria-invalid"), "true");
     assert.equal(saved.length, 0, "非法整数留在输入框供修正");
     const message = h.document.querySelector(
-      '.action-feedback-fallback-region .action-feedback-error[role="alert"]'
+      '.action-feedback-region .action-feedback-error[role="alert"]'
     );
     assert.ok(message);
     assert.match(message.textContent!, /请输入 -5,000,000 至 5,000,000 之间的整数/);

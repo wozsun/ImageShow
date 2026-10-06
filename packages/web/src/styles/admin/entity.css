@@ -7,12 +7,6 @@
   --admin-color-role-image-surface: light-dark(#e0e7ff, #1e1f44);
 }
 
-.admin-scroll-list {
-  max-height: calc(100svh - 210px);
-  overflow-y: auto;
-  padding-right: 2px;
-}
-
 /* 后台实体的新建表单；词表集合布局由 vocabulary.css 拥有。 */
 .admin-create-form {
   display: flex;

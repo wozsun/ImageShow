@@ -280,192 +280,40 @@ button.state-toggle-button:focus-visible {
   border-color: var(--admin-color-danger-border-strong);
 }
 
+/* 页面反馈固定显示在页头副标题的位置：反馈区与副标题共用同一网格区域，有消息时隐藏同级副标题。
+   消息沿用副标题字号与行高，只用状态文字色区分；单行显示，长文案省略并保留在 title 中。
+   同时有多条消息时只显示最新的一条。 */
 .action-feedback-region {
   min-width: 0;
-  display: flex;
-  justify-content: flex-end;
-  pointer-events: none;
+  overflow: hidden;
 }
-
-/* 空区域不占位；portal 子节点写入后 :empty 自动失效，区域才参与正常布局。 */
+/* 空区域不占位；portal 子节点写入后 :empty 自动失效。 */
 .action-feedback-region:empty {
   display: none;
 }
-
-.action-feedback-region.is-page {
-  flex: 1 1 300px;
-  width: min(460px, 100%);
-  max-width: 460px;
-  align-self: center;
+[data-workspace-pinned]:has(> .action-feedback-region:not(:empty)) > p {
+  visibility: hidden;
 }
-
-.action-feedback-region.is-card {
-  width: min(460px, 100%);
-}
-
-.action-feedback-fallback-region {
-  position: fixed;
-  z-index: 200;
-  top: max(16px, env(safe-area-inset-top));
-  right: max(16px, env(safe-area-inset-right));
-  width: min(380px, calc(100vw - 32px));
-}
-
 .action-feedback {
-  position: relative;
-  isolation: isolate;
-  width: fit-content;
-  max-width: 100%;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  overflow: hidden;
-  margin: 0;
-  /* 22px 关闭按钮 + 上下 6px + 边框 = 36px，保持紧凑工具栏高度。 */
-  padding: 6px 12px;
-  border: 1px solid;
-  border-radius: 9px;
-  background: var(--action-feedback-background);
-  font-size: 14px;
-  line-height: 1.4;
-  pointer-events: auto;
-  animation: action-feedback-in 0.12s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.action-feedback.is-closing {
-  pointer-events: none;
-  animation: action-feedback-out 0.11s ease-in forwards;
-}
-
-.action-feedback.is-closing .action-feedback-progress {
-  animation-play-state: paused;
-}
-
-/*
- * 页面与卡片内的反馈只占一条 36px 稳定轨道。长文案保留在 DOM 与 title 中，
- * 视觉上省略；只有不参与页面排版的顶层/降级浮层允许按内容换行。
- */
-.action-feedback-region:not(.action-feedback-fallback-region) > .action-feedback {
-  height: 36px;
-}
-.action-feedback-region:not(.action-feedback-fallback-region)
-  > .action-feedback
-  .action-feedback-content,
-.action-feedback-region:not(.action-feedback-fallback-region)
-  > .action-feedback
-  .action-feedback-content
-  > span {
-  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  animation: action-feedback-in 0.12s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-
-.action-feedback-fallback-region > .action-feedback {
-  box-shadow: 0 10px 30px var(--admin-shadow-control-floating);
+.action-feedback:not(:last-child) {
+  display: none;
 }
-
-.action-feedback-info {
-  --action-feedback-background: var(--admin-color-warning-surface);
-  --action-feedback-progress: var(--admin-color-warning-progress);
-  color: var(--admin-color-warning-text-strong);
-  border-color: var(--admin-color-warning-border);
+.action-feedback.is-closing {
+  animation: action-feedback-out 0.11s ease-in forwards;
 }
-
 .action-feedback-pending {
-  --action-feedback-background: var(--admin-color-pending-surface);
-  --action-feedback-progress: var(--admin-color-pending-progress);
   color: var(--admin-color-pending-text-strong);
-  border-color: var(--admin-color-pending-border-soft);
 }
-
 .action-feedback-success {
-  --action-feedback-background: var(--admin-color-success-surface);
-  --action-feedback-progress: var(--admin-color-success-progress);
   color: var(--admin-color-success-text-strong);
-  border-color: var(--admin-color-success-border-soft);
 }
-
 .action-feedback-error {
-  --action-feedback-background: var(--admin-color-danger-surface);
-  --action-feedback-progress: var(--admin-color-danger-progress);
   color: var(--admin-color-danger-text);
-  border-color: var(--admin-color-danger-border);
-}
-
-.action-feedback-progress {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background: var(--action-feedback-progress);
-  transform-origin: left center;
-}
-
-.action-feedback-progress.is-timed {
-  transform: scaleX(0);
-  animation: action-feedback-countdown var(--action-feedback-duration) linear forwards;
-}
-
-.action-feedback-progress.is-pending {
-  right: auto;
-  width: 42%;
-  transform: translateX(-110%);
-  animation: action-feedback-pending 1.4s ease-in-out infinite;
-}
-
-.action-feedback:hover .action-feedback-progress.is-timed,
-.action-feedback:focus-within .action-feedback-progress.is-timed,
-.action-feedback.is-countdown-paused .action-feedback-progress.is-timed {
-  animation-play-state: paused;
-}
-
-.action-feedback-content {
-  position: relative;
-  z-index: 1;
-  flex: 1 1 auto;
-  min-width: 0;
-  word-break: break-word;
-}
-
-.action-feedback-close {
-  position: relative;
-  z-index: 1;
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  /*
-   * close-line 的 24px viewBox 两侧各有约 5.6px 留白。末端多收 3px，
-   * 让图形墨迹到边框的距离与文字左侧留白相等，同时保留 22px 点击区。
-   */
-  margin-inline-start: -3px;
-  margin-inline-end: -6px;
-
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: inherit;
-  opacity: 0.65;
-  cursor: pointer;
-}
-
-.action-feedback-close:hover {
-  opacity: 1;
-}
-
-@keyframes action-feedback-countdown {
-  from {
-    transform: scaleX(0);
-  }
-  to {
-    transform: scaleX(1);
-  }
 }
 
 @keyframes action-feedback-in {
@@ -486,34 +334,9 @@ button.state-toggle-button:focus-visible {
   }
 }
 
-@keyframes action-feedback-pending {
-  0% {
-    transform: translateX(-110%);
-  }
-  55%,
-  100% {
-    transform: translateX(240%);
-  }
-}
-
-@media (max-width: 760px) {
-  .action-feedback-region.is-page {
-    flex: 0 0 auto;
-    width: 100%;
-    max-width: none;
-    align-self: stretch;
-  }
-
-  /* 固定 64px 后台导航下方的降级位置；不读取导航运行时几何。 */
-  .action-feedback-fallback-region {
-    top: calc(64px + 12px);
-    right: max(12px, env(safe-area-inset-right));
-    width: min(380px, calc(100vw - 24px));
-  }
-}
-
 /*后台字段与表单错误使用管理语义类，避免懒加载块向公共页面泄漏裸选择器。*/
 .admin-field-error {
+  display: block;
   margin: 0;
   color: var(--admin-color-danger-text);
   font-size: 13px;
@@ -670,12 +493,13 @@ pre {
   padding: 0;
 }
 
-/* 后台页面共用的表单弹窗骨架。具体页面只维护自身的内容和尺寸规则。 */
+/* 后台页面共用的表单弹窗骨架。具体页面只维护自身的内容和尺寸规则。
+   高度同时受弹窗层约束：Safari 的 vh 按收起工具栏计算，单用 vh 会让表单尾部落到可见区外。 */
 .edit-modal form {
   margin: 0;
   width: min(860px, 100%);
   max-width: 100%;
-  max-height: 92vh;
+  max-height: min(92dvh, 100%);
   overflow: auto;
   background: var(--admin-color-surface-primary);
   border-radius: 8px;
@@ -712,6 +536,62 @@ pre {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 后台窄屏全屏弹窗的共用外壳：弹窗层加 is-mobile-fullscreen，其直接子窗口铺满视口，
+   头尾避开安全区并使用触控尺寸。窗口内部的行列布局由各自模块维护；
+   [data-dialog-frame] 提高优先级，覆盖各窗口的桌面尺寸规则。 */
+@media (max-width: 760px) {
+  [data-dialog-frame].is-mobile-fullscreen {
+    padding: 0;
+    place-items: stretch;
+  }
+  [data-dialog-frame].is-mobile-fullscreen > :is(form, section) {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
+    border-radius: 0;
+  }
+  [data-dialog-frame].is-mobile-fullscreen > * > header {
+    padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 10px
+      max(12px, env(safe-area-inset-left));
+  }
+  [data-dialog-frame].is-mobile-fullscreen > * > header :is(h1, h2) {
+    font-size: 21px;
+  }
+  [data-dialog-frame].is-mobile-fullscreen > * > header .close {
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+  }
+  [data-dialog-frame].is-mobile-fullscreen > * > footer {
+    padding: 8px max(10px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom))
+      max(10px, env(safe-area-inset-left));
+  }
+  [data-dialog-frame].is-mobile-fullscreen > * > footer button {
+    min-height: 44px;
+  }
+
+  /* 操作弹窗：头尾固定，只滚动正文，动作按钮始终留在可见区。 */
+  .is-mobile-fullscreen > .operation-modal {
+    display: flex;
+    flex-direction: column;
+  }
+  .is-mobile-fullscreen > .operation-modal > :is(header, footer) {
+    flex-shrink: 0;
+  }
+  .is-mobile-fullscreen > .operation-modal > header p {
+    overflow: visible;
+    white-space: normal;
+  }
+  .is-mobile-fullscreen > .operation-modal > .operation-body {
+    flex: 1;
+    min-height: 0;
+    align-content: start;
+    overflow: auto;
+    padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right));
+  }
 }
 
 .confirm-dialog form {

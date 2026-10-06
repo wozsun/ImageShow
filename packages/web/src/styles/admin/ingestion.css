@@ -146,7 +146,7 @@
 }
 .import-source-card {
   width: min(560px, 96vw);
-  max-height: 90vh;
+  max-height: min(90dvh, 100%);
   overflow: auto;
   background: var(--admin-color-surface-primary);
   border-radius: 8px;
@@ -658,19 +658,10 @@ button.ingestion-empty-state.upload-dropzone:not(:disabled):hover,
     min-height: 0;
     resize: none;
   }
-  .ingestion-overlay {
-    padding: 0;
-    place-items: stretch;
-  }
   .ingestion-window {
-    width: 100%;
-    height: 100svh;
-    height: 100dvh;
-    max-height: none;
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto minmax(0, 1fr) auto;
-    border-radius: 0;
   }
   .ingestion-window > header.ingestion-window-header {
     min-height: 0;
@@ -679,8 +670,6 @@ button.ingestion-empty-state.upload-dropzone:not(:disabled):hover,
     grid-template-rows: auto auto;
     align-items: center;
     gap: 8px;
-    padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 10px
-      max(10px, env(safe-area-inset-left));
   }
   .ingestion-head-copy,
   .ingestion-head-actions,
@@ -693,7 +682,6 @@ button.ingestion-empty-state.upload-dropzone:not(:disabled):hover,
     min-width: 0;
     overflow: hidden;
     white-space: nowrap;
-    font-size: 21px;
   }
   .ingestion-window-header p {
     grid-column: 1;
@@ -730,15 +718,8 @@ button.ingestion-empty-state.upload-dropzone:not(:disabled):hover,
   .ingestion-close-button {
     grid-column: 3;
     grid-row: 1;
-    width: 44px;
-    height: 44px;
     justify-self: end;
   }
-  .ingestion-window > footer {
-    padding: 8px max(10px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom))
-      max(10px, env(safe-area-inset-left));
-  }
-  .ingestion-window > footer button,
   .ingestion-window > footer .select-trigger {
     min-height: 44px;
   }
