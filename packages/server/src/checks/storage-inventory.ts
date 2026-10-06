@@ -51,7 +51,9 @@ export function mergeStorageReferenceRows(
 }
 
 export type StorageBackendGroup = {
+  /** Enabled backends: the only ones that list, probe or maintain the namespace. */
   backends: StorageBackendRecord[];
+  /** Every slug sharing the namespace, disabled ones included, so their images stay referenced. */
   slugs: string[];
 };
 
@@ -59,11 +61,22 @@ export function storageBackendGroupName(group: StorageBackendGroup) {
   return group.slugs.toSorted().join(" / ");
 }
 
+/**
+ * Namespaces that checks and maintenance inspect. A disabled backend makes no
+ * storage request: a namespace reached only through disabled backends is left out.
+ */
 export async function storageBackendGroups(): Promise<StorageBackendGroup[]> {
-  return groupStorageNamespaces(await listStorageBackends()).map((backends) => ({
-    backends,
-    slugs: backends.map((backend) => backend.slug)
-  }));
+  return groupStorageNamespaces(await listStorageBackends()).flatMap((backends) => {
+    const enabled = backends.filter((backend) => backend.enabled);
+    return enabled.length
+      ? [{ backends: enabled, slugs: backends.map((backend) => backend.slug) }]
+      : [];
+  });
+}
+
+/** Slugs whose images checks and maintenance inspect. */
+export function inspectedStorageSlugs(groups: readonly StorageBackendGroup[]) {
+  return new Set(groups.flatMap((group) => group.backends.map((backend) => backend.slug)));
 }
 
 export async function collectStorageBackendGroupSnapshot(

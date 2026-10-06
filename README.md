@@ -21,6 +21,7 @@ ImageShow 是一个可以部署在自己服务器上的图片画廊，用来收�
 
 - 部署：[安装与维护](docs/DEPLOY.md)、[配置参考](docs/CONFIG.md)
 - 接入：[随机图 API](docs/api/random.md)、[嵌入页面](docs/api/embed.md)，以及嵌入页的[宿主光标协议](docs/api/embed-cursor.md)和[安全区协议](docs/api/embed-safe-area.md)
+- 维护：改动本项目的规则、流程与内部约束见 [AGENTS.md](AGENTS.md)
 
 ## 许可
 

@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { dirname, extname, isAbsolute, relative, resolve } from "node:path";
 
@@ -6,6 +7,7 @@ const workspaceRoot = resolve(import.meta.dirname, "../../..");
 async function markdownFiles() {
   const files = [
     resolve(workspaceRoot, "README.md"),
+    resolve(workspaceRoot, "AGENTS.md"),
     resolve(workspaceRoot, "scripts/tests/README.md")
   ];
   async function walk(directory) {
@@ -15,8 +17,32 @@ async function markdownFiles() {
       else if (extname(entry.name).toLowerCase() === ".md") files.push(path);
     }
   }
-  await walk(resolve(workspaceRoot, "docs"));
+  // Only these .agents directories are tracked; see .gitignore.
+  for (const directory of ["docs", ".agents/spec", ".agents/process", ".agents/reference"]) {
+    await walk(resolve(workspaceRoot, directory));
+  }
   return files;
+}
+
+// A link must resolve in a fresh clone, so a target has to exist on disk and
+// be a file Git tracks or would track (untracked but not ignored). The index
+// alone is not enough: it still lists files deleted but not yet staged, and the
+// gate runs before staging.
+function repositoryPaths() {
+  const listing = execFileSync(
+    "git",
+    ["ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+    { cwd: workspaceRoot, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }
+  );
+  const paths = new Set();
+  for (const file of listing.split("\0")) {
+    if (!file) continue;
+    paths.add(file);
+    for (let directory = dirname(file); directory !== "."; directory = dirname(directory)) {
+      paths.add(directory);
+    }
+  }
+  return paths;
 }
 
 function displayPath(path) {
@@ -44,6 +70,7 @@ function localTarget(rawTarget) {
 const missing = [];
 let checkedLinks = 0;
 const linkPattern = /!?\[[^\]]*\]\(\s*(<[^>]+>|[^\s)]+)(?:\s+[^)]*)?\)/g;
+const repository = repositoryPaths();
 const files = await markdownFiles();
 for (const file of files) {
   const source = await readFile(file, "utf8");
@@ -57,15 +84,16 @@ for (const file of files) {
       missing.push(`${displayPath(file)} -> ${match[1]} (outside workspace)`);
       continue;
     }
-    try {
-      await stat(resolved);
-    } catch {
+    const exists = await stat(resolved).then(() => true, () => false);
+    if (!exists) {
       missing.push(`${displayPath(file)} -> ${match[1]}`);
+    } else if (!repository.has(relativeTarget.replaceAll("\\", "/"))) {
+      missing.push(`${displayPath(file)} -> ${match[1]} (ignored by Git)`);
     }
   }
 }
 
 if (missing.length > 0) {
-  throw new Error(`markdown-links: missing local targets:\n${missing.join("\n")}`);
+  throw new Error(`markdown-links: missing or ignored local targets:\n${missing.join("\n")}`);
 }
 console.log(`markdown-links: ${checkedLinks} local links across ${files.length} files`);

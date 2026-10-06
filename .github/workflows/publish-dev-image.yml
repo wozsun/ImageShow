@@ -9,9 +9,12 @@ on:
 permissions:
   contents: read
 
+# Registry writes run one at a time and are never cancelled midway. A run whose
+# commit is no longer the dev head stops before building, so a late or re-run
+# job cannot move :dev back to an older commit.
 concurrency:
   group: publish-dev-image-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -28,6 +31,16 @@ jobs:
 
       - name: Validate complete version and dev branch
         run: node scripts/tests/verify/version-contract.mjs --branch dev
+
+      - name: Require the current dev head
+        shell: bash
+        run: |
+          set -euo pipefail
+          head="$(git ls-remote origin refs/heads/dev | cut -f1)"
+          if [[ "${head}" != "${GITHUB_SHA}" ]]; then
+            echo "dev is at ${head:-unknown}, not ${GITHUB_SHA}; refusing to publish an outdated dev image." >&2
+            exit 1
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -53,6 +66,7 @@ jobs:
           password: ${{ secrets.ACR_PASSWORD }}
 
       - name: Build and push to all registries
+        id: build
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -67,3 +81,32 @@ jobs:
             manifest:org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Read back dev image from all registries
+        shell: bash
+        env:
+          PUSHED_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          revision_key="org.opencontainers.image.revision"
+          failed=0
+          for image in "${DOCKER_HUB_IMAGE}" "${TCR_IMAGE}" "${ACR_IMAGE}"; do
+            # A registry may serve a just-pushed tag a moment late.
+            for attempt in 1 2 3 4 5; do
+              descriptor="$(docker buildx imagetools inspect "${image}:dev" --format '{{json .Manifest}}' 2>/dev/null || true)"
+              digest="$(jq -r '.digest // empty' <<< "${descriptor}" 2>/dev/null || true)"
+              [[ "${digest}" == "${PUSHED_DIGEST}" ]] && break
+              sleep 3
+            done
+            raw_manifest="$(docker buildx imagetools inspect "${image}@${digest}" --raw 2>/dev/null || true)"
+            revision="$(jq -r --arg key "${revision_key}" '.annotations[$key] // empty' <<< "${raw_manifest}" 2>/dev/null || true)"
+            if [[ "${digest}" != "${PUSHED_DIGEST}" || "${revision}" != "${GITHUB_SHA}" ]]; then
+              echo "${image}:dev mismatch: digest=${digest:-missing}, revision=${revision:-missing}" >&2
+              failed=1
+            fi
+          done
+          if (( failed )); then
+            echo "Registries do not all serve ${PUSHED_DIGEST} for ${GITHUB_SHA} as :dev." >&2
+            exit 1
+          fi
+          echo "All registries serve ${PUSHED_DIGEST} as :dev for ${GITHUB_SHA}."

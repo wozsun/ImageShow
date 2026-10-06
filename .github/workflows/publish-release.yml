@@ -24,8 +24,6 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
 
       - name: Validate complete version and release tag
         shell: bash
@@ -36,8 +34,11 @@ jobs:
             exit 1
           fi
           node scripts/tests/verify/version-contract.mjs --tag "${GITHUB_REF_NAME}"
-          if ! git merge-base --is-ancestor "${GITHUB_SHA}" "origin/main"; then
-            echo "Release tag ${GITHUB_REF_NAME} does not point to a commit on main" >&2
+          # Only the current main head may move latest, so re-running an older
+          # release cannot roll the registries back.
+          main_head="$(git ls-remote origin refs/heads/main | cut -f1)"
+          if [[ "${main_head}" != "${GITHUB_SHA}" ]]; then
+            echo "Release tag ${GITHUB_REF_NAME} points to ${GITHUB_SHA}, but main is at ${main_head:-unknown}" >&2
             exit 1
           fi
 
@@ -71,10 +72,10 @@ jobs:
           set -euo pipefail
           revision_key="org.opencontainers.image.revision"
           digest_pattern='^sha256:[0-9a-f]{64}$'
+          valid_digests=()
 
           validate_dev_image() {
             local image="$1"
-            local output_name="$2"
             local raw_manifest descriptor revision digest
 
             descriptor="$(docker buildx imagetools inspect "${image}:dev" \
@@ -92,7 +93,7 @@ jobs:
               '.annotations[$key] // empty' <<< "${raw_manifest}" 2>/dev/null || true)"
 
             if [[ "${revision}" == "${GITHUB_SHA}" ]]; then
-              echo "${output_name}=${digest}" >> "${GITHUB_OUTPUT}"
+              valid_digests+=("${digest}")
               return 0
             fi
 
@@ -101,43 +102,75 @@ jobs:
           }
 
           validation_failed=0
-          validate_dev_image "${DOCKER_HUB_IMAGE}" docker_hub_digest || validation_failed=1
-          validate_dev_image "${TCR_IMAGE}" tcr_digest || validation_failed=1
-          validate_dev_image "${ACR_IMAGE}" acr_digest || validation_failed=1
+          validate_dev_image "${DOCKER_HUB_IMAGE}" || validation_failed=1
+          validate_dev_image "${TCR_IMAGE}" || validation_failed=1
+          validate_dev_image "${ACR_IMAGE}" || validation_failed=1
 
           if (( validation_failed )); then
             echo "The current dev image does not match ${GITHUB_SHA}; refusing to publish the release." >&2
             exit 1
           fi
 
-          echo "Reusing the current dev image from all registries."
+          # One build pushed the same image everywhere; differing digests mean a
+          # registry still holds another build, so nothing is published.
+          digest="$(printf '%s\n' "${valid_digests[@]}" | sort -u)"
+          if [[ "$(wc -l <<< "${digest}")" -ne 1 ]]; then
+            echo "Registries serve different dev images for ${GITHUB_SHA}: ${valid_digests[*]}" >&2
+            exit 1
+          fi
+          echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
 
-      - name: Add release tags to current dev image
+          echo "Reusing the current dev image ${digest} from all registries."
+
+      - name: Publish release tags
         shell: bash
         env:
-          DOCKER_HUB_DIGEST: ${{ steps.reusable_image.outputs.docker_hub_digest }}
-          TCR_DIGEST: ${{ steps.reusable_image.outputs.tcr_digest }}
-          ACR_DIGEST: ${{ steps.reusable_image.outputs.acr_digest }}
+          DIGEST: ${{ steps.reusable_image.outputs.digest }}
         run: |
           set -euo pipefail
 
-          docker buildx imagetools create \
-            --prefer-index=false \
-            --tag "${DOCKER_HUB_IMAGE}:${GITHUB_REF_NAME}" \
-            --tag "${DOCKER_HUB_IMAGE}:latest" \
-            "${DOCKER_HUB_IMAGE}@${DOCKER_HUB_DIGEST}"
+          tag_digest() {
+            local descriptor
+            descriptor="$(docker buildx imagetools inspect "$1" --format '{{json .Manifest}}' 2>/dev/null || true)"
+            jq -r '.digest // empty' <<< "${descriptor}" 2>/dev/null || true
+          }
 
-          docker buildx imagetools create \
-            --prefer-index=false \
-            --tag "${TCR_IMAGE}:${GITHUB_REF_NAME}" \
-            --tag "${TCR_IMAGE}:latest" \
-            "${TCR_IMAGE}@${TCR_DIGEST}"
+          # A registry may serve a just-written tag a moment late.
+          read_back() {
+            local reference="$1" attempt published=""
+            for attempt in 1 2 3 4 5; do
+              published="$(tag_digest "${reference}")"
+              [[ "${published}" == "${DIGEST}" ]] && return 0
+              sleep 3
+            done
+            echo "${reference} reads back ${published:-missing}, expected ${DIGEST}" >&2
+            return 1
+          }
 
-          docker buildx imagetools create \
-            --prefer-index=false \
-            --tag "${ACR_IMAGE}:${GITHUB_REF_NAME}" \
-            --tag "${ACR_IMAGE}:latest" \
-            "${ACR_IMAGE}@${ACR_DIGEST}"
+          # Tag one registry, then read every new tag back before the next stage.
+          publish_tags() {
+            local image="$1"
+            shift
+            local tag args=()
+            for tag in "$@"; do args+=(--tag "${image}:${tag}"); done
+            docker buildx imagetools create --prefer-index=false "${args[@]}" "${image}@${DIGEST}"
+            for tag in "$@"; do
+              read_back "${image}:${tag}" || exit 1
+            done
+          }
+
+          # Docker Hub keeps every version tag. An existing tag may only be
+          # re-published with the same image, which lets a failed run retry.
+          existing="$(tag_digest "${DOCKER_HUB_IMAGE}:${GITHUB_REF_NAME}")"
+          if [[ -n "${existing}" && "${existing}" != "${DIGEST}" ]]; then
+            echo "${DOCKER_HUB_IMAGE}:${GITHUB_REF_NAME} already points to ${existing}; refusing to replace it with ${DIGEST}" >&2
+            exit 1
+          fi
+          publish_tags "${DOCKER_HUB_IMAGE}" "${GITHUB_REF_NAME}" latest
+
+          # The cloud mirrors only keep the latest and dev cursors.
+          publish_tags "${TCR_IMAGE}" latest
+          publish_tags "${ACR_IMAGE}" latest
 
   release:
     name: Publish GitHub Release

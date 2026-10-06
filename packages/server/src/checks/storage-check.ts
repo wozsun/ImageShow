@@ -11,6 +11,7 @@ import {
   activeIngestionStorageReferences,
   collectStorageBackendGroupSnapshot,
   ingestionFinalStorageReferences,
+  inspectedStorageSlugs,
   mergeActiveIngestionStorageReferences,
   mergeStorageReferenceRows,
   storageBackendGroupName,
@@ -22,11 +23,31 @@ const storageRowsQuery = `
   SELECT id, status, storage_slug
     FROM metadata`;
 
+/** Retained images on disabled backends, which the check leaves uninspected. */
+function disabledBackendImages(
+  rows: readonly ImageStorageReferenceRow[],
+  inspectedSlugs: ReadonlySet<string>
+) {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    if (inspectedSlugs.has(row.storage_slug)) continue;
+    if (row.status !== "ready" && row.status !== "deleted") continue;
+    counts.set(row.storage_slug, (counts.get(row.storage_slug) ?? 0) + 1);
+  }
+  return [...counts]
+    .toSorted(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    .map(([backend, image_count]) => ({ backend, image_count }));
+}
+
 export async function checkStorage(signal: AbortSignal) {
   signal.throwIfAborted();
   const rowsBeforeEnumeration = (await pool.query(storageRowsQuery))
     .rows as ImageStorageReferenceRow[];
   const groups = await storageBackendGroups();
+  const disabledImages = disabledBackendImages(
+    rowsBeforeEnumeration,
+    inspectedStorageSlugs(groups)
+  );
   const missingObjects: Array<Record<string, unknown>> = [];
   const orphanObjects: Array<Record<string, unknown>> = [];
   const unavailableBackends: Array<Record<string, unknown>> = [];
@@ -101,9 +122,11 @@ export async function checkStorage(signal: AbortSignal) {
       }
     }
 
+    // Disabled aliases' images stay referenced but are neither checked nor probed.
     const aliases = new Set(group.slugs);
+    const checkedSlugs = group.backends.map((record) => record.slug);
     const retainedBeforeEnumeration = keyedRowsBeforeEnumeration.filter(
-      (row) => aliases.has(row.storage_slug)
+      (row) => checkedSlugs.includes(row.storage_slug)
         && (row.status === "ready" || row.status === "deleted")
     );
     const retainedDuringEnumeration = rowsReferencedDuringEnumeration.filter(
@@ -112,7 +135,7 @@ export async function checkStorage(signal: AbortSignal) {
     );
     const largeListing = captured.snapshot.large;
     const largeSet = new Set(largeListing.keys);
-    for (const slug of group.slugs) {
+    for (const slug of checkedSlugs) {
       const rowsForSlug = retainedDuringEnumeration.filter((row) => row.storage_slug === slug);
       const sample =
         rowsForSlug.find((row) => largeSet.has(row.objectKey))
@@ -191,6 +214,7 @@ export async function checkStorage(signal: AbortSignal) {
           }
         ],
     incomplete_listings: incompleteListings,
-    unavailable_backends: unavailableBackends
+    unavailable_backends: unavailableBackends,
+    ...(disabledImages.length ? { disabled_backend_images: disabledImages } : {})
   };
 }

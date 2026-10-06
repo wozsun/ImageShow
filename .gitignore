@@ -4,6 +4,8 @@
 !/.env.example
 !/.github/
 !/.gitignore
+!/AGENTS.md
+!/CLAUDE.md
 !/compose.yaml
 !/Dockerfile
 !/docs/
@@ -15,6 +17,13 @@
 !/README.md
 !/scripts/
 !/tsconfig.base.json
+
+# Agent rules: open .agents, then track only process, spec and reference
+!/.agents/
+/.agents/*
+!/.agents/process/
+!/.agents/reference/
+!/.agents/spec/
 
 # Local files and generated output
 .DS_Store

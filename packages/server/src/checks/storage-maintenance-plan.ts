@@ -9,6 +9,7 @@ import {
   activeIngestionStorageReferences,
   collectStorageBackendGroupSnapshot,
   ingestionFinalStorageReferences,
+  inspectedStorageSlugs,
   mergeActiveIngestionStorageReferences,
   storageBackendGroups,
   type StorageBackendGroup,
@@ -158,7 +159,7 @@ function buildMaintenanceCandidates(
   const retained = new Map(rows
     .filter((row) => row.status === "ready" || row.status === "deleted")
     .map((row) => [imageObjectKey(row.id), row]));
-  const inspectedSlugs = new Set(groups.flatMap(({ group }) => group.slugs));
+  const inspectedSlugs = inspectedStorageSlugs(groups.map(({ group }) => group));
   const repairs = new Set<string>();
   const addRepair = (row: MaintenanceImage, prefix: StoragePrefix) => {
     const identity = `${row.id}:${prefix}`;
@@ -175,6 +176,7 @@ function buildMaintenanceCandidates(
       const present = new Set(snapshot[prefix].keys);
       const referenced = new Set(retainedRows.map((row) => imageObjectKey(row.id)));
       for (const row of retainedRows) {
+        if (!inspectedSlugs.has(row.storage_slug)) continue;
         if (!row.purging && !present.has(imageObjectKey(row.id))) addRepair(row, prefix);
       }
       for (const active of activeReferences.values()) {

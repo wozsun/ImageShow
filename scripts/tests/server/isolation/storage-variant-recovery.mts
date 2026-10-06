@@ -125,5 +125,67 @@ await runIntegrationScenario(async (runtime) => {
     assert.equal((await repairStorageVariant(purging.id, "large", signal)).outcome, "skipped");
     for (const prefix of ["large", "medium", "small"] as const) assert.deepEqual(await source.driver.readBuffer(prefix, purging.key), body);
     assert.equal((await runtime.databasePools.pool.query("SELECT status FROM background_job WHERE type='trash.purge' AND target_id=$1", [purging.id])).rows[0]?.status, "pending");
+
+    // A disabled backend may be an externally synced backup: checks and maintenance
+    // must neither list nor probe it, and must never treat its objects as orphans.
+    const { checkStorage } = await import("../../../../packages/server/src/checks/storage-check.ts");
+    const { buildStorageMaintenancePlan } = await import("../../../../packages/server/src/checks/storage-maintenance-plan.ts");
+    const pool = runtime.databasePools.pool;
+    const backup = await createImage({ source: false });
+    await pool.query("UPDATE metadata SET storage_slug='replica' WHERE id=$1", [backup.id]);
+    const stranded = await createImage({ source: false });
+    for (const prefix of ["large", "medium", "small"] as const) {
+      await source.driver.writeBuffer(prefix, backup.key, body, "image/webp");
+      await source.driver.writeBuffer(prefix, stranded.key, body, "image/webp");
+    }
+    await pool.query("UPDATE storage_backend SET enabled=false WHERE slug='replica'");
+    runtime.storageRegistry.invalidateStorageBackendRegistry();
+    const listDisabled = source.driver.listKeys.bind(source.driver);
+    const existsDisabled = source.driver.exists.bind(source.driver);
+    let disabledRequests = 0;
+    source.driver.listKeys = (prefix, options) => { disabledRequests += 1; return listDisabled(prefix, options); };
+    source.driver.exists = (prefix, key, options) => { disabledRequests += 1; return existsDisabled(prefix, key, options); };
+    try {
+      const check = await checkStorage(signal);
+      assert.equal(check.orphan_objects.some((item) => item.backend === "replica" || item.key === backup.key || item.key === stranded.key), false, "停用后端的对象不报游离");
+      assert.equal(check.missing_objects.some((item) => item.id === backup.id), false, "停用后端上的图片不检查缺失");
+      assert.equal(check.unavailable_backends.some((item) => item.backend === "replica"), false);
+      const retainedOnReplica = Number((await pool.query<{ count: string }>("SELECT count(*) FROM metadata WHERE storage_slug='replica' AND status IN ('ready','deleted')")).rows[0]!.count);
+      assert.deepEqual(check.disabled_backend_images, [{ backend: "replica", image_count: retainedOnReplica }]);
+      const plan = await buildStorageMaintenancePlan(signal);
+      assert.equal(plan.capturedGroups.some((captured) => captured.group.slugs.includes("replica")), false);
+      assert.equal(plan.candidates.some((candidate) => (candidate.kind === "remove" && candidate.backend === "replica") || (candidate.kind === "repair" && candidate.imageId === backup.id)), false, "停用后端不产生删除或修复候选");
+      await maintainStorageAndPurgeTasks(neverAbortedSignal);
+      assert.equal((await repairStorageVariant(backup.id, "large", signal)).outcome, "skipped", "图片所在存储已停用时跳过维修");
+      assert.equal((await repairStorageVariant(stranded.id, "large", signal)).outcome, "failed", "停用后端不作为维修来源");
+      assert.equal(await access.driver.exists("large", stranded.key), false);
+      assert.equal(disabledRequests, 0, "停用后端不产生存储请求");
+    } finally {
+      source.driver.listKeys = listDisabled;
+      source.driver.exists = existsDisabled;
+    }
+    for (const prefix of ["large", "medium", "small"] as const) {
+      assert.deepEqual(await source.driver.readBuffer(prefix, backup.key), body, "停用后端上的对象原样保留");
+      assert.deepEqual(await source.driver.readBuffer(prefix, stranded.key), body);
+    }
+
+    // A disabled alias of an enabled namespace keeps its images referenced, but they are
+    // neither checked for missing objects nor repaired.
+    await pool.query("UPDATE storage_backend SET enabled=true WHERE slug='replica'");
+    await pool.query("INSERT INTO storage_backend(slug,display_name,type,config,enabled) VALUES ('replica-alias','Replica alias','s3',$1::jsonb,false)", [JSON.stringify({...s3.settings,capabilities:{content_md5:false}})]);
+    runtime.storageRegistry.invalidateStorageBackendRegistry();
+    const aliased = await createImage({ source: false });
+    await pool.query("UPDATE metadata SET storage_slug='replica-alias' WHERE id=$1", [aliased.id]);
+    for (const prefix of ["large", "small"] as const) await source.driver.writeBuffer(prefix, aliased.key, body, "image/webp");
+    const shared = await checkStorage(signal);
+    assert.equal(shared.orphan_objects.some((item) => item.key === aliased.key), false, "停用别名登记的图片仍受引用保护");
+    assert.equal(shared.missing_objects.some((item) => item.id === aliased.id), false, "停用别名上的图片不检查缺失");
+    assert.equal(shared.unavailable_backends.some((item) => item.backend === "replica-alias"), false);
+    assert.deepEqual(shared.disabled_backend_images, [{ backend: "replica-alias", image_count: 1 }]);
+    const sharedPlan = await buildStorageMaintenancePlan(signal);
+    assert.equal(sharedPlan.candidates.some((candidate) => (candidate.kind === "repair" && candidate.imageId === aliased.id) || (candidate.kind === "remove" && candidate.key === aliased.key)), false);
+    await maintainStorageAndPurgeTasks(neverAbortedSignal);
+    assert.equal(await source.driver.exists("medium", aliased.key), false, "不为停用别名补回缺档");
+    for (const prefix of ["large", "small"] as const) assert.deepEqual(await source.driver.readBuffer(prefix, aliased.key), body);
   } finally {await s3.close();}
 });

@@ -456,6 +456,7 @@ const CHECK_RESULT_LABELS: Record<string, string> = {
   incomplete_ingestion_temp_scan: "临时文件扫描不完整",
   incomplete_listings: "未完整列举的存储命名空间",
   unavailable_backends: "无法访问的后端",
+  disabled_backend_images: "已停用存储上的图片（未检查）",
   // 存储维护
   requested: "维护请求项",
   repaired: "已恢复对象",

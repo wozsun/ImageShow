@@ -53,6 +53,11 @@ export async function repairStorageVariant(imageId: string, prefix: StoragePrefi
     if (!row || !["ready", "deleted"].includes(row.status)) return result("skipped", { reason: "图片记录已不再保留" });
     backend = row.storage_slug;
     if (row.purging) return result("skipped", { reason: "图片由永久删除任务处理" });
+    // Disabled backends take no part in maintenance, as target or as source.
+    const enabledBackends = (await listStorageBackends()).filter((record) => record.enabled);
+    if (!enabledBackends.some((record) => record.slug === backend)) {
+      return result("skipped", { reason: "图片所在存储已停用，不参与维护" });
+    }
     const target = await resolveStorageAccess(backend);
     await assertObjectNotPendingCleanup(target.config, prefix, key);
     const expected = storedVariantFacts(row, prefix);
@@ -63,9 +68,8 @@ export async function repairStorageVariant(imageId: string, prefix: StoragePrefi
         await target.driver.ensureDurable?.(prefix, key, { signal });
         return result("skipped", { reason: "当前位置对象已完整核验" });
       }
-      const backends = await listStorageBackends();
       const failures: string[] = [];
-      for (const candidate of backends) {
+      for (const candidate of enabledBackends) {
         signal.throwIfAborted();
         if (candidate.slug === backend) continue;
         try {
