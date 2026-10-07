@@ -153,6 +153,7 @@ function buildMaintenanceCandidates(
     >
   >,
   groups: readonly CapturedMaintenanceGroup[],
+  enabledSlugs: ReadonlySet<string>,
   initial: readonly MaintenanceCandidate[]
 ) {
   const candidates = [...initial];
@@ -193,7 +194,9 @@ function buildMaintenanceCandidates(
             image_id: owner.id,
             reason: owner.purging
               ? "图片由永久删除任务处理，保留现存对象"
-              : "当前位置未完成检查，保留副本供恢复"
+              : enabledSlugs.has(owner.storage_slug)
+                ? "当前位置未完成检查，保留副本供恢复"
+                : "图片所在存储已停用，不参与维护，保留现存对象"
           } });
           continue;
         }
@@ -221,6 +224,7 @@ export async function buildStorageMaintenancePlan(signal: AbortSignal) {
     rowsResult.rows,
     ingestionReferences.referencesByBackend,
     capture.captured,
+    inspectedStorageSlugs(groups),
     capture.candidates
   );
   return {

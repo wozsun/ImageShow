@@ -1,0 +1,192 @@
+:root {
+  --admin-color-import-divider-strong: light-dark(var(--admin-color-border-muted), #282e36);
+  --admin-color-import-divider-muted: light-dark(var(--admin-color-border-muted), #20262e);
+  --admin-color-import-summary: var(--admin-color-text-label);
+}
+
+/* 导入来源与按 ID 指定图片共用的输入弹窗：说明、文本框、解析结果与问题列表。 */
+.import-source-card {
+  width: min(560px, 96vw);
+  max-height: min(90dvh, 100%);
+  overflow: auto;
+  background: var(--admin-color-surface-primary);
+  border-radius: 8px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: modal-pop 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.import-source-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.import-source-head h2 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 20px;
+}
+.import-source-panel {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.import-source-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-bottom: 1px solid var(--admin-color-border-default);
+}
+.import-source-tabs button {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--admin-color-text-secondary);
+}
+.import-source-tabs button.is-active {
+  color: var(--admin-color-action-text);
+  box-shadow: inset 0 -2px var(--admin-color-action-primary);
+}
+.import-source-hint {
+  margin: 0;
+  line-height: 20px;
+  white-space: normal;
+}
+.import-source-textarea {
+  width: 100%;
+  height: 190px;
+  min-height: 190px;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  padding: 10px;
+}
+.import-source-input-region {
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.import-source-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.import-source-actions > .import-source-result-summary {
+  flex: 1 1 auto;
+  display: -webkit-box;
+  max-height: 32px;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.import-source-action-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-left: auto;
+}
+.import-source-submit-button {
+  /* 统一容纳四字解析文案与图标，也容纳三位导入数量，避免状态切换时按钮跳动。 */
+  min-width: calc(4em + 52px);
+}
+.import-source-submit-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+}
+.import-source-submit-count {
+  min-width: 3ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.import-source-result-summary {
+  min-width: 0;
+  margin: 0;
+  color: var(--admin-color-success-text);
+  line-height: 20px;
+}
+.import-source-result-summary.is-warning {
+  color: var(--admin-color-warning-text);
+}
+.import-issue-preview {
+  display: grid;
+  gap: 8px;
+  min-height: 0;
+}
+.import-issue-preview-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--admin-color-import-summary);
+  font-size: 13px;
+}
+.import-issue-preview-summary button {
+  min-height: 32px;
+  padding: 6px 9px;
+}
+.import-issue-list {
+  max-height: 190px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+  border-top: 1px solid var(--admin-color-import-divider-strong);
+}
+.import-issue-list li {
+  display: grid;
+  gap: 2px;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--admin-color-import-divider-muted);
+}
+.import-issue-list strong {
+  font-size: 12px;
+}
+.import-issue-list span {
+  overflow: hidden;
+  color: var(--admin-color-text-secondary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.import-issue-list strong,
+.import-issue-list span {
+  color: var(--admin-color-danger-text);
+}
+
+@media (max-width: 760px) {
+  .import-source-input-region.has-result-summary {
+    height: 190px;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+  .import-source-input-region.has-result-summary .import-source-textarea {
+    height: 100%;
+    min-height: 0;
+    resize: none;
+  }
+  .import-source-hint {
+    white-space: normal;
+  }
+  .import-source-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .import-source-action-buttons {
+    width: 100%;
+    margin-left: 0;
+  }
+  .import-source-action-buttons button {
+    flex: 1;
+    min-height: 44px;
+  }
+}

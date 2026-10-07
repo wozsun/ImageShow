@@ -1,6 +1,6 @@
 import { imageVariantUrl } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
-import { TwoStepConfirmIconButton } from "../../../components/actions/TwoStepConfirmIconButton.js";
+import { TwoStepConfirmButton } from "../../../components/actions/TwoStepConfirmButton.js";
 import { ThumbnailImage } from "../../../components/image/ThumbnailImage.js";
 import type { AdminImageListItem } from "../../../lib/types.js";
 import {
@@ -145,7 +145,7 @@ export function AdminImageCard({
             >
               <AdminIcon name="pencil-line" />
             </button>
-            <TwoStepConfirmIconButton
+            <TwoStepConfirmButton
               className="danger-button is-subtle"
               idleIcon="delete-bin-line"
               confirmIcon="delete-bin-2-line"

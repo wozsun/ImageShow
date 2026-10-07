@@ -6,14 +6,14 @@
 
 - 本地文件、URL、JSONL、微博进入同一领域。浏览器只拥有尚未被服务端接受的占位、文件与草稿；一旦接受，即由 Redis canonical 与单实例 worker 接管。路由卸载可中止浏览器仍持有的 raw 传输，但不在 effect cleanup 中隐式取消已接管的任务。
 - `metadata WHERE id = image_id` 是唯一完成判据。Redis completed 回执缺少 PG 行即视为陈旧并清除，查询失败时 fail closed。批量 status 先固定 Redis 读取再查 PG（completed 只在 PG 提交后发布，这一顺序避免拼出不存在的状态）。Web 只有拿到 PG 投影后才把任务置为完成并失效图库查询。
-- 运行态全部位于专用 Redis logical database 的 `imageshow:ingestion:*`；Lua 原子维护 canonical 与全部派生索引，Redis 不可用或结构不一致时 fail closed。canonical 不使用 Redis 原生过期事件，由 expires scanner 读取 `discard_at` 后经 Lua 复核 version、token 与截止时间再移除。
-- 资源准入各有唯一 owner：浏览器页面 lane（预览、凭据、raw PUT）、Server raw 接收、preparation owner（Upload 与 Import 合计，由 `normalize.concurrency` 派生）、Normalize（全部 Sharp 重工作的唯一准入，含维护入口）与 commit（数量许可 + 字节许可）。页面窗口只限制单端工作，不替代服务端边界；原图大小与长边在浏览器预检后，由 Server 在取得完整事实的边界再次权威校验。
+- 运行态全部位于专用 Redis logical database；Lua 原子维护 canonical 与全部派生索引，Redis 不可用或结构不一致时 fail closed。canonical 不使用 Redis 原生过期事件，由 expires scanner 读取 `discard_at` 后经 Lua 复核 version、token 与截止时间再移除。
+- 资源准入各有唯一 owner：浏览器页面 lane（预览、凭据、raw PUT）、Server raw 接收、preparation owner（Upload 与 Import 合计）、Normalize（全部 Sharp 重工作的唯一准入，含维护入口）与 commit（数量许可 + 字节许可）。页面窗口只限制单端工作，不替代服务端边界；原图大小与长边在浏览器预检后，由 Server 在取得完整事实的边界再次权威校验。
 
 ## 身份与幂等
 
 - 任务以大小写敏感的 `(session_id, image_id)` pair 定位：UUID 可以规范化大小写，session ID 不得改写。`image_id` 是按独立 `image_time` 生成的 UUIDv7；一次选择共享 batch key，batch position 写入 UUIDv7 的 `rand_a`，使并发完成顺序不改变同批排序。
 - 浏览器 `attemptKey` 是幂等键：同一规范化意图的重试复用原 session、候选 ID、`image_time` 与 request hash；只有 intent 已过期且 canonical 也不存在时才形成新 incarnation。接管请求冻结完整输入，响应未知的重放不读取之后变化的窗口默认值。服务端派生的 accepted order、执行 token 与 generation 不进入 request hash。
-- 本地来源按相对路径 / 文件名、大小、修改时间去重，远端按规范化 HTTPS URL 去重。prepare 后的 MD5 重复只是 PG 快照提示，commit 在同 MD5 advisory lock 内再次判定。
+- prepare 后的 MD5 重复只是 PG 快照提示，commit 在同 MD5 advisory lock 内再次判定。
 - Upload 固定为一次 intent POST 加每项至多一次 raw PUT，凭据只放受限 header；canonical 形成前失败时以原 `attemptKey` 为同一 pair 重签凭据，不创建第二项任务。Import accept 在 storage read lock 内创建 canonical，请求断开不撤销已接受项；取消结果未知的项以冻结输入发送 `cancel_if_missing`，缺失项原子登记 discarded 回执，迟到的 accept 复用该回执。
 - 控制请求超时保留未知结果供幂等核对，不视为服务端失败或已取消。
 
@@ -27,8 +27,8 @@
 - `import.keep_original_link` 与 `weibo.source_enabled` 由 Server 在接管时按 `source_type` 权威应用，首次冻结提交意图时按当前配置再投影一次，冻结后不受热加载影响；客户端旧值不能写入正式图片。
 - 微博：全进程固定串行调度器与单个共享访客身份，明确拒绝后只在下一项重建；取得图片链接后立即离开调度器。作者只按媒体实际所属账号的严格 UID 批量查 PG，无法确定归属时留空；UID 不写入 canonical 或 Redis，不回写历史图片。不得并发请求或探测反爬阈值。
 - 标签合并：来源标签在前、默认标签在后去重；省略 `tags` 与 `tags: []` 都带入默认标签；单值字段清单优先，显式 `auto` 仍是有效选择。
-- completed 回执只保留卡片展示所需的紧凑字段（来源类型、位置、原始尺寸与体积、三档最终质量），不保留下载 URL、完整 manifest、图片投影或草稿；回执失效后不反推质量或用当前配置代替。
-- 明暗自动判断只分析 small 档成品：Ingestion 的 prepare-session 用编码后的 small 缓冲，后台分类编辑选「自动」时从存储读取同一份 small 对象，两处输入一致；透明按白底合成后计算 Lab 亮度直方图，不再另行缩放，small 长边配置变化会改变新判断的输入，已有图片不重算。判断参数（阈值、权重与硬暗规则）的来源已不可考，重调须先取得标注集或真实误判样本，不凭推算修改。
+- completed 回执只保留卡片展示所需的紧凑字段，不保留下载 URL、完整 manifest、图片投影或草稿；回执失效后不反推质量或用当前配置代替。
+- 明暗自动判断只分析 small 档成品：Ingestion 的 prepare-session 用编码后的 small 缓冲，后台分类编辑选「自动」时从存储读取同一份 small 对象，两处输入一致；small 长边配置变化会改变新判断的输入，已有图片不重算。判断参数（阈值、权重与硬暗规则）的来源已不可考，重调须先取得标注集或真实误判样本，不凭推算修改。
 
 ## 取消、恢复与清理
 

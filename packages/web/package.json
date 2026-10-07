@@ -1,6 +1,6 @@
 {
   "name": "@imageshow/web",
-  "version": "6.7.6",
+  "version": "6.7.7",
   "private": true,
   "type": "module",
   "scripts": {
@@ -28,6 +28,6 @@
     "@vitejs/plugin-react": "^6.1.2",
     "remixicon": "^4.9.1",
     "typescript": "^7.0.2",
-    "vite": "^8.3.2"
+    "vite": "^8.3.3"
   }
 }

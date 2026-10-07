@@ -9,12 +9,12 @@
 - Redis 只保存派生或临时状态：图片投影、查询缓存、随机近期历史、会话、限流，以及 Ingestion 未完成任务和紧凑 completed 回执。Redis 丢失时这些允许消失，PG 中已提交图片不受影响。
 - Ingestion canonical 在所属队列期限内是未完成任务的唯一运行时权威，可跨窗口 / 会话恢复；不以 PG 会话表或 `data/temp` 文件建立第二套恢复真相，也不从临时文件反建任务。
 - 图片 ID 由 Server 生成 UUIDv7，排序以 `image_time` 为准；`created_at` 是首次正式入库时间，`created_by` 在首次提交时冻结，之后不随编辑、删除、恢复或迁移改写。
-- 正式对象键只由 UUID 派生：`<large|medium|small>/<UUID 尾两位>/<UUID>.webp`，独立于设备、亮度、主题、作者、标签等可编辑 metadata。三档各存独立文件，内容相同也分别保存。分类编辑只更新 metadata 与必要投影；只有接入、存储迁移、永久删除和显式维护能创建、复制或删除正式对象。读路径只访问已生成对象，不实时编码、不探测补建、不降级到其他档位。
+- 正式对象键只由 UUID 派生，独立于设备、亮度、主题、作者、标签等可编辑 metadata。三档各存独立文件，内容相同也分别保存。分类编辑只更新 metadata 与必要投影；只有接入、存储迁移、永久删除和显式维护能创建、复制或删除正式对象。读路径只访问已生成对象，不实时编码、不探测补建、不降级到其他档位。
 - 本地上传、URL、JSONL、微博统一进入 Ingestion；原始文件、处理结果与缩略图暂存于 `data/temp`，提交时才写入所选后端。外部原图代理和随机 `proxy` 只代理响应，不创建图片记录；`original` 指另行登记的外部 HTTPS 原图，不是站内保存的上传原文件。
 
 ## Redis 图片投影
 
-- 协调器只有 `unavailable`、`rebuilding`、`ready`、`stopped` 四态，同时只有一个活动校验 / 重建任务；状态机只有一个所有者，拆文件不得产生第二实例或第二恢复权威。
+- 协调器同时只有一个活动校验 / 重建任务；状态机只有一个所有者，拆文件不得产生第二实例或第二恢复权威。
 - PG `ready_image_revision`（单行）是投影权威修订号。凡改变 ready 图片投影、筛选成员或统计的事务都在 COMMIT 前推进它；Redis 的 applied revision 只在精确同步或全量重建完成完整性校验后发布，不一致即关闭读门。
 - 提交后在写栅栏内按旧投影与新 PG 投影做精确同步，超过同步预算只安排一次完整重建。Redis 同步失败绝不回滚已提交事务，而是关门重建；不得把旧值（如旧 `storage_slug`）重新发布。恢复任务入库失败时由同一状态机保留意图并有界重试。
 - 读门关闭时，公开只读路径经统一 FIFO 准入有界回源 PG，等待或执行超限明确返回 429 / 503；后台返回 `503 redis_unavailable`。首次 Redis 能力校验成功前，冷启动门拒绝全部业务。
@@ -34,7 +34,7 @@
 
 ## 后台任务
 
-- `background_job` 只有 `move.cleanup`、`trash.purge`、`cache.rebuild`。通用 jobs 层只拥有领取、execution token、续租、重试、公平调度、停机排空与历史裁剪；handler、payload 与结果语义归各领域。不同类型分别取得有界时间片，慢任务不阻塞其他类型。
+- 通用 jobs 层只拥有领取、execution token、续租、重试、公平调度、停机排空与历史裁剪；handler、payload 与结果语义归各领域。不同类型分别取得有界时间片，慢任务不阻塞其他类型。
 - 每次领取生成新的 `execution_token`；续租和所有终态写入必须同时匹配 id、`running` 与 token，退出 `running` 的路径清空 token，租约超时后被重新领取的旧执行者不能写入迟到终态。退避与到期判断统一使用 PG 时钟；僵尸恢复与普通失败共用同一重试预算。
 - 历史裁剪在锁定候选时跳过正在更新的行，避免删除并发重新入队的新意图；仍承担删除租约或删除意图的任务不裁剪（见[数据库](database.md#回收站与永久删除)）。
 - Ingestion 使用独立的单实例 Redis worker，会话不进入通用任务表；Redis 恢复后先恢复 canonical 再领取新工作。
@@ -55,6 +55,6 @@
 
 ## 部署与 CI
 
-- Compose 中 PostgreSQL / Redis 只保留主版本游标，不固定小版本或 digest。应用、PostgreSQL、Redis 分别挂载 `./data`、`./postgres`、`./redis`，运行数据不进入 Git 或构建上下文。
-- `ADMIN_USERNAME` / `ADMIN_PASSWORD` 只用于首次创建管理员（语义见[数据库](database.md#管理员)），直接放在服务 environment；ImageShow 与 PostgreSQL 的 environment 直接插值同组数据库变量。两个密码使用必填插值，不写入 `config.json`。内置 Redis 在私有网络无密码连接，外部 Redis 可用 `REDIS_PASSWORD`。Redis 内存上限与淘汰策略由部署方管理。
+- Compose 中 PostgreSQL / Redis 只保留主版本游标，不固定小版本或 digest。运行数据目录不进入 Git 或构建上下文。
+- `ADMIN_USERNAME` / `ADMIN_PASSWORD` 只用于首次创建管理员（语义见[数据库](database.md#管理员)），直接放在服务 environment；数据库与管理员密码不写入 `config.json`。Redis 内存上限与淘汰策略由部署方管理。
 - GitHub Actions 只负责 dev / release tag、版本核对、生产镜像构建分发与 GitHub Release，不运行本地门禁，远端成功不能替代本地验收。公开 Action 使用稳定主版本标签，不固定完整提交 SHA；升级主版本须核对 release notes、权限和输入变化。job 不设项目自定义总运行时限，连接和请求使用协议级超时、有限重试和取消信号。

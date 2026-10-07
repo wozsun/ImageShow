@@ -13,6 +13,7 @@ import {
 } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { StableButtonLabel } from "../../../components/data-display/StableButtonLabel.js";
+import { TwoStepConfirmButton } from "../../../components/actions/TwoStepConfirmButton.js";
 import { ConfirmDialog } from "../../../components/feedback/ConfirmDialog.js";
 import {
   ActionFeedbackOutlet,
@@ -26,7 +27,8 @@ import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import { AdminSettingsBoundary } from "../../../components/feedback/AdminSettingsBoundary.js";
 import { useIngestionVocabulary } from "../../../lib/api/ingestion-vocabulary.js";
 import { useStorageNameResolver } from "../../../lib/api/storage-options.js";
-import type { AdminImageListItem } from "../../../lib/types.js";
+import type { AdminImageListItem, EditableImageSnapshot } from "../../../lib/types.js";
+import { createPageLifetimeModuleLoader } from "../../../lib/page-lifetime-module-loader.js";
 import { AdminImageCard } from "./AdminImageCard.js";
 import {
   emptyImageAdminFilters,
@@ -44,7 +46,11 @@ import { useAdminPermissions } from "../../../hooks/useAuthSession.js";
 import { useAdminPreference } from "../../../hooks/useAdminPreferences.js";
 import { useAdminImageDetailCapability } from "../../../components/image/useAdminImageDetailCapability.js";
 import { useImageEditorCapability } from "../../../components/image/editor/useImageEditorCapability.js";
-import type { ImageMetadataSaveCommit } from "../../../components/image/editor/image-editor-capability-loader.js";
+import {
+  loadImageEditorCapabilityModule,
+  type ImageEditorIntent,
+  type ImageMetadataSaveCommit
+} from "../../../components/image/editor/image-editor-capability-loader.js";
 import {
   mobileViewportMediaQuery,
   useMediaQuery
@@ -53,7 +59,6 @@ import { useWorkspaceToolbarCollapse } from "../../../hooks/useWorkspaceToolbarC
 import { WorkspaceToolbarScrollbar } from "../../../components/layout/WorkspaceToolbarScrollbar.js";
 import { WorkspaceToolbar } from "../../../components/layout/WorkspaceToolbar.js";
 import { workspaceScrollContainer } from "../../../lib/ui/workspace-scroll.js";
-import { useTwoStepConfirmation } from "../../../hooks/useTwoStepConfirmation.js";
 import {
   imageAdminConfirmationCopy,
   useImageAdminOperations,
@@ -65,6 +70,23 @@ import { imageAdminPaginationScopeKey } from "./image-admin-list-query.js";
 import "../../../styles/admin/images.css";
 
 const imageRangeSelectionHelpId = "admin-image-range-selection-help";
+
+type ImageIdInputDialogModule = typeof import("./ImageIdInputDialog.js");
+
+const loadImageIdInputDialog = createPageLifetimeModuleLoader<ImageIdInputDialogModule>(
+  () => import("./ImageIdInputDialog.js")
+);
+// 未勾选时「编辑图片」「删除图片」先输入 ID，再进入编辑弹窗；两段一并预取。
+const preloadImageIdInput = () => {
+  void loadImageIdInputDialog().catch(() => undefined);
+  void loadImageEditorCapabilityModule().catch(() => undefined);
+};
+
+type ImageIdInputSession = {
+  intent: ImageEditorIntent;
+  opener: HTMLButtonElement;
+  Dialog: ImageIdInputDialogModule["ImageIdInputDialog"];
+};
 
 export function ImageAdmin() {
   return (
@@ -89,6 +111,9 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
     order: preferredOrder
   }));
   const [batchTrashPending, setBatchTrashPending] = useState(false);
+  const [idInput, setIdInput] = useState<ImageIdInputSession | null>(null);
+  const [idInputPending, setIdInputPending] = useState(false);
+  const idInputOpenerRef = useRef<HTMLButtonElement | null>(null);
   const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
   const permissions = useAdminPermissions();
   const canPurgeImage = permissions.includes(adminPermissions.imageTrashPurge);
@@ -174,9 +199,18 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
     }
   });
   const editorPending = editorCapability.pending !== null;
-  const editorConflictBusy = operationBusy || detailPending;
-  const modalOpen = Boolean(detailCapability.item || editorCapability.session || confirmAction);
+  // ID 弹窗模块加载期间页面尚未 inert：卡片编辑、批量编辑与 ID 入口经此让路，卡片详情与上传 / 导入
+  // 在各自的禁用条件中另行计入，避免弹窗叠加。
+  const editorConflictBusy = operationBusy || detailPending || idInputPending;
+  const modalOpen = Boolean(
+    detailCapability.item
+    || editorCapability.session
+    || confirmAction
+    || idInput
+  );
   const interfaceBusy = editorConflictBusy || editorPending || modalOpen;
+  // 按 ID 指定图片的入口不随弹窗打开而禁用：弹窗期间页面已 inert，关闭时焦点要能还给按钮。
+  const idInputEntryBusy = editorConflictBusy || editorPending;
   const clearImageSelection = selection.clear;
   const finishIngestionBatch = selection.clear;
   const canTrashReadyItems = view !== "deleted";
@@ -185,14 +219,6 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
     || !selected.length
     || interfaceBusy
     || batchTrashPending;
-  const batchTrashConfirmation = useTwoStepConfirmation<HTMLButtonElement>({
-    disabled: batchTrashDisabled,
-    busy: batchTrashPending,
-    invalidationKey: `${view}:${scopeKey}:${pageNumber}:${selected.join(",")}`,
-    onDisarm: () => {
-      frozenBatchTrashIdsRef.current = [];
-    }
-  });
   useEffect(() => {
     if (routeView === view) return;
     setView(routeView);
@@ -259,6 +285,36 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
     editorCapability.preload({
       sources: selectedItems
     });
+  const openImageIdInput = (intent: ImageEditorIntent, opener: HTMLButtonElement) => {
+    // 模块加载期间计入页面忙碌，避免其间打开其他弹窗后 ID 弹窗叠加其上。
+    setIdInputPending(true);
+    void loadImageIdInputDialog().then(
+      (module) => {
+        if (!opener.isConnected) return;
+        idInputOpenerRef.current = opener;
+        setIdInput({ intent, opener, Dialog: module.ImageIdInputDialog });
+      },
+      (error: unknown) => {
+        reportAdminUiError("image_admin.id_input_load", error);
+        showFeedback("按 ID 指定图片功能加载失败，请重新加载页面", "error");
+      }
+    ).finally(() => setIdInputPending(false));
+  };
+  // ID 弹窗保持到编辑弹窗就绪，二者在同一次渲染中交接，避免中间露出页面。
+  const openEditorForImageIds = async (items: EditableImageSnapshot[]) => {
+    if (!idInput) return false;
+    const { intent, opener } = idInput;
+    let opened = false;
+    await editorCapability.open(
+      { sources: items, intent, fromDialog: true },
+      opener,
+      () => {
+        opened = true;
+        setIdInput(null);
+      }
+    );
+    return opened;
+  };
   const selectedEditorPending = Boolean(
     editorCapability.pending &&
     editorCapability.pending.itemIds.length === selectedItems.length &&
@@ -323,7 +379,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
             <IngestionLauncher
               settings={settings}
               showTriggers={view === "ready"}
-              disabled={operationBusy || detailPending || editorPending}
+              disabled={operationBusy || detailPending || editorPending || idInputPending}
               onDone={finishIngestionBatch}
               onLoadError={(error) => {
                 reportAdminUiError("image_admin.ingestion_load", error);
@@ -422,12 +478,18 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
                   {view !== "deleted" && (
                     <button
                       type="button"
-                      disabled={!selected.length
-                        || editorConflictBusy
-                        || selectedEditorPending}
+                      disabled={selected.length
+                        ? editorConflictBusy || selectedEditorPending
+                        : idInputEntryBusy}
                       aria-busy={selectedEditorPending || undefined}
-                      {...preloadIntentProps(preloadBatchEditor)}
+                      {...preloadIntentProps(selected.length
+                        ? preloadBatchEditor
+                        : preloadImageIdInput)}
                       onClick={(event) => {
+                        if (!selected.length) {
+                          openImageIdInput("edit", event.currentTarget);
+                          return;
+                        }
                         void editorCapability.open(
                           {
                             sources: selectedItems
@@ -437,7 +499,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
                       }}
                     >
                       <AdminIcon name="pencil-line" />
-                      批量编辑
+                      {selected.length ? "批量编辑" : "编辑图片"}
                     </button>
                   )}
                   {view === "deleted" && (
@@ -452,66 +514,50 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
                       批量恢复
                     </button>
                   )}
-                  {canTrashReadyItems && (
-                    <button
-                      ref={batchTrashConfirmation.targetRef}
-                      className={[
-                        "danger-button",
-                        "is-subtle",
-                        "two-step-confirm-text-button",
-                        batchTrashConfirmation.armed ? "is-armed" : ""
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                      type="button"
-                      aria-label={
-                        batchTrashPending
-                          ? "正在删除"
-                          : batchTrashConfirmation.armed
-                            ? "确认删除"
-                            : "批量删除"
-                      }
-                      aria-pressed={batchTrashConfirmation.armed}
-                      aria-busy={batchTrashPending || undefined}
+                  {/* 删除结束前会先清空选择，进行中保持两步确认按钮显示「正在删除」。 */}
+                  {canTrashReadyItems && (selected.length || batchTrashPending ? (
+                    <TwoStepConfirmButton
+                      className="danger-button is-subtle"
+                      showLabel
+                      idleIcon="delete-bin-line"
+                      confirmIcon="delete-bin-2-line"
+                      busyIcon="delete-bin-5-line"
+                      idleLabel="批量删除"
+                      confirmLabel="确认删除"
+                      busyLabel="正在删除"
                       disabled={batchTrashDisabled}
-                      onBlur={batchTrashConfirmation.onBlur}
-                      onClick={() => {
-                        batchTrashConfirmation.activate(
-                          () => {
-                            const ids = [...selected];
-                            if (!ids.length) return false;
-                            frozenBatchTrashIdsRef.current = ids;
-                          },
-                          () => {
-                            const ids = frozenBatchTrashIdsRef.current;
-                            frozenBatchTrashIdsRef.current = [];
-                            if (!ids.length) return;
-                            setBatchTrashPending(true);
-                            void trash(ids).finally(() => {
-                              setBatchTrashPending(false);
-                            });
-                          }
-                        );
+                      busy={batchTrashPending}
+                      invalidationKey={`${view}:${scopeKey}:${pageNumber}:${selected.join(",")}`}
+                      onArm={() => {
+                        const ids = [...selected];
+                        if (!ids.length) return false;
+                        frozenBatchTrashIdsRef.current = ids;
                       }}
+                      onDisarm={() => {
+                        frozenBatchTrashIdsRef.current = [];
+                      }}
+                      onConfirm={() => {
+                        const ids = frozenBatchTrashIdsRef.current;
+                        frozenBatchTrashIdsRef.current = [];
+                        if (!ids.length) return;
+                        setBatchTrashPending(true);
+                        void trash(ids).finally(() => {
+                          setBatchTrashPending(false);
+                        });
+                      }}
+                    />
+                  ) : (
+                    <button
+                      className="danger-button is-subtle"
+                      type="button"
+                      disabled={idInputEntryBusy}
+                      {...preloadIntentProps(preloadImageIdInput)}
+                      onClick={(event) => openImageIdInput("delete", event.currentTarget)}
                     >
-                      <AdminIcon
-                        name={
-                          batchTrashPending
-                            ? "delete-bin-5-line"
-                            : batchTrashConfirmation.armed
-                              ? "delete-bin-2-line"
-                              : "delete-bin-line"
-                        }
-                      />
-                      <StableButtonLabel
-                        idle={batchTrashConfirmation.armed
-                          ? "确认删除"
-                          : "批量删除"}
-                        busyText="正在删除"
-                        busy={batchTrashPending}
-                      />
+                      <AdminIcon name="delete-bin-line" />
+                      删除图片
                     </button>
-                  )}
+                  ))}
                   {view === "deleted" && canPurgeImage && (
                     <button
                       className="danger-button is-subtle"
@@ -568,7 +614,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
               item={item}
               storageName={storageName}
               checked={selected.includes(item.id)}
-              detailDisabled={operationBusy || editorPending}
+              detailDisabled={operationBusy || editorPending || idInputPending}
               detailPending={detailCapability.pendingItemId === item.id}
               onPreloadDetail={detailCapability.preload}
               onCheck={(checked, extendRange) =>
@@ -656,7 +702,11 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
       )}
       {editorCapability.session && (
         <editorCapability.session.module.ImageMetadataEditorDialog
+          // 弹窗只在挂载时建立会话；新会话一律重新挂载，不沿用上一组图片。
+          key={`${editorCapability.session.intent}:${editorCapability.session.items.map((item) => item.id).join(",")}`}
           items={editorCapability.session.items}
+          intent={editorCapability.session.intent}
+          fromDialog={editorCapability.session.fromDialog}
           pageSize={editPageSize}
           themes={editorCapability.session.vocabulary.themes}
           allTags={editorCapability.session.vocabulary.tags}
@@ -674,6 +724,14 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
           onSaved={refreshAfterEditorSave}
           onStorageMigrationSucceeded={(message) => showFeedback(message, "success")}
           returnFocusRef={editorCapability.returnFocusRef}
+        />
+      )}
+      {idInput && (
+        <idInput.Dialog
+          intent={idInput.intent}
+          onClose={() => setIdInput(null)}
+          onResolved={openEditorForImageIds}
+          returnFocusRef={idInputOpenerRef}
         />
       )}
       {confirmAction && confirmCopy && (

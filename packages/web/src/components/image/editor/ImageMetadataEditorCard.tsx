@@ -18,6 +18,7 @@ import type {
   EditableImageSnapshot,
   ImageDraft
 } from "../../../lib/types.js";
+import type { ImageEditorIntent } from "./image-editor-types.js";
 import {
   imageMetadataCardSaveState,
   type ImageMetadataChanges,
@@ -30,6 +31,7 @@ export function ImageMetadataEditorCard({
   changed,
   lastSaveReport,
   multipleItems,
+  intent,
   busy,
   themes,
   allTags,
@@ -44,6 +46,7 @@ export function ImageMetadataEditorCard({
   changed: ImageMetadataChanges;
   lastSaveReport: ImageMetadataSaveReport | null;
   multipleItems: boolean;
+  intent: ImageEditorIntent;
   busy: boolean;
   themes: FacetOption[];
   allTags: FacetOption[];
@@ -127,7 +130,7 @@ export function ImageMetadataEditorCard({
             <button
               className="icon danger-button"
               type="button"
-              title="从批量编辑中移除"
+              title={intent === "delete" ? "从批量删除中移除" : "从批量编辑中移除"}
               disabled={busy}
               onClick={onRemove}
             >
@@ -144,7 +147,7 @@ export function ImageMetadataEditorCard({
         authors={authors}
         deviceOptions={editCardDeviceSelectOptions}
         brightnessOptions={cardBrightnessSelectOptions}
-        disabled={busy}
+        disabled={busy || intent === "delete"}
         ariaPrefix={item.id}
         changed={changed}
       />

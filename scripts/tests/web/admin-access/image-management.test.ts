@@ -1074,8 +1074,8 @@ test("[Web/后台访问] 单图移入回收站按钮必须在同一按钮上点�
 
   try {
     const { createRoot } = await import("react-dom/client");
-    const { TwoStepConfirmIconButton } =
-      await import("../../../../packages/web/src/components/actions/TwoStepConfirmIconButton.tsx");
+    const { TwoStepConfirmButton } =
+      await import("../../../../packages/web/src/components/actions/TwoStepConfirmButton.tsx");
     const { ADMIN_ICONS } =
       await import("../../../../packages/web/src/components/icon/admin-icons.generated.ts");
     let confirmed = 0;
@@ -1084,7 +1084,7 @@ test("[Web/后台访问] 单图移入回收站按钮必须在同一按钮上点�
     const root = createRoot(container);
     await React.act(async () => {
       root.render(
-        React.createElement(TwoStepConfirmIconButton, {
+        React.createElement(TwoStepConfirmButton, {
           idleIcon: "delete-bin-6-line",
           confirmIcon: "delete-bin-2-line",
           busyIcon: "delete-bin-5-line",
@@ -1138,7 +1138,7 @@ test("[Web/后台访问] 单图移入回收站按钮必须在同一按钮上点�
     assert.equal(confirmed, 1, "解除后下一次点击只能重新 armed");
     await React.act(async () => {
       root.render(
-        React.createElement(TwoStepConfirmIconButton, {
+        React.createElement(TwoStepConfirmButton, {
           idleIcon: "delete-bin-6-line",
           confirmIcon: "delete-bin-2-line",
           busyIcon: "delete-bin-5-line",

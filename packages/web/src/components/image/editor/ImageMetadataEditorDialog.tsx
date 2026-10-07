@@ -5,7 +5,7 @@ import { adminPermissions } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../icon/AdminIcon.js";
 import { AsyncActionButton } from "../../actions/AsyncActionButton.js";
 import { ConfirmDialog } from "../../feedback/ConfirmDialog.js";
-import { TwoStepConfirmIconButton } from "../../actions/TwoStepConfirmIconButton.js";
+import { TwoStepConfirmButton } from "../../actions/TwoStepConfirmButton.js";
 import { DialogFrame } from "../../feedback/DialogFrame.js";
 import { WorkflowDefaultFields } from "../../form/WorkflowDefaultFields.js";
 import { WorkflowCollapsePanel } from "../../layout/WorkflowCollapsePanel.js";
@@ -43,7 +43,10 @@ import {
 } from "./image-metadata-session.js";
 import { ImageMetadataEditorCard } from "./ImageMetadataEditorCard.js";
 import { useImageEditorTrashAction } from "./useImageEditorTrashAction.js";
-import type { ImageEditorSavedHandler } from "./image-editor-types.js";
+import type {
+  ImageEditorIntent,
+  ImageEditorSavedHandler
+} from "./image-editor-types.js";
 
 type ImageStorageMigrationDialogModule = typeof import("./ImageStorageMigrationDialog.js");
 
@@ -72,6 +75,8 @@ function emptyCommonAttributes() {
 
 export function ImageMetadataEditorDialog({
   items,
+  intent = "edit",
+  fromDialog = false,
   pageSize,
   themes,
   allTags,
@@ -84,6 +89,8 @@ export function ImageMetadataEditorDialog({
   returnFocusRef
 }: {
   items: EditableImageSnapshot[];
+  intent?: ImageEditorIntent;
+  fromDialog?: boolean;
   pageSize: number;
   themes: FacetOption[];
   allTags: FacetOption[];
@@ -100,7 +107,11 @@ export function ImageMetadataEditorDialog({
 }) {
   const singleItem = items.length === 1;
   const multipleItems = items.length > 1;
-  const title = singleItem ? "编辑图片" : "批量编辑图片";
+  // 删除用途只核对图片后移入回收站：属性字段只读，不提供保存、复原与迁移存储。
+  const deleting = intent === "delete";
+  const title = deleting
+    ? singleItem ? "删除图片" : "批量删除图片"
+    : singleItem ? "编辑图片" : "批量编辑图片";
   const listRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const restoreTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -281,7 +292,7 @@ export function ImageMetadataEditorDialog({
   };
   return (
     <DialogFrame
-      className="modal edit-modal is-mobile-fullscreen"
+      className={`modal edit-modal is-mobile-fullscreen${fromDialog ? " is-dialog-continuation" : ""}`}
       ariaLabel={title}
       busy={busy}
       paused={Boolean((canMigrateStorage && migrating)
@@ -294,7 +305,7 @@ export function ImageMetadataEditorDialog({
       {({ requestClose }) => (
         <>
           <form
-            className={`image-editor-modal image-workflow-window${singleItem ? " is-single" : ""}`}
+            className={`image-editor-modal image-workflow-window${singleItem ? " is-single" : ""}${deleting ? " is-delete" : ""}`}
             tabIndex={-1}
             onSubmit={async (event) => {
               event.preventDefault();
@@ -308,20 +319,22 @@ export function ImageMetadataEditorDialog({
                 <p title={singleItem ? modalSubtitle : undefined}>{modalSubtitle}</p>
               </div>
               <div className="image-editor-header-actions">
-                <button
-                  ref={restoreTriggerRef}
-                  className="image-editor-restore-button"
-                  type="button"
-                  title="撤销所有未保存修改"
-                  disabled={busy || !restoreAvailable}
-                  onClick={() => {
-                    setRestoreError("");
-                    setRestoreConfirmation(true);
-                  }}
-                >
-                  <AdminIcon name="history-line" />
-                  复原
-                </button>
+                {!deleting && (
+                  <button
+                    ref={restoreTriggerRef}
+                    className="image-editor-restore-button"
+                    type="button"
+                    title="撤销所有未保存修改"
+                    disabled={busy || !restoreAvailable}
+                    onClick={() => {
+                      setRestoreError("");
+                      setRestoreConfirmation(true);
+                    }}
+                  >
+                    <AdminIcon name="history-line" />
+                    复原
+                  </button>
+                )}
                 <button
                   ref={closeButtonRef}
                   className="icon close pressable"
@@ -334,7 +347,7 @@ export function ImageMetadataEditorDialog({
                 </button>
               </div>
             </header>
-            {multipleItems && (
+            {multipleItems && !deleting && (
               <WorkflowCollapsePanel
                 className="image-editor-common-panel"
                 contentClassName="image-editor-common workflow-defaults"
@@ -410,6 +423,7 @@ export function ImageMetadataEditorDialog({
                   changed={changedByItem.get(item.id)!}
                   lastSaveReport={lastSaveReport}
                   multipleItems={multipleItems}
+                  intent={intent}
                   busy={busy}
                   themes={themes}
                   allTags={allTags}
@@ -428,12 +442,16 @@ export function ImageMetadataEditorDialog({
                   }}
                 />
               ))}
-              {!activeItems.length && <p className="image-editor-empty-state">图片编辑列表为空</p>}
+              {!activeItems.length && (
+                <p className="image-editor-empty-state">
+                  {deleting ? "图片删除列表为空" : "图片编辑列表为空"}
+                </p>
+              )}
             </div>
             <footer
               className={`image-workflow-footer${paginationAvailable ? " has-pagination" : ""}`}
             >
-              {(canMigrateStorage || trashAvailable) && (
+              {!deleting && (canMigrateStorage || trashAvailable) && (
                 <div className="image-editor-resource-actions image-workflow-leading-actions">
                   {canMigrateStorage && (
                     <button
@@ -449,7 +467,7 @@ export function ImageMetadataEditorDialog({
                     </button>
                   )}
                   {trashAvailable && (
-                    <TwoStepConfirmIconButton
+                    <TwoStepConfirmButton
                       className="icon danger-button is-subtle image-editor-trash-trigger"
                       idleIcon="delete-bin-line"
                       confirmIcon="delete-bin-2-line"
@@ -482,7 +500,7 @@ export function ImageMetadataEditorDialog({
               {paginationAvailable && (
                 <AdminPagination
                   className="image-workflow-pagination"
-                  ariaLabel="批量编辑分页"
+                  ariaLabel={deleting ? "批量删除分页" : "批量编辑分页"}
                   page={page}
                   totalPages={totalPages}
                   disabled={busy}
@@ -493,13 +511,32 @@ export function ImageMetadataEditorDialog({
                 <button type="button" disabled={busy} onClick={() => requestClose()}>
                   取消
                 </button>
-                <AsyncActionButton
-                  className={`button workflow-submit-button${multipleItems ? " image-editor-save-button" : ""}`}
-                  type="submit"
-                  status={saveStatus.status}
-                  presentation={savePresentation}
-                  disabled={busy || (!changedCount && !pendingReconciliation)}
-                />
+                {deleting ? (
+                  <TwoStepConfirmButton
+                    className="danger-button workflow-submit-button image-editor-delete-button"
+                    showLabel
+                    idleIcon="delete-bin-line"
+                    confirmIcon="delete-bin-2-line"
+                    busyIcon="delete-bin-5-line"
+                    idleLabel={`删除 ${activeItems.length} 张`}
+                    confirmLabel="确认删除"
+                    busyLabel="正在删除"
+                    disabled={busy || !activeItems.length}
+                    busy={trashAction.pending}
+                    onConfirm={() => {
+                      trashAction.clearError();
+                      void trashActiveImages(requestClose);
+                    }}
+                  />
+                ) : (
+                  <AsyncActionButton
+                    className={`button workflow-submit-button${multipleItems ? " image-editor-save-button" : ""}`}
+                    type="submit"
+                    status={saveStatus.status}
+                    presentation={savePresentation}
+                    disabled={busy || (!changedCount && !pendingReconciliation)}
+                  />
+                )}
               </div>
             </footer>
           </form>

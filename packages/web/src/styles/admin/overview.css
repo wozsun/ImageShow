@@ -5,6 +5,10 @@
   --admin-color-overview-recent-surface: var(--admin-color-surface-subtle);
 }
 
+/* 指标卡悬停会上浮并投影；滚动区顶部留出与图片列表相同的余量，避免边框与阴影被裁切。 */
+.overview > .workspace-scroll-body {
+  padding-top: 8px;
+}
 .overview-grid {
   display: grid;
   grid-template-columns: 2fr 1fr;

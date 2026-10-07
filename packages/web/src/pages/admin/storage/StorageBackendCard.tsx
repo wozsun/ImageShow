@@ -125,8 +125,8 @@ export function StorageBackendCard({
                 backend.is_default
                   ? "默认后端不能停用"
                   : backend.enabled
-                    ? "已启用：可写入新图片并迁入已有图片。点击停用（已有图片仍可读取并迁出）"
-                    : "已停用：不能写入新图片或作为迁移目标，已有图片仍可读取并迁出。点击启用"
+                    ? "已启用：可写入新图片并迁入已有图片，参与检查与存储维护。点击停用（已有图片仍可读取并迁出，但不再检查与维护）"
+                    : "已停用：不能写入新图片或作为迁移目标，不参与检查与存储维护；已有图片仍可读取并迁出。点击启用"
               }
               onClick={() => void enabledStatus.run(onToggleEnabled)}
             />

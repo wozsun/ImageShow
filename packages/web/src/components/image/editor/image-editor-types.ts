@@ -8,8 +8,14 @@ export type ImageEditorSource = Pick<AdminImageListItem, "id"> &
   Partial<EditableImageSnapshot> &
   Partial<Pick<AdminImageListItem, "deleted_at" | "status">>;
 
+/** 编辑弹窗的用途：编辑属性，或只核对图片后移入回收站。 */
+export type ImageEditorIntent = "edit" | "delete";
+
 export type ImageEditorTarget = {
   sources: ImageEditorSource[];
+  intent?: ImageEditorIntent;
+  /** 由另一个弹窗直接交接打开：遮罩已在屏幕上，不再淡入。 */
+  fromDialog?: boolean;
 };
 
 export type ImageMetadataSaveCommit = {

@@ -1574,17 +1574,22 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
           "trash interface scenario did not select both items"
         );
 
-        let batchTrash = buttonWithText("批量删除");
+        // 两步确认按钮把各状态文案都放在占位格中，当前状态以 aria-label 为准。
+        const batchTrashButton = (label: string) => container.querySelector<HTMLButtonElement>(
+          `.two-step-confirm-button[aria-label="${label}"]`
+        );
+        let batchTrash = batchTrashButton("批量删除");
+        assert.ok(batchTrash);
         await click(batchTrash);
         assert.equal(trashBodies.length, 0);
         assert.equal(batchTrash.getAttribute("aria-pressed"), "true");
-        assert.match(batchTrash.textContent ?? "", /确认删除/);
+        assert.equal(batchTrash.getAttribute("aria-label"), "确认删除");
         assert.equal(document.querySelector("[data-dialog-frame]"), null);
 
         await click(selectionTargets[0]!);
         await waitFor(
           () => /已选 1/.test(container.textContent ?? "")
-            && Boolean(buttonWithText("批量删除")),
+            && Boolean(batchTrashButton("批量删除")),
           "selection change did not disarm frozen batch delete"
         );
         assert.equal(trashBodies.length, 0);
@@ -1594,9 +1599,10 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
           "trash interface scenario did not restore both selections"
         );
 
-        batchTrash = buttonWithText("批量删除");
+        batchTrash = batchTrashButton("批量删除");
+        assert.ok(batchTrash);
         await click(batchTrash);
-        await click(buttonWithText("确认删除"));
+        await click(batchTrash);
         await waitFor(
           () => trashBodies.length === 1,
           "batch trash did not submit after the second click"
@@ -1605,7 +1611,7 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
           ids: initialReadyItems.map((item) => item.id)
         });
         const pendingBatchTrash = container.querySelector<HTMLButtonElement>(
-          '.two-step-confirm-text-button[aria-label="正在删除"]'
+          '.two-step-confirm-button[aria-label="正在删除"]'
         );
         assert.ok(pendingBatchTrash);
         assert.equal(
@@ -1632,8 +1638,11 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
         await React.act(async () => pendingTrashRefreshes.shift()?.resolve());
         await waitFor(
           () =>
-            Boolean(buttonWithText("批量删除")) &&
-            !container.querySelector('[aria-busy="true"].two-step-confirm-text-button') &&
+            // 删除完成后选择已清空，工具栏回到按 ID 指定图片的「删除图片」。
+            [...container.querySelectorAll("button")].some(
+              (button) => button.textContent === "删除图片"
+            ) &&
+            !container.querySelector('[aria-busy="true"].two-step-confirm-button') &&
             container.querySelectorAll(".admin-image-card").length === 1 &&
             Boolean(document.getElementById(`admin-image-select-${readyItems[2]!.id}`)),
           "batch trash did not return to its idle state"

@@ -36,6 +36,10 @@
 .image-editor-save-button {
   min-width: max(calc(3em + 3ch + 26px), calc(4em + 1.125rem + 34px));
 }
+/* 「删除 N 张」按三位数量与图标预留宽度，移除图片或进入确认时按钮与「取消」不变宽。 */
+.image-editor-delete-button {
+  min-width: calc(3.6em + 3ch + 1.125rem + 34px);
+}
 .image-editor-common-panel {
   flex: 0 0 auto;
 }
@@ -191,7 +195,8 @@
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto minmax(0, 1fr) auto;
   }
-  .is-mobile-fullscreen > form.image-editor-modal.is-single {
+  /* 单图与删除用途没有批量默认属性区。 */
+  .is-mobile-fullscreen > form.image-editor-modal:is(.is-single, .is-delete) {
     grid-template-rows: auto minmax(0, 1fr) auto;
   }
   .image-editor-modal > header .image-editor-restore-button {

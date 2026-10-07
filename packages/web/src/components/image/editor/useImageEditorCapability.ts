@@ -9,6 +9,7 @@ import {
   imageEditorTargetKey,
   loadImageEditorCapabilityModule,
   type ImageEditorCapabilityModule,
+  type ImageEditorIntent,
   type ImageEditorTarget
 } from "./image-editor-capability-loader.js";
 import { AsyncIntentFence } from "../../../lib/async-intent-fence.js";
@@ -19,6 +20,11 @@ type PreparedImageEditor = {
   module: ImageEditorCapabilityModule;
   items: EditableImageSnapshot[];
   vocabulary: IngestionVocabularyDto;
+};
+
+type ImageEditorSession = PreparedImageEditor & {
+  intent: ImageEditorIntent;
+  fromDialog: boolean;
 };
 
 type PendingImageEditor = { itemIds: string[] };
@@ -40,7 +46,7 @@ export function useImageEditorCapability({
   onOpenError?: (error: unknown) => void;
 } = {}) {
   const queryClient = useQueryClient();
-  const [session, setSession] = useState<PreparedImageEditor | null>(null);
+  const [session, setSession] = useState<ImageEditorSession | null>(null);
   const [pending, setPending] = useState<PendingImageEditor | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const preparationRef = useRef<Preparation | null>(null);
@@ -109,7 +115,9 @@ export function useImageEditorCapability({
   const open = useCallback(
     async (
       target: ImageEditorTarget,
-      opener: HTMLElement
+      opener: HTMLElement,
+      // 与会话写入同步执行，交接方可在同一次渲染中关闭自己的弹窗。
+      onOpened?: () => void
     ) => {
       const requestFence = requestFenceRef.current;
       const requestSequence = requestFence.begin();
@@ -125,7 +133,12 @@ export function useImageEditorCapability({
           return;
         }
         returnFocusRef.current = opener;
-        setSession(prepared);
+        onOpened?.();
+        setSession({
+          ...prepared,
+          intent: target.intent ?? "edit",
+          fromDialog: target.fromDialog ?? false
+        });
       } catch (error) {
         if (requestFence.isCurrent(requestSequence)) {
           onOpenErrorRef.current?.(error);

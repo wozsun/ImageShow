@@ -10,6 +10,11 @@
   animation: modal-fade 0.16s ease-out;
 }
 
+/* 从另一个弹窗交接时遮罩一直在屏幕上，只保留内容的入场动画。 */
+.modal.is-dialog-continuation {
+  animation: none;
+}
+
 .modal.is-closing {
   pointer-events: none;
   animation: modal-fade-out 0.12s ease-in forwards;

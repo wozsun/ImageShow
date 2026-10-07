@@ -35,6 +35,7 @@ import {
 } from "./ImportSourceResultPanel.js";
 import { parseImportUrlInput } from "../queue/model/import-job-source.js";
 import { FieldError } from "../../../../components/form/FieldError.js";
+import "../../../../styles/admin/import-source-dialog.css";
 
 export type { ImportSourceSubmission } from "./import-source-adapters.js";
 export type { ImportSourceMode } from "./import-source-model.js";
