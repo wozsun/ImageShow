@@ -1,21 +1,21 @@
 import type { Pool, PoolClient } from "pg";
 import type { AuthorDto } from "@imageshow/shared/browser";
-import { nextSortOrderSql } from "../core/database/sort-order-sql.ts";
-import { readVocabularyMutationImpact } from "../vocab/mutation-impact.ts";
-import { withTransaction } from "../core/database/transactions.ts";
-import { ApiError } from "../core/api-error.ts";
+import { nextSortOrderSql } from "../../core/database/sort-order-sql.ts";
+import { readVocabularyMutationImpact } from "../mutation-impact.ts";
+import { withTransaction } from "../../core/database/transactions.ts";
+import { ApiError } from "../../core/api-error.ts";
 import {
   assertVocabularyCreated,
   assertVocabularyFound,
   assertVocabularySlug,
   withVocabularyMutationSync,
   withVocabularyMutationLock
-} from "../vocab/mutation-sync.ts";
+} from "../mutation-sync.ts";
 import {
   withImageMutationSync,
   type ImageMutationSyncBatch
-} from "../images/mutation-sync.ts";
-import { bumpReadyImageRevision } from "../images/ready-cache/revision.ts";
+} from "../../images/mutation-sync.ts";
+import { bumpReadyImageRevision } from "../../images/ready-cache/revision.ts";
 import {
   deriveAuthorIdentityFromLink,
   projectAuthorDerivedIdentity,

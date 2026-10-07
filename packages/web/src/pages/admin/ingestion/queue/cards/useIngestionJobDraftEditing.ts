@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   type IngestionDraftUrlField,
-  normalizeIngestionDraftUrl
+  normalizeIngestionDraftUrl,
+  type ImageDraftDto
 } from "@imageshow/shared/browser";
 import type {
   ImageDraftDeferredEditing,
   ImageDraftDeferredField
 } from "../../../../../components/form/ImageDraftFields.js";
-import type { ImageDraft } from "../../../../../lib/types.js";
 import type { IngestionJob } from "../model/ingestion-job.js";
 import { ingestionJobAttributesEditable } from "../model/ingestion-attribute-policy.js";
 
@@ -40,7 +40,7 @@ export function useIngestionJobDraftEditing({
 }: {
   job: IngestionJob;
   busy: boolean;
-  onPatch: (job: IngestionJob, patch: Partial<ImageDraft>) => void;
+  onPatch: (job: IngestionJob, patch: Partial<ImageDraftDto>) => void;
 }) {
   const jobRef = useRef(job);
   jobRef.current = job;
@@ -107,7 +107,7 @@ export function useIngestionJobDraftEditing({
         reportInvalidDraftUrl(field);
         return;
       }
-      onPatchRef.current(current, { [field]: value } as Partial<ImageDraft>);
+      onPatchRef.current(current, { [field]: value } as Partial<ImageDraftDto>);
     },
     [currentSessionJob]
   );

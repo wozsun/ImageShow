@@ -7,11 +7,7 @@ import {
   ingestionCardDeviceSelectOptions
 } from "../../../../../lib/ui/select-options.js";
 import { formatBytes, shortImageId } from "../../../../../lib/ui/formatters.js";
-import type {
-  FacetOption,
-  ImageDraft,
-  AdminImageListItem
-} from "../../../../../lib/types.js";
+import type { FacetOptionDto, ImageDraftDto, AdminImageListItemDto } from "@imageshow/shared/browser";
 import type { IngestionJob } from "../model/ingestion-job.js";
 import { DuplicateMatchPanel, type IngestionPreviewTarget } from "./DuplicateMatchPanel.js";
 import {
@@ -47,17 +43,17 @@ type IngestionJobCardProps = {
   job: IngestionJob;
   busy: boolean;
   storageDisplayName: string;
-  themes: FacetOption[];
-  allTags: FacetOption[];
-  authors: FacetOption[];
-  onPatch: (job: IngestionJob, patch: Partial<ImageDraft>) => void;
+  themes: FacetOptionDto[];
+  allTags: FacetOptionDto[];
+  authors: FacetOptionDto[];
+  onPatch: (job: IngestionJob, patch: Partial<ImageDraftDto>) => void;
   onCancel: (job: IngestionJob) => void;
   onRetry: (job: IngestionJob) => void;
   onRemove: (job: IngestionJob) => void;
   onConfirmDuplicate: (job: IngestionJob) => void;
   onOpenDetail: (
     job: IngestionJob,
-    item: AdminImageListItem,
+    item: AdminImageListItemDto,
     opener: HTMLElement
   ) => void;
   onFocusWithin: (

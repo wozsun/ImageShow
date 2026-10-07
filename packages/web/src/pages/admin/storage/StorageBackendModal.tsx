@@ -1,19 +1,20 @@
 import { useId, useRef, useState } from "react";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { AsyncActionButton } from "../../../components/actions/AsyncActionButton.js";
-import { DialogFrame } from "../../../components/feedback/DialogFrame.js";
+import { DialogFrame } from "../../../components/dialog/DialogFrame.js";
 import { NumberInput } from "../../../components/form/NumberInput.js";
 import { FieldError } from "../../../components/form/FieldError.js";
 import { apiValidationIssues } from "../../../lib/api/client.js";
 import { OverlayScrollbar } from "../../../components/layout/OverlayScrollbar.js";
 import { storageBackendDisplay, storageTypeLabel } from "../../../lib/ui/select-options.js";
-import type { S3Settings, StorageBackendAdmin } from "../../../lib/types.js";
-import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
 import {
+  type S3Settings,
   storageBackendEditConfigPatch,
   storageBackendS3AfterSuccessfulSave,
   storageBackendS3FormSettings
 } from "./storage-backend-form.js";
+import type { StorageBackendAdminDto } from "@imageshow/shared/browser";
+import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
 
 const storageTestPresentation = {
   idle: { icon: "flask-line", label: "连接测试" },
@@ -56,7 +57,7 @@ export function StorageBackendModal({
   onSave,
   onTest
 }: {
-  target: StorageBackendAdmin | "new";
+  target: StorageBackendAdminDto | "new";
   busy: string;
   onClose: () => void;
   onSave: (

@@ -1,14 +1,15 @@
-import { imageVariantUrl } from "@imageshow/shared/browser";
+import {
+  imageVariantUrl,
+  type AdminOverviewDto,
+  type AdminCheckStatusDto,
+  adminApiBasePath,
+  adminBasePath
+} from "@imageshow/shared/browser";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
-import type {
-  AdminOverviewDto,
-  AdminCheckStatusDto
-} from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
 import { ThumbnailImage } from "../../components/image/ThumbnailImage.js";
-import { adminApiBasePath, adminBasePath } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import {
   readyImageProjection,
@@ -36,7 +37,7 @@ type OverviewMetric = {
   to?: string;
 };
 
-function redisCacheStateLabel(cache: AdminOverviewDto["redis_cache"] | undefined) {
+function readyImageCacheStateLabel(cache: AdminOverviewDto["ready_image_cache"] | undefined) {
   if (!cache) return "读取中";
   if (cache.synchronized) return "已同步";
   if (cache.rebuilding) return "重建中";
@@ -93,11 +94,11 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
   const cachedCheckStatus = client.getQueryData<AdminCheckStatusDto>(queryKeys.adminCheckStatus);
   const cachedReadyImageStatus = readyImageProjection(cachedCheckStatus);
   const observeReadyImageStatus = Boolean(
-    query.data?.redis_cache.rebuilding || cachedReadyImageStatus?.rebuilding
+    query.data?.ready_image_cache.rebuilding || cachedReadyImageStatus?.rebuilding
   );
   const checkStatusQuery = useAdminCheckStatus({
     enabled: observeReadyImageStatus,
-    refreshAfter: query.data?.redis_cache.rebuilding
+    refreshAfter: query.data?.ready_image_cache.rebuilding
       ? query.dataUpdatedAt
       : 0
   });
@@ -108,7 +109,7 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
     currentReadyImageStatus &&
     checkStatusQuery.dataUpdatedAt > query.dataUpdatedAt
   );
-  const redisCache =
+  const readyImageCache =
     observeReadyImageStatus
       && readyImageStatusIsCurrent
       && currentReadyImageStatus
@@ -117,13 +118,13 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
           synchronized: currentReadyImageStatus.synchronized === true,
           rebuilding: currentReadyImageStatus.rebuilding,
           item_count: currentReadyImageStatus.item_count,
-          current_core_memory_bytes: data?.redis_cache.current_core_memory_bytes ?? null,
-          current_core_measured_at: data?.redis_cache.current_core_measured_at ?? null,
+          current_core_memory_bytes: data?.ready_image_cache.current_core_memory_bytes ?? null,
+          current_core_measured_at: data?.ready_image_cache.current_core_measured_at ?? null,
           last_full_rebuild_core_memory_bytes:
-            data?.redis_cache.last_full_rebuild_core_memory_bytes ?? null,
-          last_full_rebuild_measured_at: data?.redis_cache.last_full_rebuild_measured_at ?? null
+            data?.ready_image_cache.last_full_rebuild_core_memory_bytes ?? null,
+          last_full_rebuild_measured_at: data?.ready_image_cache.last_full_rebuild_measured_at ?? null
         }
-      : data?.redis_cache;
+      : data?.ready_image_cache;
   if (query.isError)
     return (
       <QueryErrorState
@@ -149,31 +150,31 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
     large === undefined || medium === undefined || small === undefined ? undefined : formatBytes(large + medium + small);
   const sizeTitle = (large?: number, medium?: number, small?: number) =>
     large === undefined || medium === undefined || small === undefined ? undefined : `大图 ${formatBytes(large)} + 中图 ${formatBytes(medium)} + 小图 ${formatBytes(small)}`;
-  const redisCacheState = redisCacheStateLabel(redisCache);
+  const readyImageCacheState = readyImageCacheStateLabel(readyImageCache);
   const currentCoreSize =
-    redisCache?.current_core_memory_bytes === null ||
-    redisCache?.current_core_memory_bytes === undefined ||
-    !redisCache.current_core_measured_at
+    readyImageCache?.current_core_memory_bytes === null ||
+    readyImageCache?.current_core_memory_bytes === undefined ||
+    !readyImageCache.current_core_measured_at
       ? null
-      : formatBytes(redisCache.current_core_memory_bytes);
+      : formatBytes(readyImageCache.current_core_memory_bytes);
   const fullRebuildCoreSize =
-    redisCache?.last_full_rebuild_core_memory_bytes === null ||
-    redisCache?.last_full_rebuild_core_memory_bytes === undefined ||
-    !redisCache.last_full_rebuild_measured_at
+    readyImageCache?.last_full_rebuild_core_memory_bytes === null ||
+    readyImageCache?.last_full_rebuild_core_memory_bytes === undefined ||
+    !readyImageCache.last_full_rebuild_measured_at
       ? "—"
-      : formatBytes(redisCache.last_full_rebuild_core_memory_bytes);
-  const currentCoreMeasuredAt = redisCache?.current_core_measured_at
-    ? new Date(redisCache.current_core_measured_at).toLocaleString()
+      : formatBytes(readyImageCache.last_full_rebuild_core_memory_bytes);
+  const currentCoreMeasuredAt = readyImageCache?.current_core_measured_at
+    ? new Date(readyImageCache.current_core_measured_at).toLocaleString()
     : null;
-  const fullRebuildMeasuredAt = redisCache?.last_full_rebuild_measured_at
-    ? new Date(redisCache.last_full_rebuild_measured_at).toLocaleString()
+  const fullRebuildMeasuredAt = readyImageCache?.last_full_rebuild_measured_at
+    ? new Date(readyImageCache.last_full_rebuild_measured_at).toLocaleString()
     : null;
   const redisMemoryHint =
     currentCoreSize && currentCoreMeasuredAt
-      ? `${currentCoreSize} · ${redisCacheState}`
+      ? `${currentCoreSize} · ${readyImageCacheState}`
       : fullRebuildCoreSize !== "—" && fullRebuildMeasuredAt
-        ? `${fullRebuildCoreSize} · ${redisCacheState}`
-        : `— · ${redisCacheState}`;
+        ? `${fullRebuildCoreSize} · ${readyImageCacheState}`
+        : `— · ${readyImageCacheState}`;
   const redisMemoryTitle =
     currentCoreSize && currentCoreMeasuredAt
       ? `当前核心图片投影占用 ${currentCoreSize}，测量于 ${currentCoreMeasuredAt}`
@@ -183,7 +184,7 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
   const storageCards: OverviewMetric[] = [
     {
       label: "Redis 缓存",
-      value: redisCache?.item_count ?? undefined,
+      value: readyImageCache?.item_count ?? undefined,
       hint: redisMemoryHint,
       hintTitle: redisMemoryTitle,
       to: `${adminBasePath}/check`

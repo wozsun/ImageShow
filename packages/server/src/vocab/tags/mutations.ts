@@ -1,17 +1,17 @@
 import type { PoolClient } from "pg";
-import { clampSortOrderSql, nextSortOrderSql } from "../core/database/sort-order-sql.ts";
-import { readVocabularyMutationImpact } from "../vocab/mutation-impact.ts";
-import { pool } from "../core/database/pools.ts";
-import { withTransaction } from "../core/database/transactions.ts";
-import { withImageMutationSync } from "../images/mutation-sync.ts";
-import { bumpReadyImageRevision } from "../images/ready-cache/revision.ts";
+import { clampSortOrderSql, nextSortOrderSql } from "../../core/database/sort-order-sql.ts";
+import { readVocabularyMutationImpact } from "../mutation-impact.ts";
+import { pool } from "../../core/database/pools.ts";
+import { withTransaction } from "../../core/database/transactions.ts";
+import { withImageMutationSync } from "../../images/mutation-sync.ts";
+import { bumpReadyImageRevision } from "../../images/ready-cache/revision.ts";
 import {
   assertVocabularyCreated,
   assertVocabularyFound,
   assertVocabularySlug,
   withVocabularyMutationSync,
   withVocabularyMutationLock
-} from "../vocab/mutation-sync.ts";
+} from "../mutation-sync.ts";
 
 export async function createTag(slug: string, displayName = "") {
   assertVocabularySlug("tag", slug);

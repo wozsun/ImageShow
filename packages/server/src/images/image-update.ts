@@ -1,12 +1,12 @@
 import type {
   ImageUpdateItemResultDto,
-  ImageUpdateResponseDto
+  ImageUpdateResponseDto,
+  ImageUpdateItemInputDto
 } from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
 import { withAdvisoryLocks } from "../core/database/advisory-locks.ts";
 import { logger } from "../core/logger.ts";
-import type { ImageUpdateItemInputDto } from "@imageshow/shared/browser";
-import { createEntityCountCacheInvalidationBatch } from "../vocab/vocab-cache.ts";
+import { createEntityCountCacheInvalidationBatch } from "../vocab/cache.ts";
 import {
   prepareImageUpdateItem,
   updateImageItem,

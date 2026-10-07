@@ -1,4 +1,10 @@
-import { readableFilterSearch } from "@imageshow/shared/browser";
+import {
+  readableFilterSearch,
+  type ShowClusterGroup,
+  type ShowDensity,
+  type ShowOrder,
+  type SiteShowSettings
+} from "@imageshow/shared/browser";
 import { useImageBrowseRoute } from "../../hooks/useImageBrowseRoute.js";
 import { usePublicFilterDialog } from "../../hooks/usePublicFilterDialog.js";
 import { PublicFilterDialog } from "../../components/image/filter/PublicFilterDialog.js";
@@ -12,15 +18,9 @@ import {
   useState,
   type CSSProperties
 } from "react";
-import type {
-  ShowClusterGroup,
-  ShowDensity,
-  ShowOrder,
-  SiteShowSettings
-} from "@imageshow/shared/browser";
 import { reducedMotionQuery } from "../../lib/ui/reduced-motion.js";
 import { AppLoadingRegion } from "../../components/feedback/AppLoadingScreen.js";
-import { DialogFrame } from "../../components/feedback/DialogFrame.js";
+import { DialogFrame } from "../../components/dialog/DialogFrame.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { PublicImageDetail } from "../../components/image/PublicImageDetail.js";
 import { PublicImageNavigation } from "../../components/navigation/PublicImageNavigation.js";

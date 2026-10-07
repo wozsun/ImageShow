@@ -728,7 +728,7 @@ test("[Web/后台] 动画关闭捕获最新回调并在请求阶段冻结完成�
       innerWidth: 1280
     });
     const { DialogFrame } =
-      await import("../../../../packages/web/src/components/feedback/DialogFrame.tsx");
+      await import("../../../../packages/web/src/components/dialog/DialogFrame.tsx");
     let noAnimationPrepared = 0;
     let noAnimationFinished = 0;
     let noAnimationFallback = 0;

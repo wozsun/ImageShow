@@ -5,15 +5,14 @@ import {
   type FormEvent,
   type RefObject
 } from "react";
-import type { ImageStorageMigrationResponseDto } from "@imageshow/shared/browser";
+import { type ImageStorageMigrationResponseDto, adminApiBasePath } from "@imageshow/shared/browser";
 import { AsyncActionButton } from "../../actions/AsyncActionButton.js";
-import { DialogFrame } from "../../feedback/DialogFrame.js";
+import { DialogFrame } from "../../dialog/DialogFrame.js";
 import { SelectMenu } from "../../form/SelectMenu.js";
 import { AdminIcon } from "../../icon/AdminIcon.js";
 import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
 import { api } from "../../../lib/api/client.js";
 import { useStorageOptions } from "../../../lib/api/storage-options.js";
-import { adminApiBasePath } from "../../../lib/constants.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import { errorMessage } from "../../../lib/ui/formatters.js";
 

@@ -10,7 +10,7 @@ import {
 } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { StableButtonLabel } from "../../../components/data-display/StableButtonLabel.js";
-import { DialogFrame } from "../../../components/feedback/DialogFrame.js";
+import { DialogFrame } from "../../../components/dialog/DialogFrame.js";
 import { api } from "../../../lib/api/client.js";
 import { queryKeys } from "../../../lib/api/query-keys.js";
 import { invalidateStorageData } from "../../../lib/api/query-invalidation.js";

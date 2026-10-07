@@ -3,14 +3,14 @@ import {
   detectDeviceFromUserAgent,
   publicTagGroupLimit,
   type GalleryFacetsDto,
-  type GalleryStatsDto
+  type GalleryStatsDto,
+  type FacetOptionDto
 } from "@imageshow/shared/browser";
 import { Icon, type IconName } from "../../icon/Icon.js";
 import { MatchedText } from "../../data-display/FacetSuggestionLabel.js";
 import { OverflowMarqueeText } from "../../data-display/OverflowMarqueeText.js";
 import { publicFilterOptionState } from "../../../lib/gallery/public-filter-options.js";
 import { matchFacetText } from "../../../lib/ui/facet-input.js";
-import type { FacetOption } from "../../../lib/types.js";
 import {
   publicFilterLabels,
   publicFilterSections,
@@ -53,7 +53,7 @@ type Props = {
   draft: PublicFilterDraft;
   tag: { selection: TagSelection };
   tagLocked: boolean;
-  options: readonly FacetOption[];
+  options: readonly FacetOptionDto[];
   facets: GalleryFacetsDto | undefined;
   facetsLoading: boolean;
   totals: { data: GalleryStatsDto | undefined; isError: boolean; refetch: () => unknown };

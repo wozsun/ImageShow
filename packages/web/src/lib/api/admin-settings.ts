@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { AdminSettingsResponseDto } from "@imageshow/shared/browser";
-import { adminApiBasePath } from "../constants.js";
+import { type AdminSettingsResponseDto, adminApiBasePath } from "@imageshow/shared/browser";
 import { api } from "./client.js";
 import { queryKeys } from "./query-keys.js";
 

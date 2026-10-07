@@ -6,14 +6,14 @@ import {
   useState,
   type MouseEvent as ReactMouseEvent
 } from "react";
-import type { AdminImageListItem } from "../../../lib/types.js";
+import type { AdminImageListItemDto } from "@imageshow/shared/browser";
 import {
   ImageListSelectionController,
   isImageSelectionPreservingTarget
 } from "./image-list-selection.js";
 
 /** Owns the current-page selection, range anchor, and background-click reset. */
-export function useImageAdminSelection(items: readonly AdminImageListItem[]) {
+export function useImageAdminSelection(items: readonly AdminImageListItemDto[]) {
   const [selected, setSelected] = useState<string[]>([]);
   const controllerRef = useRef(new ImageListSelectionController());
   const pageIds = useMemo(

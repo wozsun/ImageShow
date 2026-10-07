@@ -1,5 +1,4 @@
-import type { ImageTrashResponseDto } from "@imageshow/shared/browser";
-import type { EditableImageSnapshot } from "../../../lib/types.js";
+import type { ImageTrashResponseDto, EditableImageSnapshotDto } from "@imageshow/shared/browser";
 import type { ImageMetadataSessionState } from "./image-metadata-session.js";
 
 export type ImageEditorTrashOutcome = {
@@ -35,7 +34,7 @@ export function imageTrashIdsNeedingSnapshot(
 export function reconcileImageEditorTrash(
   requestedIds: string[],
   response: ImageTrashResponseDto | null,
-  authoritativeItems: EditableImageSnapshot[] | null
+  authoritativeItems: EditableImageSnapshotDto[] | null
 ): ImageEditorTrashOutcome {
   const responseTrashedIds = responseTrashedIdSet(response);
   const editableIdSet =

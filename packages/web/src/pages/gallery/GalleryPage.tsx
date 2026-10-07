@@ -1,4 +1,4 @@
-import { readableFilterSearch } from "@imageshow/shared/browser";
+import { readableFilterSearch, type GalleryOrder, type GalleryImageCardDto } from "@imageshow/shared/browser";
 import { useImageBrowseRoute } from "../../hooks/useImageBrowseRoute.js";
 import { PublicFilterErrorState } from "../../components/feedback/PublicFilterErrorState.js";
 import {
@@ -10,7 +10,6 @@ import {
   useState,
   type CSSProperties
 } from "react";
-import type { GalleryOrder } from "@imageshow/shared/browser";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigationType } from "react-router";
 import { Icon } from "../../components/icon/Icon.js";
@@ -22,7 +21,6 @@ import { PublicFilterDialog } from "../../components/image/filter/PublicFilterDi
 import { usePublicFilterDialog } from "../../hooks/usePublicFilterDialog.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import { createGalleryTaxonomyDisplayFormatter } from "../../lib/gallery/card-display.js";
-import type { GalleryImageCard } from "../../lib/types.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { AppLoadingRegion } from "../../components/feedback/AppLoadingScreen.js";
 import { pageScrollRestoredEvent } from "../../hooks/usePageScrollLock.js";
@@ -60,7 +58,7 @@ export function GalleryPage({
   order: GalleryOrder;
 }) {
   const mobile = useMediaQuery(mobileViewportMediaQuery);
-  const [selected, setSelected] = useState<GalleryImageCard | null>(null);
+  const [selected, setSelected] = useState<GalleryImageCardDto | null>(null);
   const [pinnedImageId, setPinnedImageId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { key: navigationKey } = useLocation();
@@ -93,7 +91,7 @@ export function GalleryPage({
     usePublicNavigationEntrance();
   const cardSubtitle = useMemo(() => {
     const display = createGalleryTaxonomyDisplayFormatter(facets);
-    return (card: GalleryImageCard) => display(card).subtitle;
+    return (card: GalleryImageCardDto) => display(card).subtitle;
   }, [facets]);
 
   const userAgent = window.navigator.userAgent;
@@ -163,7 +161,7 @@ export function GalleryPage({
   const showBackToTop = backToTopVisible && !dialogOpen;
 
   const openDetail = useCallback((
-    card: GalleryImageCard,
+    card: GalleryImageCardDto,
     opener: HTMLButtonElement
   ) => {
     detailReturnFocusRef.current = opener;

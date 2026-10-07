@@ -11,7 +11,7 @@ import {
   AsyncActionButton,
   type AsyncActionPresentation
 } from "../../../../components/actions/AsyncActionButton.js";
-import { DialogFrame } from "../../../../components/feedback/DialogFrame.js";
+import { DialogFrame } from "../../../../components/dialog/DialogFrame.js";
 import { AdminIcon } from "../../../../components/icon/AdminIcon.js";
 import { OverlayScrollbar } from "../../../../components/layout/OverlayScrollbar.js";
 import { useAsyncActionStatus } from "../../../../hooks/useAsyncActionStatus.js";

@@ -1,13 +1,11 @@
-import type {
-  ImageUpdateItemInputDto,
-  ImageUpdateItemResultDto,
-  ImageUpdateResponseDto
+import {
+  type ImageUpdateItemInputDto,
+  type ImageUpdateItemResultDto,
+  type ImageUpdateResponseDto,
+  normalizeIngestionDraftUrl,
+  type EditableImageSnapshotDto,
+  type ImageDraftDto
 } from "@imageshow/shared/browser";
-import { normalizeIngestionDraftUrl } from "@imageshow/shared/browser";
-import type {
-  EditableImageSnapshot,
-  ImageDraft
-} from "../../../lib/types.js";
 import {
   normalizeNamedSlug
 } from "../../../lib/image-draft.js";
@@ -16,8 +14,8 @@ export type ImageMetadataUpdate = ImageUpdateItemInputDto;
 
 export type ImageMetadataSessionState = {
   activeIds: string[];
-  baselineItems: EditableImageSnapshot[];
-  drafts: Record<string, ImageDraft>;
+  baselineItems: EditableImageSnapshotDto[];
+  drafts: Record<string, ImageDraftDto>;
 };
 
 export type ImageMetadataSaveAttempt = {
@@ -36,11 +34,11 @@ export type ImageMetadataCardSaveState = "saved" | "failed" | "pending" | null;
 
 export type ImageMetadataSaveOutcome = {
   attempt: ImageMetadataSaveAttempt;
-  authoritativeItems: EditableImageSnapshot[] | null;
+  authoritativeItems: EditableImageSnapshotDto[] | null;
   report: ImageMetadataSaveReport;
 };
 
-export type ImageMetadataChanges = Record<keyof ImageDraft, boolean>;
+export type ImageMetadataChanges = Record<keyof ImageDraftDto, boolean>;
 
 const imageDraftFields = [
   "title",
@@ -52,9 +50,9 @@ const imageDraftFields = [
   "theme",
   "author",
   "tags"
-] as const satisfies readonly (keyof ImageDraft)[];
+] as const satisfies readonly (keyof ImageDraftDto)[];
 
-function draftFromImage(item: EditableImageSnapshot): ImageDraft {
+function draftFromImage(item: EditableImageSnapshotDto): ImageDraftDto {
   return {
     title: item.title,
     description: item.description,
@@ -68,12 +66,12 @@ function draftFromImage(item: EditableImageSnapshot): ImageDraft {
   };
 }
 
-function draftsFromImages(items: EditableImageSnapshot[]) {
+function draftsFromImages(items: EditableImageSnapshotDto[]) {
   return Object.fromEntries(items.map((item) => [item.id, draftFromImage(item)]));
 }
 
 export function createImageMetadataSession(
-  items: EditableImageSnapshot[]
+  items: EditableImageSnapshotDto[]
 ): ImageMetadataSessionState {
   return {
     activeIds: items.map((item) => item.id),
@@ -87,8 +85,8 @@ function tagsChanged(draftTags: string[], savedTags: string[]) {
 }
 
 export function fieldsChangedFor(
-  item: EditableImageSnapshot,
-  draft: ImageDraft
+  item: EditableImageSnapshotDto,
+  draft: ImageDraftDto
 ): ImageMetadataChanges {
   return {
     title: draft.title !== item.title,
@@ -104,8 +102,8 @@ export function fieldsChangedFor(
 }
 
 export function changedMetadataUpdate(
-  item: EditableImageSnapshot,
-  draft: ImageDraft,
+  item: EditableImageSnapshotDto,
+  draft: ImageDraftDto,
   changed: ImageMetadataChanges
 ): ImageMetadataUpdate {
   const update: ImageMetadataUpdate = { id: item.id };
@@ -122,9 +120,9 @@ export function changedMetadataUpdate(
 }
 
 function valuesEqual(
-  field: keyof ImageDraft,
-  left: ImageDraft[keyof ImageDraft],
-  right: ImageDraft[keyof ImageDraft]
+  field: keyof ImageDraftDto,
+  left: ImageDraftDto[keyof ImageDraftDto],
+  right: ImageDraftDto[keyof ImageDraftDto]
 ) {
   if (field === "tags") {
     return !tagsChanged(left as string[], right as string[]);
@@ -136,20 +134,20 @@ function valuesEqual(
 }
 
 function draftStillHasSubmittedIntent(
-  field: keyof ImageDraft,
-  draft: ImageDraft,
+  field: keyof ImageDraftDto,
+  draft: ImageDraftDto,
   update: ImageMetadataUpdate
 ) {
-  const submitted = update[field] as ImageDraft[keyof ImageDraft];
+  const submitted = update[field] as ImageDraftDto[keyof ImageDraftDto];
   return valuesEqual(field, draft[field], submitted);
 }
 
 function submittedIntentMatchesSnapshot(
-  field: keyof ImageDraft,
+  field: keyof ImageDraftDto,
   update: ImageMetadataUpdate,
-  item: EditableImageSnapshot
+  item: EditableImageSnapshotDto
 ) {
-  const submitted = update[field] as ImageDraft[keyof ImageDraft];
+  const submitted = update[field] as ImageDraftDto[keyof ImageDraftDto];
   const authoritativeDraft = draftFromImage(item);
   // auto 是重新识别命令，不是 PostgreSQL 的持久值。具体分类无法证明命令已经
   // 执行；只有服务端明确返回 updated 时才能清除，failed 或响应丢失都保留草稿。
@@ -170,7 +168,7 @@ function submittedIntentMatchesSnapshot(
 
 function updateMatchesSnapshot(
   update: ImageMetadataUpdate,
-  item: EditableImageSnapshot
+  item: EditableImageSnapshotDto
 ) {
   return imageDraftFields.every(
     (field) => !Object.hasOwn(update, field)
@@ -180,7 +178,7 @@ function updateMatchesSnapshot(
 
 export function createImageMetadataSaveReport(
   attempt: ImageMetadataSaveAttempt,
-  authoritativeItems: EditableImageSnapshot[] | null
+  authoritativeItems: EditableImageSnapshotDto[] | null
 ): ImageMetadataSaveReport {
   const authoritativeById = new Map((authoritativeItems ?? []).map((item) => [item.id, item]));
   const responseReceived = attempt.response !== null;
@@ -240,7 +238,7 @@ export function imageMetadataCardSaveState(
 export function reconcileImageMetadataSession(
   state: ImageMetadataSessionState,
   attempt: ImageMetadataSaveAttempt,
-  authoritativeItems: EditableImageSnapshot[]
+  authoritativeItems: EditableImageSnapshotDto[]
 ): ImageMetadataSessionState {
   const oldBaselineById = new Map(state.baselineItems.map((item) => [item.id, item]));
   const authoritativeById = new Map(authoritativeItems.map((item) => [item.id, item]));
@@ -262,7 +260,7 @@ export function reconcileImageMetadataSession(
           imageDraftFields.map((field) => [field, false])
         ) as ImageMetadataChanges);
     const nextDraft = { ...currentDraft };
-    const writableDraft = nextDraft as Record<keyof ImageDraft, unknown>;
+    const writableDraft = nextDraft as Record<keyof ImageDraftDto, unknown>;
 
     for (const field of imageDraftFields) {
       const submitted = Boolean(update && Object.hasOwn(update, field));

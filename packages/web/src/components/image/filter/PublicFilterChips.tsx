@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, type RefObject } from "react";
-import { DirectActivationButton } from "../../feedback/DirectActivationButton.js";
+import { DirectActivationButton } from "../../actions/DirectActivationButton.js";
 import { useChipStripScroll } from "../../../hooks/useChipStripScroll.js";
 import { Icon } from "../../icon/Icon.js";
 import {

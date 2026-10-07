@@ -1,6 +1,5 @@
-import { safeLogText, safeLogValue } from "@imageshow/shared/browser";
+import { safeLogText, safeLogValue, adminApiBasePath } from "@imageshow/shared/browser";
 import { api } from "../api/client.js";
-import { adminApiBasePath } from "../constants.js";
 
 /** Browser diagnostics and server reports share the same bounded, scrubbed data. */
 export function reportAdminUiError(context: string, error: unknown, metadata?: unknown) {

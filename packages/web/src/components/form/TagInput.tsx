@@ -7,7 +7,7 @@ import {
   useState,
   type KeyboardEvent
 } from "react";
-import { vocabularyDisplayNameMaxLength } from "@imageshow/shared/browser";
+import { vocabularyDisplayNameMaxLength, type FacetOptionDto } from "@imageshow/shared/browser";
 import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
 import { useFacetSearchMatcher } from "../../hooks/useFacetSearchMatcher.js";
 import { useImeInputSession } from "../../hooks/useImeInputSession.js";
@@ -23,8 +23,7 @@ import {
   touchWithIdentifier,
   type ClientPoint
 } from "../../lib/ui/movement-intent.js";
-import type { FacetOption } from "../../lib/types.js";
-import { DirectActivationButton } from "../feedback/DirectActivationButton.js";
+import { DirectActivationButton } from "../actions/DirectActivationButton.js";
 import {
   handleSuggestionNavigationKey,
   SuggestionList,
@@ -54,7 +53,7 @@ export function TagInput({
 }: {
   value: string[];
   onChange: (value: string[]) => void;
-  suggestions: FacetOption[];
+  suggestions: FacetOptionDto[];
   disabled?: boolean;
   ariaLabel?: string;
   className?: string;

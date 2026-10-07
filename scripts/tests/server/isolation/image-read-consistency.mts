@@ -26,7 +26,7 @@ await runIntegrationScenario(async (runtime) => {
   const imageFilterPlan = await import("../../../../packages/server/src/images/filter-plan.ts");
   const readyCacheFilterIndex =
     await import("../../../../packages/server/src/images/ready-cache/indexes/filter.ts");
-  const vocabCache = await import("../../../../packages/server/src/vocab/vocab-cache.ts");
+  const vocabCache = await import("../../../../packages/server/src/vocab/cache.ts");
   await runtimeAvailability.requireOperationalRedis();
   const duplicates =
     await import("../../../../packages/server/src/images/read-models/duplicates.ts");

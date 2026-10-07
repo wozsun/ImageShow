@@ -1,6 +1,5 @@
-import type { ImageSnapshotResponseDto } from "@imageshow/shared/browser";
+import { type ImageSnapshotResponseDto, adminApiBasePath } from "@imageshow/shared/browser";
 import { api } from "./client.js";
-import { adminApiBasePath } from "../constants.js";
 import { retryReadRequest } from "./read-request-retry.js";
 
 export function readEditableImageSnapshots(

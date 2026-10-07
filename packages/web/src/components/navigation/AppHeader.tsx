@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router";
-import { adminBasePath, publicRootPath } from "../../lib/constants.js";
+import { adminBasePath, publicRootPath } from "@imageshow/shared/browser";
 import { useSiteConfig } from "../../lib/api/site-queries.js";
 import { useAuthSessionQuery } from "../../hooks/useAuthSession.js";
 import {

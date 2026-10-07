@@ -7,14 +7,11 @@ import {
 import { loadImageAdminDetailsModule } from "./image-admin-details-loader.js";
 import { AsyncIntentFence } from "../../lib/async-intent-fence.js";
 import { createPageLifetimeModuleLoader } from "../../lib/page-lifetime-module-loader.js";
-import type {
-  AdminImageDetailItem,
-  AdminImageListItem
-} from "../../lib/types.js";
+import type { AdminImageDetailItemDto, AdminImageListItemDto } from "@imageshow/shared/browser";
 
 type ImageDetailModalModule = typeof import("./ImageDetailModal.js");
 type ImageDetailModalComponent = ImageDetailModalModule["ImageDetailModal"];
-type AdminDetailItem = AdminImageDetailItem | AdminImageListItem;
+type AdminDetailItem = AdminImageDetailItemDto | AdminImageListItemDto;
 
 const loadImageDetailModalModule = createPageLifetimeModuleLoader<ImageDetailModalModule>(
   () => import("./ImageDetailModal.js")

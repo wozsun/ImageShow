@@ -1,16 +1,14 @@
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { StorageBackendsAdminResponseDto } from "@imageshow/shared/browser";
+import { type StorageBackendsAdminResponseDto, adminApiBasePath, type StorageBackendAdminDto } from "@imageshow/shared/browser";
 import { api, isApiClientError } from "../../../lib/api/client.js";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
-import { ConfirmDialog } from "../../../components/feedback/ConfirmDialog.js";
-import { adminApiBasePath } from "../../../lib/constants.js";
+import { ConfirmDialog } from "../../../components/dialog/ConfirmDialog.js";
 import {
   storageBackendDisplay,
   storageBackendLabel
 } from "../../../lib/ui/select-options.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
-import type { StorageBackendAdmin } from "../../../lib/types.js";
 import {
   createActionFeedback,
   type ActionFeedbackState
@@ -38,10 +36,10 @@ import { StorageBackendDeletionBlockedDialog } from "./StorageBackendDeletionBlo
 import { storageBackendAfterDeleteRejection } from "./storage-backend-deletion-policy.js";
 
 type StorageActionDialog =
-  | { kind: "delete"; backend: StorageBackendAdmin; error?: string }
-  | { kind: "retry-cleanup"; backend: StorageBackendAdmin }
-  | { kind: "migrate"; backend: StorageBackendAdmin }
-  | { kind: "blocked"; backend: StorageBackendAdmin };
+  | { kind: "delete"; backend: StorageBackendAdminDto; error?: string }
+  | { kind: "retry-cleanup"; backend: StorageBackendAdminDto }
+  | { kind: "migrate"; backend: StorageBackendAdminDto }
+  | { kind: "blocked"; backend: StorageBackendAdminDto };
 
 // 存储管理：注册表卡片与数字排序，新建/编辑走 StorageBackendModal。
 export function StorageSettings() {
@@ -62,7 +60,7 @@ export function StorageSettings() {
   const defaultAction = useAsyncActionStatus();
   const defaultActionRunning = useRef(false);
   const [defaultActionSlug, setDefaultActionSlug] = useState("");
-  const [editing, setEditing] = useState<StorageBackendAdmin | "new" | null>(null);
+  const [editing, setEditing] = useState<StorageBackendAdminDto | "new" | null>(null);
   const [actionDialog, setActionDialog] = useState<StorageActionDialog | null>(null);
   const backends = query.data?.backends ?? [];
   const defaultBackend = backends.find((backend) => backend.is_default);
@@ -146,7 +144,7 @@ export function StorageSettings() {
     }
   };
 
-  const deleteBackend = async (backend: StorageBackendAdmin) => {
+  const deleteBackend = async (backend: StorageBackendAdminDto) => {
     if (busy) return false;
     const result = await executeStorageAction(`delete:${backend.slug}`, () =>
       api(`${adminApiBasePath}/storage/backends/${backend.slug}/delete`, { method: "POST" })
@@ -231,7 +229,7 @@ export function StorageSettings() {
       })
     );
 
-  const openEditor = (target: StorageBackendAdmin | "new") => setEditing(target);
+  const openEditor = (target: StorageBackendAdminDto | "new") => setEditing(target);
   const closeEditor = () => setEditing(null);
   const editingTarget =
     editing === "new"

@@ -15,7 +15,7 @@ await runIntegrationScenario(async (runtime) => {
   for (let index = 0; index < count * 2; index++) {
     images.push(await fixture.createImage({ thumbnail: fixture.body }));
   }
-  const { getTagVocab } = await import("../../../../packages/server/src/vocab/vocab-cache.ts");
+  const { getTagVocab } = await import("../../../../packages/server/src/vocab/cache.ts");
   await getTagVocab();
 
   // Keep real pool checkout and real PostgreSQL locks. Only synchronize the

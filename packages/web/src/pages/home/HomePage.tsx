@@ -1,9 +1,10 @@
 import {
   basicTagSelection,
   readableFilterSearch,
-  type TagMatchMode
+  type TagMatchMode,
+  type PublicSiteSettings,
+  publicHomeBrowsePath
 } from "@imageshow/shared/browser";
-import type { PublicSiteSettings } from "@imageshow/shared/browser";
 import {
   useEffect,
   useLayoutEffect,
@@ -20,7 +21,6 @@ import { useDocumentMotionPause } from "../../hooks/useDocumentMotionPause.js";
 import { usePublicNavigationEntrance } from "../../hooks/usePublicNavigationEntrance.js";
 import { usePublicFilterStats } from "../../hooks/usePublicFilterStats.js";
 import { useGalleryFacets } from "../../lib/api/site-queries.js";
-import { publicHomeBrowsePath } from "../../lib/constants.js";
 import {
   emptyGalleryFilters,
   galleryRouteSearchParams,

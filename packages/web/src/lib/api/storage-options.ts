@@ -1,15 +1,15 @@
 import { useMemo } from "react";
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { api } from "./client.js";
-import { adminApiBasePath } from "../constants.js";
+import {
+  adminApiBasePath,
+  type StorageBackendOptionDto,
+  type StorageBackendOptionsResponseDto
+} from "@imageshow/shared/browser";
 import { storageBackendLabel } from "../ui/select-options.js";
 import { queryKeys } from "./query-keys.js";
 import { readRequestRetryOptions } from "./read-request-retry.js";
 import { requestWithDeadline } from "./request-deadline.js";
-import type {
-  StorageBackendOptionDto,
-  StorageBackendOptionsResponseDto
-} from "@imageshow/shared/browser";
 
 export type StorageBackendOption = StorageBackendOptionDto;
 

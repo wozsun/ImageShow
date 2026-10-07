@@ -1,4 +1,4 @@
-import { basicTagSelection, basicTagValue, TagFilterError } from "@imageshow/shared/browser";
+import { basicTagSelection, basicTagValue, TagFilterError, type FacetOptionDto } from "@imageshow/shared/browser";
 import { FacetSuggestionLabel } from "../../../components/data-display/FacetSuggestionLabel.js";
 import {
   useCallback,
@@ -10,9 +10,9 @@ import {
   type KeyboardEvent
 } from "react";
 import { flushSync } from "react-dom";
-import { AnchoredPopup } from "../../../components/feedback/AnchoredPopup.js";
-import { DirectActivationButton } from "../../../components/feedback/DirectActivationButton.js";
-import { MenuItemButton } from "../../../components/feedback/MenuItemButton.js";
+import { AnchoredPopup } from "../../../components/menu/AnchoredPopup.js";
+import { DirectActivationButton } from "../../../components/actions/DirectActivationButton.js";
+import { MenuItemButton } from "../../../components/menu/MenuItemButton.js";
 import { AnchoredMenuDismissSignalContext, useAnchoredMenu } from "../../../hooks/useAnchoredMenu.js";
 import { useFacetSearchMatcher } from "../../../hooks/useFacetSearchMatcher.js";
 import { useImeSearchInput } from "../../../hooks/useImeSearchInput.js";
@@ -22,7 +22,6 @@ import {
 } from "../../../lib/ui/facet-input.js";
 import { facetDisplayName } from "../../../lib/ui/formatters.js";
 import type { AnchoredMenuSize } from "../../../lib/ui/menu-position.js";
-import type { FacetOption } from "../../../lib/types.js";
 
 type FacetMode = "include" | "exclude" | "any" | "all";
 const modeLabels = { include: "包含", exclude: "排除", any: "任一", all: "全部" };
@@ -50,7 +49,7 @@ export function FacetSelector({
   selectionMode = "include-exclude"
 }: {
   selectionMode?: "include-exclude" | "any-all";
-  options: FacetOption[];
+  options: FacetOptionDto[];
   value: string;
   onChange: (value: string) => void;
   noun: string;

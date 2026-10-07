@@ -1,14 +1,14 @@
-import type { GalleryImageCard } from "../../lib/types.js";
+import type { GalleryImageCardDto } from "@imageshow/shared/browser";
 import type { GalleryCardRevealRegistry } from "./gallery-card-reveal.js";
 import type { GalleryWindowPosition } from "./gallery-data-window.js";
 
 export type GalleryTileRenderProps = {
-  position: GalleryWindowPosition & { item: GalleryImageCard };
+  position: GalleryWindowPosition & { item: GalleryImageCardDto };
   revealOrder: number;
   revealRegistry: GalleryCardRevealRegistry;
   subtitle: string;
   onOpen: (
-    card: GalleryImageCard,
+    card: GalleryImageCardDto,
     opener: HTMLButtonElement
   ) => void;
 };

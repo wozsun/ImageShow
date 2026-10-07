@@ -5,7 +5,7 @@ import {
   useState,
   type KeyboardEvent
 } from "react";
-import { vocabularyDisplayNameMaxLength } from "@imageshow/shared/browser";
+import { vocabularyDisplayNameMaxLength, type FacetOptionDto } from "@imageshow/shared/browser";
 import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
 import { useFacetSearchMatcher } from "../../hooks/useFacetSearchMatcher.js";
 import { useImeInputSession } from "../../hooks/useImeInputSession.js";
@@ -15,7 +15,6 @@ import {
   parseFacetSlug
 } from "../../lib/ui/facet-input.js";
 import { facetDisplayName } from "../../lib/ui/formatters.js";
-import type { FacetOption } from "../../lib/types.js";
 import {
   handleSuggestionNavigationKey,
   SuggestionList,
@@ -38,7 +37,7 @@ export function SlugComboInput({
 }: {
   value: string;
   onChange: (value: string) => void;
-  options: FacetOption[];
+  options: FacetOptionDto[];
   noun: string;
   placeholder?: string;
   disabled?: boolean;

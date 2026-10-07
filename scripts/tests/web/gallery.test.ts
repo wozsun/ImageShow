@@ -2,10 +2,7 @@ import "../support/web-environment.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseHTML } from "linkedom";
-import {
-  galleryResidenceBufferScreens,
-  galleryVirtualOverscanScreens
-} from "../../../packages/web/src/lib/constants.ts";
+import { galleryResidenceBufferScreens, galleryVirtualOverscanScreens } from "../../../packages/web/src/lib/gallery/gallery-budget.ts";
 import { createGalleryTaxonomyDisplayFormatter } from "../../../packages/web/src/lib/gallery/card-display.ts";
 import {
   boundedHomeRevealIndexes,

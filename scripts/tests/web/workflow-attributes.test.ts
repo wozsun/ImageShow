@@ -1,13 +1,13 @@
 import "../support/web-environment.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
-import type {
-  IngestionQueueActionResultDto,
-  IngestionSessionPairDto
+import {
+  type IngestionQueueActionResultDto,
+  type IngestionSessionPairDto,
+  ingestionActionPath
 } from "../../../packages/shared/src/browser.ts";
-import { ingestionActionPath } from "../../../packages/shared/src/browser.ts";
 import { clearCsrfToken, setCsrfToken } from "../../../packages/web/src/lib/api/client.ts";
-import type { ImageDraft } from "../../../packages/web/src/lib/types.ts";
+import type { ImageDraftDto } from "@imageshow/shared/browser";
 import {
   imageAttributeClearPatch,
   mergeCommonImageAttributes,
@@ -76,7 +76,7 @@ for (const surface of ["默认属性", "图片编辑"] as const) {
     const { ImageDraftFields } = await import(
       "../../../packages/web/src/components/form/ImageDraftFields.tsx"
     );
-    let current: ImageDraft = {
+    let current: ImageDraftDto = {
       ...ingestionJob().draft,
       theme: "",
       author: "",
@@ -679,7 +679,7 @@ test("[Web/工作流属性] 移动浮层拥有菜单与确认框，按层关闭�
   const { WorkflowCollapsePanel } =
     await import("../../../packages/web/src/components/layout/WorkflowCollapsePanel.tsx");
   const { DialogFrame } =
-    await import("../../../packages/web/src/components/feedback/DialogFrame.tsx");
+    await import("../../../packages/web/src/components/dialog/DialogFrame.tsx");
   let activeElement = document.body as HTMLElement;
   // linkedom dispatches every listener in registration order. Restore the
   // document keydown capture phase so layered Escape sees browser ordering.

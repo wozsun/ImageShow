@@ -3,7 +3,7 @@ import {
   resolveImageFilterPlan,
   type ImageFilterPlan
 } from "../filter-plan.ts";
-import type { VocabularyReadAccess } from "../../vocab/vocab-cache.ts";
+import type { VocabularyReadAccess } from "../../vocab/cache.ts";
 import { buildImageFilterSql } from "./image-filter-sql.ts";
 
 export type ImageListFilterQuery = {

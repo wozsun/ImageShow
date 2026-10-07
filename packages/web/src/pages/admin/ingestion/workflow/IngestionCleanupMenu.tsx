@@ -1,7 +1,7 @@
 import { useRef, type KeyboardEvent } from "react";
-import { AnchoredPopup } from "../../../../components/feedback/AnchoredPopup.js";
-import { DirectActivationButton } from "../../../../components/feedback/DirectActivationButton.js";
-import { MenuItemButton } from "../../../../components/feedback/MenuItemButton.js";
+import { AnchoredPopup } from "../../../../components/menu/AnchoredPopup.js";
+import { DirectActivationButton } from "../../../../components/actions/DirectActivationButton.js";
+import { MenuItemButton } from "../../../../components/menu/MenuItemButton.js";
 import { AdminIcon } from "../../../../components/icon/AdminIcon.js";
 import { useAnchoredMenu } from "../../../../hooks/useAnchoredMenu.js";
 import type { AnchoredMenuSize } from "../../../../lib/ui/menu-position.js";

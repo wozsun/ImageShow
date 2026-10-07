@@ -1,7 +1,7 @@
 import { useId, useMemo, useRef, useState, type RefObject } from "react";
-import { publicTagGroupLimit, type GalleryFacetsDto } from "@imageshow/shared/browser";
+import { publicTagGroupLimit, type GalleryFacetsDto, type FacetOptionDto } from "@imageshow/shared/browser";
 import { reducedMotionQuery } from "../../../lib/ui/reduced-motion.js";
-import { DialogFrame } from "../../feedback/DialogFrame.js";
+import { DialogFrame } from "../../dialog/DialogFrame.js";
 import { OverlayScrollbar } from "../../layout/OverlayScrollbar.js";
 import { PublicFilterSection, publicFilterIcons } from "./PublicFilterSection.js";
 import { PublicFilterChips } from "./PublicFilterChips.js";
@@ -18,7 +18,6 @@ import {
 } from "../../../lib/ui/facet-input.js";
 import { useFacetSearchMatcher } from "../../../hooks/useFacetSearchMatcher.js";
 import { useImeSearchInput } from "../../../hooks/useImeSearchInput.js";
-import type { FacetOption } from "../../../lib/types.js";
 import { galleryStatsSearch, type GalleryFilters } from "../../../lib/gallery/gallery-query.js";
 import type { GallerySelectorField } from "../../../lib/gallery/gallery-selectors.js";
 import { optionsWithUnsetLast } from "../../../lib/gallery/public-filter-options.js";
@@ -55,7 +54,7 @@ const fixedOptions = {
 };
 
 function filterOptions(
-  options: readonly FacetOption[],
+  options: readonly FacetOptionDto[],
   query: string,
   section: Exclude<PublicFilterSectionKey, "device" | "brightness">,
   matchName: typeof matchFacetText

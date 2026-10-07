@@ -1,10 +1,8 @@
-import { Component, Suspense, lazy, useCallback, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import { Component, Suspense, lazy, useCallback, useRef, useState, type ReactNode } from "react";
 import type { AltchaWidgetElement } from "altcha";
-import type { AdminLoginResultDto } from "@imageshow/shared/browser";
+import { type AdminLoginResultDto, adminApiBasePath } from "@imageshow/shared/browser";
 import { api, clearCsrfToken, setCsrfToken } from "../../../lib/api/client.js";
 import { PasswordInput } from "../../../components/form/PasswordInput.js";
-import { adminApiBasePath } from "../../../lib/constants.js";
 import {
   clearSessionProbeHint,
   rememberSessionProbeHint

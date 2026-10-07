@@ -908,11 +908,16 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
   const previousConsoleError = console.error;
   const expectedListErrors: unknown[][] = [];
   const expectedMutationErrors: unknown[][] = [];
+  const expectedEditorErrors: unknown[][] = [];
   console.error = (...args: unknown[]) => {
     const report =
       args[0] === "[ImageShow]" ? (args[1] as { context?: string } | undefined) : undefined;
     if (report?.context === "image_admin.list_load") {
       expectedListErrors.push(args);
+      return;
+    }
+    if (report?.context === "image_admin.editor_load") {
+      expectedEditorErrors.push(args);
       return;
     }
     if (report?.context === "image_admin.trash_or_purge") {
@@ -1541,8 +1546,7 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
         throw new Error(`unexpected trash interface request: ${url.pathname}`);
       };
 
-      const root = createRoot(container);
-      try {
+      const renderImages = async (Page = ImageAdmin) => {
         await React.act(async () => {
           root.render(
             React.createElement(
@@ -1565,7 +1569,7 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
                     React.createElement(
                       ActionFeedbackProvider,
                       null,
-                      React.createElement(ImageAdmin)
+                      React.createElement(Page)
                     )
                   )
                 )
@@ -1573,6 +1577,10 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
             )
           );
         });
+      };
+      const root = createRoot(container);
+      try {
+        await renderImages();
         await waitFor(
           () => container.querySelectorAll(".admin-image-card").length === 2,
           "trash interface scenario did not load ready items"
@@ -1819,6 +1827,91 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
           idInputDialogHooks.deregister();
           Reflect.deleteProperty(globalThis, idInputDialogHoldGlobal);
         }
+
+        // 独立的页面模块图让真实编辑器加载器各经历一次首次加载；其失败缓存仍由生产代码持有。
+        // 覆盖脚本失败后的刷新指引，以及入口失效造成交接中断后的关闭重试指引。
+        trashedIds.delete(offPageImageId);
+        for (const failure of ["load", "interrupted"] as const) {
+          const gate = Promise.withResolvers<void>();
+          const gateName = "imageshowTestEditorRecoveryGate";
+          Object.defineProperty(globalThis, gateName, { configurable: true, value: gate.promise });
+          const query = `?id-recovery-${failure}`;
+          const isolatedPaths = [
+            "/pages/admin/images/ImageAdmin.tsx",
+            "/components/image/editor/useImageEditorCapability.ts",
+            "/components/image/editor/image-editor-capability-loader.ts",
+            "/components/image/editor/image-editor-capability.ts"
+          ];
+          let loadIntercepted = false;
+          const hooks = registerHooks({
+            resolve(specifier, context, nextResolve) {
+              const resolved = nextResolve(specifier, context);
+              if (context.parentURL?.endsWith(query)
+                && !context.parentURL.endsWith("/image-editor-capability.ts" + query)
+                && isolatedPaths.some((path) => resolved.url.endsWith(path))) {
+                return { ...resolved, url: resolved.url + query };
+              }
+              return resolved;
+            },
+            load(url, context, nextLoad) {
+              if (!url.endsWith("/image-editor-capability.ts" + query)) return nextLoad(url, context);
+              loadIntercepted = true;
+              const source = `await globalThis.${gateName}; export * from ${JSON.stringify(url.slice(0, -query.length))};`;
+              return { format: "module", source, shortCircuit: true };
+            }
+          });
+          try {
+            const pageUrl = new URL("../../../../packages/web/src/pages/admin/images/ImageAdmin.tsx", import.meta.url);
+            pageUrl.search = query;
+
+            const isolatedPage = await import(pageUrl.href) as { ImageAdmin: typeof ImageAdmin };
+
+            await renderImages(isolatedPage.ImageAdmin);
+            await waitFor(() => [...container.querySelectorAll<HTMLButtonElement>("button")].some(button => button.textContent === "删除图片" && !button.disabled), "recovery page did not mount");
+            const entry = buttonWithText("删除图片");
+            await click(entry);
+            const fillAndParse = async () => {
+              await waitFor(() => Boolean(document.querySelector('textarea[aria-label="图片 ID"]')), "ID input missing");
+              const input = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="图片 ID"]')!;
+              await React.act(async () => inputText(window as unknown as Window, input, offPageImageId));
+              await click(buttonWithText("解析"));
+              return input;
+            };
+
+            const input = await fillAndParse();
+            await waitFor(() => loadIntercepted, "editor load must be intercepted before it settles");
+            const parent = entry.parentNode!;
+            const sibling = entry.nextSibling;
+            await React.act(async () => {
+              if (failure === "load") gate.reject(new Error("controlled editor script failure"));
+              else { entry.remove(); gate.resolve(); }
+            });
+            const expected = failure === "load"
+              ? "编辑器加载失败，请重新加载页面"
+              : "未能打开编辑弹窗，请关闭后重试";
+            await waitFor(() => (document.querySelector(".import-source-overlay")?.textContent ?? "").includes(expected), `${failure}: wrong editor recovery hint`);
+            assert.equal(input.disabled, false);
+            assert.ok(input.getAttribute("aria-describedby")?.split(" ").some(id => document.getElementById(id)?.textContent === expected));
+            if (failure === "interrupted") parent.insertBefore(entry, sibling);
+
+            await click(buttonWithText("取消"));
+            assert.notEqual(container.inert, true);
+            await click(entry);
+
+            await fillAndParse();
+            if (failure === "load") {
+              await waitFor(() => (document.querySelector(".import-source-overlay")?.textContent ?? "").includes(expected), "closing and reopening must retain the page-lifetime load failure");
+              await click(buttonWithText("取消"));
+            } else {
+              await waitFor(() => Boolean(document.querySelector(".edit-modal")), "interrupted handoff should recover after reopening");
+              await click(document.querySelector<HTMLButtonElement>('.edit-modal button[title="关闭"]')!);
+            }
+          } finally {
+            gate.resolve();
+            hooks.deregister();
+            Reflect.deleteProperty(globalThis, gateName);
+          }
+        }
       } finally {
         await React.act(async () => root.unmount());
         client.clear();
@@ -2060,6 +2153,10 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
       expectedMutationErrors.length,
       1,
       "未知永久删除请求必须只记录一次 mutation 错误"
+    );
+    assert.deepEqual(
+      expectedEditorErrors.map(args => (args[1] as { error: { message: string } }).error.message),
+      ["controlled editor script failure", "controlled editor script failure"]
     );
   } finally {
     console.error = previousConsoleError;

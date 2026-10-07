@@ -55,7 +55,7 @@ type RedisDeepInspectionBase = {
   measured_at: string;
   scanned_keys: number;
   prefix_counts: RedisPrefixCounts;
-  image_projection_usage: {
+  ready_image_cache_usage: {
     core: RedisUsageAggregate;
     derived: RedisUsageAggregate;
   };
@@ -201,12 +201,12 @@ export function redisDeepInspectionDeadlineResult(
       ? {
           scanned_keys: partial.scanned_keys,
           prefix_counts: partial.prefix_counts,
-          image_projection_usage: partial.image_projection_usage
+          ready_image_cache_usage: partial.ready_image_cache_usage
         }
       : {
           scanned_keys: 0,
           prefix_counts: emptyPrefixCounts(),
-          image_projection_usage: {
+          ready_image_cache_usage: {
             core: emptyUsage(),
             derived: emptyUsage()
           }
@@ -246,7 +246,7 @@ export async function inspectRedisKeyspaceDeep(
   const state = {
     scanned_keys: 0,
     prefix_counts: emptyPrefixCounts(),
-    image_projection_usage: {
+    ready_image_cache_usage: {
       core: emptyUsage(),
       derived: emptyUsage()
     }
@@ -283,8 +283,8 @@ export async function inspectRedisKeyspaceDeep(
         }
         const key = batch[index]!;
         const aggregate = key.startsWith(READY_IMAGE_DERIVED_PREFIX)
-          ? state.image_projection_usage.derived
-          : state.image_projection_usage.core;
+          ? state.ready_image_cache_usage.derived
+          : state.ready_image_cache_usage.core;
         addUsage(
           aggregate,
           nonNegativeSafeInteger(rawMemory, "memory usage"),

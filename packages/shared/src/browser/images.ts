@@ -1,5 +1,6 @@
 import { imageVariants, type ImageVariantsDto, type ImageVariantByteSizesDto } from "./image-variants.ts";
-import { slugMaxLength, slugPattern, type Brightness, type Device } from "./common.ts";
+import { slugMaxLength, slugPattern } from "./vocabulary.ts";
+import { type Brightness, type Device } from "./image-classification.ts";
 
 /** Stable physical identity, independent of editable image classification. */
 export function storageObjectKey(id: string) {
@@ -268,3 +269,7 @@ export type ImagePurgeResponseDto = {
   remaining: number;
   ignored: number;
 };
+
+export const imageTitleMaxLength = 80;
+
+export const imageDescriptionMaxLength = 500;

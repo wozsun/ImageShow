@@ -1,6 +1,10 @@
-import { readableFilterSearch } from "@imageshow/shared/browser";
+import {
+  readableFilterSearch,
+  type PublicImageListResponseDto,
+  type ShowOrder,
+  type EditableImageSnapshotDto
+} from "@imageshow/shared/browser";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { PublicImageListResponseDto, ShowOrder } from "@imageshow/shared/browser";
 import { api, ApiClientError, isApiClientError } from "../../lib/api/client.js";
 import { readEditableImageSnapshots } from "../../lib/api/image-edit.js";
 import {
@@ -9,7 +13,6 @@ import {
   type GalleryFilters
 } from "../../lib/gallery/gallery-query.js";
 import { imageMatchesFilters, shuffledImageBatch } from "../../lib/gallery/image-browse.js";
-import type { EditableImageSnapshot } from "../../lib/types.js";
 import type { ShowImage } from "./show-layout.js";
 import {
   showContinuationLimit as continuationLimit,
@@ -296,7 +299,7 @@ export function useShowData(
   );
 
   const updateImage = useCallback(
-    (snapshot: EditableImageSnapshot) => {
+    (snapshot: EditableImageSnapshotDto) => {
       const current = imagesRef.current.find((image) => image.id === snapshot.id);
       if (!current) return;
       if (!imageMatchesFilters(snapshot, requestFilters, window.navigator.userAgent)) {

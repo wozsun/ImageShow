@@ -483,7 +483,7 @@ test("[Web/共享交互] 直接激活在键盘视口中延后目标聚焦并区�
     const { WorkflowCollapsePanel } =
       await import("../../../packages/web/src/components/layout/WorkflowCollapsePanel.tsx");
     const { DirectActivationButton } =
-      await import("../../../packages/web/src/components/feedback/DirectActivationButton.tsx");
+      await import("../../../packages/web/src/components/actions/DirectActivationButton.tsx");
     const { TagInput } = await import("../../../packages/web/src/components/form/TagInput.tsx");
 
     function Harness() {

@@ -24,10 +24,10 @@ await runIntegrationScenario(async (runtime) => {
     await import("../../../../packages/server/src/images/trash/purge-maintenance.ts");
   const databaseCheck = await import("../../../../packages/server/src/checks/database-check.ts");
   const sharedAppConfig = await import("@imageshow/shared");
-  const vocab = await import("../../../../packages/server/src/vocab/vocab-cache.ts");
-  const { createTheme } = await import("../../../../packages/server/src/themes/mutations.ts");
-  const { createTag } = await import("../../../../packages/server/src/tags/mutations.ts");
-  const { createAuthor } = await import("../../../../packages/server/src/authors/mutations.ts");
+  const vocab = await import("../../../../packages/server/src/vocab/cache.ts");
+  const { createTheme } = await import("../../../../packages/server/src/vocab/themes/mutations.ts");
+  const { createTag } = await import("../../../../packages/server/src/vocab/tags/mutations.ts");
+  const { createAuthor } = await import("../../../../packages/server/src/vocab/authors/mutations.ts");
   const localAccess = await registry.resolveStorageAccess("local");
   const foregroundImage = randomUUID();
   await database.pool.query(

@@ -1,9 +1,9 @@
 import {
   getAuthorVocab,
   type VocabularyReadAccess
-} from "../vocab/vocab-cache.ts";
-import { pool } from "../core/database/pools.ts";
-import { resolveVocabularySlugs, resolveTermSlugMap } from "../vocab/terms.ts";
+} from "../cache.ts";
+import { pool } from "../../core/database/pools.ts";
+import { resolveVocabularySlugs, resolveTermSlugMap } from "../terms.ts";
 import { isWeiboUserId } from "./identity.ts";
 
 export function resolveAuthorTermMap(

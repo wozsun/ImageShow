@@ -1294,7 +1294,7 @@ test("[Server/缓存与 Redis] Redis 手动深检保持截止时间、键上限�
       temporary: 0,
       other: 1
     },
-    image_projection_usage: {
+    ready_image_cache_usage: {
       core: { key_count: 2, member_count: 15, memory_bytes: 30 },
       derived: { key_count: 1, member_count: 2, memory_bytes: 30 }
     }
@@ -1322,7 +1322,7 @@ test("[Server/缓存与 Redis] Redis 手动深检保持截止时间、键上限�
   if (limited.complete) assert.fail("key-limited inspection must be partial");
   assert.equal(limited.reason, "max_keys");
   assert.equal(limited.scanned_keys, 2);
-  assert.equal(limited.image_projection_usage.derived.key_count, 0);
+  assert.equal(limited.ready_image_cache_usage.derived.key_count, 0);
 
   const pendingScan = Promise.withResolvers<[string, string[]]>();
   let pendingScanCalls = 0;

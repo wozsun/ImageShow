@@ -2,9 +2,9 @@ import { hash } from "node:crypto";
 import type { RandomImageSize, RandomMethod } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
-import { resolveAuthorTermMap } from "../authors/query.ts";
-import { resolveTagTermMap } from "../tags/query.ts";
-import { resolveThemeTermMap } from "../themes/query.ts";
+import { resolveAuthorTermMap } from "../vocab/authors/query.ts";
+import { resolveTagTermMap } from "../vocab/tags/query.ts";
+import { resolveThemeTermMap } from "../vocab/themes/query.ts";
 import { createImageFilterPlan } from "../images/filter-plan.ts";
 import { sampleReadyImages } from "../images/ready-cache/query.ts";
 import {

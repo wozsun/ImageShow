@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import type { IngestionVocabularyDto } from "@imageshow/shared/browser";
+import type { IngestionVocabularyDto, EditableImageSnapshotDto } from "@imageshow/shared/browser";
 import { readEditableImageSnapshots } from "../../../lib/api/image-edit.js";
 import { ingestionVocabularyQueryOptions } from "../../../lib/api/ingestion-vocabulary.js";
 import {
@@ -7,9 +7,7 @@ import {
   invalidateImageDataAfterMetadataSave
 } from "../../../lib/api/query-invalidation.js";
 import { storageOptionsQueryOptions } from "../../../lib/api/storage-options.js";
-import type { ImageEditorSource } from "./image-editor-types.js";
-import type { EditableImageSnapshot } from "../../../lib/types.js";
-import type { ImageMetadataSaveCommit } from "./image-editor-types.js";
+import type { ImageEditorSource, ImageMetadataSaveCommit } from "./image-editor-types.js";
 // 单图与批量编辑共用同一懒加载能力入口。共享样式独占字段内部排布，编辑器专属
 // 样式只负责卡片外框和宿主定位，因此即使浏览器并行预载 CSS，应用顺序也不会改变
 // 属性位置；冷入口同样不依赖图片列表、内容接入窗口或另一种编辑入口碰巧加载样式。
@@ -28,14 +26,14 @@ class ImageNotEditableError extends Error {
   }
 }
 
-function editableSnapshotFromSource(source: ImageEditorSource): EditableImageSnapshot | null {
+function editableSnapshotFromSource(source: ImageEditorSource): EditableImageSnapshotDto | null {
   if (source.deleted_at) return null;
   if (source.status && source.status !== "ready") return null;
   if (typeof source.original !== "string"
     || typeof source.variants !== "object") {
     return null;
   }
-  return source as EditableImageSnapshot;
+  return source as EditableImageSnapshotDto;
 }
 
 async function loadEditableSnapshots(sources: ImageEditorSource[]) {
@@ -54,14 +52,14 @@ async function loadEditableSnapshots(sources: ImageEditorSource[]) {
   const itemById = new Map(response.items.map((item) => [item.id, item]));
   const items = ids.map((id) => itemById.get(id));
   if (items.some((item) => !item)) throw new ImageNotEditableError();
-  return items as EditableImageSnapshot[];
+  return items as EditableImageSnapshotDto[];
 }
 
 export async function prepareImageEditor(
   queryClient: QueryClient,
   sources: ImageEditorSource[]
 ): Promise<{
-  items: EditableImageSnapshot[];
+  items: EditableImageSnapshotDto[];
   vocabulary: IngestionVocabularyDto;
 }> {
   const [vocabulary, , items] = await Promise.all([

@@ -13,11 +13,7 @@ import {
   uploadCommonDeviceOptions,
   type SelectOption
 } from "../../../../lib/ui/select-options.js";
-import type {
-  AdminImageListItem,
-  FacetOption,
-  ImageDraft
-} from "../../../../lib/types.js";
+import type { AdminImageListItemDto, FacetOptionDto, ImageDraftDto } from "@imageshow/shared/browser";
 import type { IngestionJob, IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
 
 import type { IngestionPreviewTarget } from "../queue/cards/DuplicateMatchPanel.js";
@@ -190,9 +186,9 @@ export function IngestionWorkflowDefaults({
   expanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
   onChange: (defaults: IngestionAttributeDefaults) => void;
-  themes: FacetOption[];
-  tags: FacetOption[];
-  authors: FacetOption[];
+  themes: FacetOptionDto[];
+  tags: FacetOptionDto[];
+  authors: FacetOptionDto[];
   applyDisabled: boolean;
   onApply: () => void;
   onPrepareClear: PrepareImageAttributeClear;
@@ -287,20 +283,20 @@ export function IngestionWorkflowQueueBody({
   onClearImportParseErrors: () => void;
   storageName: (slug: string) => string;
   vocabulary: Readonly<{
-    themes: FacetOption[];
-    tags: FacetOption[];
-    authors: FacetOption[];
+    themes: FacetOptionDto[];
+    tags: FacetOptionDto[];
+    authors: FacetOptionDto[];
   }>;
   jobActions: Readonly<{
     isRetryPending: (job: IngestionJob) => boolean;
-    onPatch: (job: IngestionJob, patch: Partial<ImageDraft>) => void;
+    onPatch: (job: IngestionJob, patch: Partial<ImageDraftDto>) => void;
     onCancel: (job: IngestionJob) => void;
     onRetry: (job: IngestionJob) => void;
     onRemove: (job: IngestionJob) => void;
     onConfirmDuplicate: (job: IngestionJob) => void;
     onOpenDetail: (
       job: IngestionJob,
-      item: AdminImageListItem,
+      item: AdminImageListItemDto,
       opener: HTMLElement
     ) => void;
     onFocusWithin: (

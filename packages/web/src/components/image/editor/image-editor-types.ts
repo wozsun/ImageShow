@@ -1,12 +1,8 @@
-import type { ImageUpdateItemInputDto } from "@imageshow/shared/browser";
-import type {
-  EditableImageSnapshot,
-  AdminImageListItem,
-} from "../../../lib/types.js";
+import type { ImageUpdateItemInputDto, EditableImageSnapshotDto, AdminImageListItemDto } from "@imageshow/shared/browser";
 
-export type ImageEditorSource = Pick<AdminImageListItem, "id"> &
-  Partial<EditableImageSnapshot> &
-  Partial<Pick<AdminImageListItem, "deleted_at" | "status">>;
+export type ImageEditorSource = Pick<AdminImageListItemDto, "id"> &
+  Partial<EditableImageSnapshotDto> &
+  Partial<Pick<AdminImageListItemDto, "deleted_at" | "status">>;
 
 /** 编辑弹窗的用途：编辑属性，或只核对图片后移入回收站。 */
 export type ImageEditorIntent = "edit" | "delete";
@@ -19,7 +15,7 @@ export type ImageEditorTarget = {
 };
 
 export type ImageMetadataSaveCommit = {
-  authoritativeItems: EditableImageSnapshot[] | null;
+  authoritativeItems: EditableImageSnapshotDto[] | null;
   updates: ImageUpdateItemInputDto[];
 };
 

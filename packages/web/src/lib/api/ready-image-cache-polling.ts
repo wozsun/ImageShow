@@ -64,7 +64,7 @@ function pollingTracker(
 
 function projectionIsRebuilding(status: AdminCheckStatusDto | undefined) {
   return status?.redis.status === "ok"
-    && status.redis.data.image_projection.rebuilding;
+    && status.redis.data.ready_image_cache.rebuilding;
 }
 
 function redisResourceFailed(status: AdminCheckStatusDto | undefined) {

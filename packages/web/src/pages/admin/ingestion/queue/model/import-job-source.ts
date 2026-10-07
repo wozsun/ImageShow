@@ -1,4 +1,4 @@
-import type { ImageDraft } from "../../../../../lib/types.js";
+import type { ImageDraftDto } from "@imageshow/shared/browser";
 import { normalizeNamedSlug } from "../../../../../lib/image-draft.js";
 import type {
   IngestionJob,
@@ -109,7 +109,7 @@ function createUrlImportDraft(
   downloadUrl: string,
   defaults: IngestionAttributeDefaults,
   retainOriginalLink: boolean
-): ImageDraft {
+): ImageDraftDto {
   return {
     title: "",
     description: "",

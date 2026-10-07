@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { SplitActionButton } from "../actions/SplitActionButton.js";
-import { ConfirmDialog } from "../feedback/ConfirmDialog.js";
+import { ConfirmDialog } from "../dialog/ConfirmDialog.js";
 import type {
   ClearableImageAttribute,
   ImageAttributeClearPlan,

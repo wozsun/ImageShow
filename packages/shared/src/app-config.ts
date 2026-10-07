@@ -1,17 +1,11 @@
 import { defaultNormalizeProfile } from "./browser/image-variants.ts";
-import {
-  adminImagePageLimit,
-  altchaSolveTimeoutMs,
-  brightnesses,
-  devices,
-  imageDescriptionMaxLength,
-  imageTitleMaxLength,
-  ingestionBatchHardLimit,
-  ingestionQueueSnapshotMaxItems,
-  randomQueryLimits,
-  slugMaxLength
-} from "./browser/common.ts";
-import type { ImportSourceTypeDto } from "./browser/ingestion.ts";
+import { adminImagePageLimit } from "./browser/admin.ts";
+import { altchaSolveTimeoutMs } from "./browser/auth.ts";
+import { brightnesses, devices } from "./browser/image-classification.ts";
+import { imageDescriptionMaxLength, imageTitleMaxLength } from "./browser/images.ts";
+import { ingestionBatchHardLimit, ingestionQueueSnapshotMaxItems, type ImportSourceTypeDto } from "./browser/ingestion.ts";
+import { randomQueryLimits } from "./browser/random-limits.ts";
+import { slugMaxLength } from "./browser/vocabulary.ts";
 
 const shutdownHardExitMs = 8_000;
 const shutdownCleanupReserveMs = 2_000;

@@ -7,7 +7,11 @@ import {
   type AuthorMutationResponseDto,
   type AdminEntityListResponseDto,
   type AdminSettings,
-  type AdminPermission
+  type AdminPermission,
+  adminApiBasePath,
+  slugPattern,
+  type TagDto,
+  type ThemeDto
 } from "@imageshow/shared/browser";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
@@ -21,22 +25,17 @@ import { WorkspaceToolbarScrollbar } from "../../components/layout/WorkspaceTool
 import { WorkspaceToolbar } from "../../components/layout/WorkspaceToolbar.js";
 import { workspaceScrollContainer } from "../../lib/ui/workspace-scroll.js";
 import { AdminPagination } from "../../components/navigation/AdminPagination.js";
-import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
+import { ConfirmDialog } from "../../components/dialog/ConfirmDialog.js";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
 import {
   VocabularyAdminItem,
   vocabularyColumnLabels,
   type VocabularyColumnId
 } from "./VocabularyAdminItem.js";
-import {
-  adminApiBasePath,
-  slugFormatHint,
-  slugPattern
-} from "../../lib/constants.js";
+import { slugFormatHint } from "../../components/form/slug-format.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import { AdminSettingsBoundary } from "../../components/feedback/AdminSettingsBoundary.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
-import type { Author, Tag, Theme } from "../../lib/types.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import {
   invalidateVocabularyData,
@@ -52,7 +51,7 @@ import "../../styles/admin/entity.css";
 import "../../styles/admin/vocabulary.css";
 
 type VocabularyKind = "tags" | "themes" | "authors";
-type VocabularyEntry = Tag | Theme | Author;
+type VocabularyEntry = TagDto | ThemeDto | AuthorDto;
 type VocabularyMutation = "" | "delete";
 
 const vocabularyFeatures = tableFeatures({});

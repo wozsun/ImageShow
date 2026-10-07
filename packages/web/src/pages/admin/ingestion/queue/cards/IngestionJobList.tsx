@@ -1,9 +1,5 @@
 import { memo } from "react";
-import type {
-  FacetOption,
-  ImageDraft,
-  AdminImageListItem
-} from "../../../../../lib/types.js";
+import type { FacetOptionDto, ImageDraftDto, AdminImageListItemDto } from "@imageshow/shared/browser";
 import type { IngestionJob } from "../model/ingestion-job.js";
 import { IngestionJobCard } from "./IngestionJobCard.js";
 import type { IngestionPreviewTarget } from "./DuplicateMatchPanel.js";
@@ -12,10 +8,10 @@ type IngestionJobListProps = {
   jobs: IngestionJob[];
   busy: boolean;
   storageName: (slug: string) => string;
-  themes: FacetOption[];
-  tags: FacetOption[];
-  authors: FacetOption[];
-  onPatch: (job: IngestionJob, patch: Partial<ImageDraft>) => void;
+  themes: FacetOptionDto[];
+  tags: FacetOptionDto[];
+  authors: FacetOptionDto[];
+  onPatch: (job: IngestionJob, patch: Partial<ImageDraftDto>) => void;
   onCancel: (job: IngestionJob) => void;
   onRetry: (job: IngestionJob) => void;
   isRetryPending: (job: IngestionJob) => boolean;
@@ -23,7 +19,7 @@ type IngestionJobListProps = {
   onConfirmDuplicate: (job: IngestionJob) => void;
   onOpenDetail: (
     job: IngestionJob,
-    item: AdminImageListItem,
+    item: AdminImageListItemDto,
     opener: HTMLElement
   ) => void;
   onFocusWithin: (

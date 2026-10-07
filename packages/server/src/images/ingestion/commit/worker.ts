@@ -1,18 +1,17 @@
 import { randomUUIDv7 } from "node:crypto";
-import { imageVariants } from "@imageshow/shared/browser";
+import { imageVariants, type CompletedIngestionImageDto } from "@imageshow/shared/browser";
 import { ingestionPreparedPath, ingestionPreparedFiles } from "../raw/paths.ts";
 import { withActiveIngestionTempPaths } from "../raw/lease-registry.ts";
 import { updateIngestionExecutionProgress } from "../execution/session.ts";
-import type { CompletedIngestionImageDto } from "@imageshow/shared/browser";
 import { imageObjectKey } from "../../../storage/objects/image-paths.ts";
 import { ApiError } from "../../../core/api-error.ts";
 import { runWithAdvisoryLockAcquisitionSignal } from "../../../core/database/advisory-locks.ts";
 import { logger } from "../../../core/logger.ts";
-import { resolveTagSlugs } from "../../../tags/query.ts";
+import { resolveTagSlugs } from "../../../vocab/tags/query.ts";
 import {
   invalidateEntityCountCaches,
   refreshEntityVocabularies
-} from "../../../vocab/vocab-cache.ts";
+} from "../../../vocab/cache.ts";
 import { vocabularyAssociationLockRequests } from "../../../vocab/mutation-sync.ts";
 import {
   assertStorageWriteTarget,

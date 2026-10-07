@@ -1,4 +1,4 @@
-import type { ImageDraft } from "../../../../../lib/types.js";
+import type { ImageDraftDto } from "@imageshow/shared/browser";
 import type {
   IngestionCommonAttributeField,
   IngestionDetectedClassification,
@@ -49,10 +49,10 @@ export function ingestionJobAttributesEditable(job: IngestionJob) {
 }
 
 export function imageDraftPatchChanges(
-  draft: ImageDraft,
-  patch: Partial<ImageDraft>
+  draft: ImageDraftDto,
+  patch: Partial<ImageDraftDto>
 ) {
-  return (Object.keys(patch) as Array<keyof ImageDraft>).some((field) => {
+  return (Object.keys(patch) as Array<keyof ImageDraftDto>).some((field) => {
     const current = draft[field];
     const next = patch[field];
     if (Array.isArray(current) && Array.isArray(next)) {
@@ -68,7 +68,7 @@ export function imageDraftPatchChanges(
 function initialAttributePatch(
   job: IngestionJob,
   defaults: IngestionAttributeDefaults
-): Partial<ImageDraft> {
+): Partial<ImageDraftDto> {
   const provided = new Set<IngestionCommonAttributeField>(job.manifestProvidedCommonFields ?? []);
   return {
     ...(!provided.has("device") ? { device: defaults.device } : {}),
@@ -81,7 +81,7 @@ function initialAttributePatch(
 function readyAttributePatch(
   job: IngestionJob,
   defaults: IngestionAttributeDefaults
-): Partial<ImageDraft> {
+): Partial<ImageDraftDto> {
   const device = defaults.device === "auto"
     ? job.detectedClassification?.device
     : defaults.device;
@@ -100,7 +100,7 @@ function readyAttributePatch(
 export function ingestionAttributeDefaultsPatch(
   job: IngestionJob,
   defaults: IngestionAttributeDefaults
-): Partial<ImageDraft> {
+): Partial<ImageDraftDto> {
   const phase = ingestionAttributePhase(job);
   if (phase === "locked") return {};
   return {
@@ -115,7 +115,7 @@ export function ingestionAttributeDefaultsPatch(
 
 export function ingestionAttributeDefaultsActionMetadata(
   defaults: IngestionAttributeDefaults
-): Partial<ImageDraft> {
+): Partial<ImageDraftDto> {
   const theme = defaults.theme.trim();
   const author = defaults.author.trim();
   return {
@@ -149,9 +149,9 @@ export function canClearIngestionAttribute(job: IngestionJob) {
 }
 
 export function draftWithDetectedClassification(
-  draft: ImageDraft,
+  draft: ImageDraftDto,
   detected: IngestionDetectedClassification
-): ImageDraft {
+): ImageDraftDto {
   return {
     ...draft,
     device: draft.device === "auto" ? detected.device : draft.device,
@@ -160,7 +160,7 @@ export function draftWithDetectedClassification(
 }
 
 export function classificationOverrideFor(
-  draft: ImageDraft,
+  draft: ImageDraftDto,
   detected: IngestionDetectedClassification | undefined
 ): IngestionJob["classificationOverride"] {
   if (!detected) return undefined;

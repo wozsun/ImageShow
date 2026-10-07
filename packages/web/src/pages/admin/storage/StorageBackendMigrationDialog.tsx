@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { AsyncActionButton } from "../../../components/actions/AsyncActionButton.js";
-import { DialogFrame } from "../../../components/feedback/DialogFrame.js";
+import { DialogFrame } from "../../../components/dialog/DialogFrame.js";
 import { SelectMenu } from "../../../components/form/SelectMenu.js";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";

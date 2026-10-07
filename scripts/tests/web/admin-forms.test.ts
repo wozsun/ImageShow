@@ -7,7 +7,7 @@ import {
   type IngestionVocabularyDto,
   type RuntimeConfig
 } from "../../../packages/shared/src/browser.ts";
-import type { StorageBackendAdmin } from "../../../packages/web/src/lib/types.ts";
+import type { StorageBackendAdminDto } from "@imageshow/shared/browser";
 import type { VocabularyColumnId } from "../../../packages/web/src/pages/admin/VocabularyAdminItem.tsx";
 import { ApiClientError } from "../../../packages/web/src/lib/api/client.ts";
 import { invalidateImageDataAfterMetadataSave } from "../../../packages/web/src/lib/api/query-invalidation.ts";
@@ -708,7 +708,7 @@ test("[Web/后台表单] 存储删除反馈以服务端权威结果收口", () =
     failed_cleanup_job_count: 0,
     exhausted_cleanup_job_count: 0,
     deletion: { action: "migrate", blockers: ["images"] }
-  } satisfies StorageBackendAdmin;
+  } satisfies StorageBackendAdminDto;
   assert.deepEqual(storageBackendDeletionReasons(backend), [
     "仍有 3 张图片使用该后端；请先迁移这些图片。"
   ]);
@@ -755,7 +755,7 @@ test("[Web/后台表单] 存储编辑只提交变化字段并省略空凭据", (
       task_timeout_seconds: 300,
       secret_access_key_configured: false
     }
-  } satisfies StorageBackendAdmin;
+  } satisfies StorageBackendAdminDto;
   assert.deepEqual(storageBackendS3FormSettings(), {
     endpoint: "",
     region: "auto",
@@ -2160,7 +2160,7 @@ test("[Web/后台表单] 存储能力显示三态，连接测试后刷新一次�
     deletion: { action: "delete", blockers: [] },
     content_md5: null,
     s3: { ...storageBackendS3FormSettings(), secret_access_key_configured: true }
-  } satisfies StorageBackendAdmin;
+  } satisfies StorageBackendAdminDto;
   client.setQueryData(queryKeys.storageBackends, { backends: [backend] });
   await h.render(
     h.React.createElement(
@@ -2211,7 +2211,7 @@ test("[Web/后台表单] 本地存储公开 URL 回显、修改保存与清空�
     await import("../../../packages/web/src/pages/admin/storage/StorageBackendModal.tsx");
   const { ActionFeedbackProvider } =
     await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
-  const backend: StorageBackendAdmin = {
+  const backend: StorageBackendAdminDto = {
     slug: "local",
     type: "local",
     public_base_url: "https://images.example.test/pictures",
@@ -2307,7 +2307,7 @@ for (const kind of ["user", "storage"] as const) {
       failed_cleanup_job_count: 0,
       exhausted_cleanup_job_count: 0,
       deletion: { action: "delete", blockers: [] }
-    } satisfies StorageBackendAdmin;
+    } satisfies StorageBackendAdminDto;
     const data =
       kind === "user"
         ? { items: [{ username: "reviewer", role: "image" }] }

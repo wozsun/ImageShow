@@ -11,10 +11,7 @@ import {
   showOrderFromSearchParams,
   updateImageBrowseSearchParams
 } from "../../../packages/web/src/lib/gallery/gallery-query.ts";
-import {
-  publicHomeBrowsePath,
-  publicRootPath
-} from "../../../packages/web/src/lib/constants.ts";
+import { publicHomeBrowsePath, publicRootPath } from "@imageshow/shared/browser";
 import { buildRandomUrl } from "../../../packages/web/src/lib/gallery/random-url.ts";
 import {
   publicNavigationAutoHideDelayMs,

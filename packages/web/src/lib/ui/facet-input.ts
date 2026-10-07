@@ -1,15 +1,15 @@
 import {
   slugMaxLength,
-  slugPattern
+  slugPattern,
+  type FacetOptionDto
 } from "@imageshow/shared/browser";
-import type { FacetOption } from "../types.js";
 
 export type FacetTextMatch = {
   rank: number;
   ranges: [number, number][];
 };
 
-export type FacetSuggestion = FacetOption & {
+export type FacetSuggestion = FacetOptionDto & {
   slugMatch: FacetTextMatch | null;
   displayNameMatch: FacetTextMatch | null;
 };
@@ -49,7 +49,7 @@ export function matchFacetText(value: string, query: string): FacetTextMatch | n
 }
 
 export function facetSuggestions(
-  options: readonly FacetOption[],
+  options: readonly FacetOptionDto[],
   query: string,
   excludedSlugs: ReadonlySet<string> = new Set(),
   matchName: typeof matchFacetText = matchFacetText,

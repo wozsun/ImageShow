@@ -19,7 +19,7 @@ await runIntegrationScenario(async (runtime) => {
   const readyCacheAdminStatus =
     await import("../../../../packages/server/src/images/ready-cache/admin-status.ts");
   const redisInspection = await import("../../../../packages/server/src/checks/redis-inspection.ts");
-  const vocabCache = await import("../../../../packages/server/src/vocab/vocab-cache.ts");
+  const vocabCache = await import("../../../../packages/server/src/vocab/cache.ts");
   const runtimeAvailability =
     await import("../../../../packages/server/src/core/runtime-availability.ts");
   await runtimeAvailability.requireOperationalRedis();
@@ -183,7 +183,7 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(redisDeepCheck.deep_inspection.source, "deep");
   assert.ok(Number.isFinite(Date.parse(redisDeepCheck.deep_inspection.measured_at)));
   assert.ok(
-    redisDeepCheck.deep_inspection.image_projection_usage.core.member_count >=
+    redisDeepCheck.deep_inspection.ready_image_cache_usage.core.member_count >=
       incrementalMeta.itemCount
   );
   let deepCursor = "0";
@@ -217,7 +217,7 @@ await runIntegrationScenario(async (runtime) => {
     )
   ).reduce<number>((sum, value) => sum + Number(value ?? 0), 0);
   assert.equal(
-    redisDeepCheck.deep_inspection.image_projection_usage.core.memory_bytes,
+    redisDeepCheck.deep_inspection.ready_image_cache_usage.core.memory_bytes,
     directCoreMemory
   );
   const singleImageUpdate = await imageUpdate.updateImages([
@@ -489,8 +489,8 @@ await runIntegrationScenario(async (runtime) => {
     1
   );
 
-  const themeMutations = await import("../../../../packages/server/src/themes/mutations.ts");
-  const tagMutations = await import("../../../../packages/server/src/tags/mutations.ts");
+  const themeMutations = await import("../../../../packages/server/src/vocab/themes/mutations.ts");
+  const tagMutations = await import("../../../../packages/server/src/vocab/tags/mutations.ts");
   const { withTransactionOnClient } =
     await import("../../../../packages/server/src/core/database/transactions.ts");
   const tagClient = await database.pool.connect();
@@ -594,7 +594,7 @@ await runIntegrationScenario(async (runtime) => {
   const originalThemeImage = await readThemeImage();
   assert.equal(originalThemeImage.theme, null);
   await themeMutations.createTheme("none", "普通主题");
-  const themeQuery = await import("../../../../packages/server/src/themes/query.ts");
+  const themeQuery = await import("../../../../packages/server/src/vocab/themes/query.ts");
   assert.deepEqual(await themeQuery.resolveThemeSlugs(["none", "null"]), ["none", "null"]);
   for (const theme of ["clearable", "none"]) {
     assert.equal(

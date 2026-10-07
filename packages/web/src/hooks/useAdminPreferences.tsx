@@ -17,10 +17,10 @@ import {
   type AdminPreferenceKey,
   type AdminPreferences,
   type AdminPreferencesResponseDto,
-  type AdminPreferenceValues
+  type AdminPreferenceValues,
+  adminApiBasePath
 } from "@imageshow/shared/browser";
 import { apiWithEtag } from "../lib/api/client.js";
-import { adminApiBasePath } from "../lib/constants.js";
 import { queryKeys } from "../lib/api/query-keys.js";
 import {
   assignAdminPreference,

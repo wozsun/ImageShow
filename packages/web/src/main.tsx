@@ -5,7 +5,7 @@ import { BrowserRouter, useLocation } from "react-router";
 import { AppRoutes } from "./AppRoutes.js";
 import { SiteHead } from "./components/layout/SiteHead.js";
 import { OverlayScrollbar } from "./components/layout/OverlayScrollbar.js";
-import { adminBasePath } from "./lib/constants.js";
+import { adminBasePath } from "@imageshow/shared/browser";
 import "./styles/app-core.css";
 
 const queryClient = new QueryClient({

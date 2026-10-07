@@ -15,7 +15,7 @@ import {
 } from "react";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import { imageDataRevision } from "../../lib/api/image-data-revision.js";
-import { galleryDataWindowMaxConcurrentPageLoads } from "../../lib/constants.js";
+import { galleryDataWindowMaxConcurrentPageLoads } from "../../lib/gallery/gallery-budget.js";
 import {
   isPageScrollLocked,
   pageScrollRestoredEvent
@@ -38,7 +38,7 @@ import { isApiClientError } from "../../lib/api/client.js";
 import { imageMatchesFilters } from "../../lib/gallery/image-browse.js";
 import { galleryFiltersFromSearchParams } from "../../lib/gallery/gallery-query.js";
 import type { GalleryDataWindowMetrics } from "./gallery-debug-stats.js";
-import type { EditableImageSnapshot } from "../../lib/types.js";
+import type { EditableImageSnapshotDto } from "@imageshow/shared/browser";
 import {
   createGalleryRenderViewport,
   shouldRefreshGalleryRenderViewport
@@ -534,7 +534,7 @@ export function useGalleryDataWindow({
   }, [controller, imageQuery, queryClient, queryScope]);
 
   const refreshImage = useCallback(
-    (image: string | EditableImageSnapshot) => {
+    (image: string | EditableImageSnapshotDto) => {
       const imageId = typeof image === "string" ? image : image.id;
       const pauseToken = (nextRequestPauseTokenRef.current += 1);
       requestPauseRef.current = { controller, token: pauseToken };

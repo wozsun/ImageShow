@@ -7,7 +7,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../lib/api/client.js";
 import { queryKeys } from "../../../lib/api/query-keys.js";
-import { adminApiBasePath } from "../../../lib/constants.js";
+import { adminApiBasePath } from "@imageshow/shared/browser";
 
 const adminRedisInspectionPath = `${adminApiBasePath}/check/redis`;
 
@@ -88,7 +88,7 @@ export function readyImageProjectionUsage(
   ) {
     return null;
   }
-  const usage = recordValue(deepInspection.image_projection_usage);
+  const usage = recordValue(deepInspection.ready_image_cache_usage);
   const core = projectionUsageAggregate(usage?.core);
   const derived = derivedProjectionUsageAggregate(usage?.derived);
   return core && derived

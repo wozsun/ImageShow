@@ -4,13 +4,16 @@ import {
   adminPermissions,
   type AdminPermission,
   type AdminColorScheme,
-  type AdminRole
+  type AdminRole,
+  adminBasePath
 } from "@imageshow/shared/browser";
 import { AdminIcon, type AdminIconName } from "../../../components/icon/AdminIcon.js";
-import { adminBasePath, adminOverviewPath } from "../../../lib/constants.js";
 import { AdminNavGroup } from "./AdminNavGroup.js";
 import { type AdminRouteModuleKey } from "./admin-route-modules.js";
 import { useAdminRoutePreloadIntent } from "./useAdminRoutePreloadIntent.js";
+
+// 后台入口保持原地址，导航中的概览使用显式地址。
+const adminOverviewPath = `${adminBasePath}/overview`;
 
 type AdminNavigationLink = {
   kind: "link";

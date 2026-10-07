@@ -4,12 +4,12 @@ import {
   logLevels,
   type AdminLogLevelDto,
   type AdminLogPayloadDto,
-  type LogLevel
+  type LogLevel,
+  adminApiBasePath
 } from "@imageshow/shared/browser";
 import { api, isApiClientError } from "../../lib/api/client.js";
 import { SelectMenu } from "../../components/form/SelectMenu.js";
 import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
-import { adminApiBasePath } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import { formatBytes, formatDate } from "../../lib/ui/formatters.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";

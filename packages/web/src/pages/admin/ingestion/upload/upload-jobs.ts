@@ -1,4 +1,4 @@
-import type { ImageDraft } from "../../../../lib/types.js";
+import type { ImageDraftDto } from "@imageshow/shared/browser";
 import type { IngestionJob, IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
 import { normalizeNamedSlug } from "../../../../lib/image-draft.js";
 
@@ -11,7 +11,7 @@ import {
   uploadFileFingerprint
 } from "../queue/model/ingestion-job-deduplication.js";
 
-function createUploadDraft(defaults: IngestionAttributeDefaults): ImageDraft {
+function createUploadDraft(defaults: IngestionAttributeDefaults): ImageDraftDto {
   return {
     device: defaults.device,
     brightness: defaults.brightness,

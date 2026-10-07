@@ -1,5 +1,4 @@
-import type { IngestionStatusItemDto } from "@imageshow/shared/browser";
-import type { ImageDraft } from "../../../../../lib/types.js";
+import type { IngestionStatusItemDto, ImageDraftDto } from "@imageshow/shared/browser";
 import type { IngestionJob } from "./ingestion-job.js";
 import {
   ingestionJobFromServerItem,
@@ -12,7 +11,7 @@ export type DraftSyncTarget = Readonly<{
   sessionId: string;
   imageId: string;
   expectedVersion: number;
-  draft: ImageDraft;
+  draft: ImageDraftDto;
 }>;
 
 export type PendingDraftSync = {
@@ -67,7 +66,7 @@ export function matchesDraftTarget(
 
 function completedDraft(
   item: Extract<IngestionStatusItemDto, { status: "completed" }>["completed_item"]
-): ImageDraft {
+): ImageDraftDto {
   return {
     device: item.device,
     brightness: item.brightness,

@@ -1,7 +1,13 @@
 import { useMemo, useState, type RefObject } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { PublicImageDetailResponseDto, PublicImageView, ShowImageCardDto } from "@imageshow/shared/browser";
-import { imageDevice } from "@imageshow/shared/browser";
+import {
+  type PublicImageDetailResponseDto,
+  type PublicImageView,
+  type ShowImageCardDto,
+  imageDevice,
+  type EditableImageSnapshotDto,
+  type GalleryImageCardDto
+} from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import {
@@ -9,15 +15,11 @@ import {
   publicDetailValidation
 } from "../../lib/api/image-data-revision.js";
 import { errorMessage } from "../../lib/ui/formatters.js";
-import type {
-  EditableImageSnapshot,
-  GalleryImageCard,
-  PublicImageItem
-} from "../../lib/types.js";
+import type { PublicImageItem } from "../../lib/gallery/public-image.js";
 import { ImageDetailModal } from "./ImageDetailModal.js";
 import { useOptionalAuthSessionQuery } from "../../hooks/useAuthSession.js";
 
-function imagePlaceholder(card: ShowImageCardDto | GalleryImageCard): PublicImageItem {
+function imagePlaceholder(card: ShowImageCardDto | GalleryImageCardDto): PublicImageItem {
   return {
     brightness: "light",
     theme: null,
@@ -45,10 +47,10 @@ export function PublicImageDetail({
   onClose: () => void;
   onTrashCommitted?: (imageId: string) => void | Promise<void>;
   onTrashed?: (imageId: string) => void;
-  onItemUpdated?: (item: EditableImageSnapshot) => void;
+  onItemUpdated?: (item: EditableImageSnapshotDto) => void;
   onItemRefreshRequested?: (imageId: string) => void;
   returnFocusRef: RefObject<HTMLElement | null>;
-} & ({ view: "show"; card: ShowImageCardDto } | { view: "gallery"; card: GalleryImageCard })) {
+} & ({ view: "show"; card: ShowImageCardDto } | { view: "gallery"; card: GalleryImageCardDto })) {
   const placeholder = useMemo(() => imagePlaceholder(card), [card]);
   const [trashCommitted, setTrashCommitted] = useState(false);
   const authQuery = useOptionalAuthSessionQuery();

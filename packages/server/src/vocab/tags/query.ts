@@ -1,8 +1,8 @@
 import {
   getTagVocab,
   type VocabularyReadAccess
-} from "../vocab/vocab-cache.ts";
-import { resolveVocabularySlugs, resolveTermSlugMap } from "../vocab/terms.ts";
+} from "../cache.ts";
+import { resolveVocabularySlugs, resolveTermSlugMap } from "../terms.ts";
 
 export function resolveTagTermMap(
   terms: string[],

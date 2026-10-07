@@ -11,7 +11,7 @@ import {
   createAuthor,
   deleteAuthor,
   updateAuthorProfile
-} from "../authors/mutations.ts";
+} from "../vocab/authors/mutations.ts";
 import { readJsonBody } from "../core/http/json-body.ts";
 import {
   apiSuccess,
@@ -36,17 +36,17 @@ import {
   getAdminTagList,
   getAdminThemeList,
   type EntityCacheKind
-} from "../vocab/vocab-cache.ts";
+} from "../vocab/cache.ts";
 import {
   createTag,
   deleteTag,
   setTagDisplayName
-} from "../tags/mutations.ts";
+} from "../vocab/tags/mutations.ts";
 import {
   createTheme,
   deleteTheme,
   updateThemeDisplayName
-} from "../themes/mutations.ts";
+} from "../vocab/themes/mutations.ts";
 import { requireAdminPermission } from "../users/admin-authorization.ts";
 
 type EntityRouteOptions<CreateSchema extends z.ZodType, UpdateSchema extends z.ZodType> = {

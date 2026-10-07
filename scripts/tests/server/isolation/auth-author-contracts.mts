@@ -43,9 +43,9 @@ await runIntegrationScenario(async (runtime) => {
   const httpResponses = await import("../../../../packages/server/src/core/http/responses.ts");
   const redisClient = await import("../../../../packages/server/src/core/redis/client.ts");
   const apiError = await import("../../../../packages/server/src/core/api-error.ts");
-  const vocabCache = await import("../../../../packages/server/src/vocab/vocab-cache.ts");
-  const authorMutations = await import("../../../../packages/server/src/authors/mutations.ts");
-  const authorQuery = await import("../../../../packages/server/src/authors/query.ts");
+  const vocabCache = await import("../../../../packages/server/src/vocab/cache.ts");
+  const authorMutations = await import("../../../../packages/server/src/vocab/authors/mutations.ts");
+  const authorQuery = await import("../../../../packages/server/src/vocab/authors/query.ts");
   const adminVocabularyRoutes =
     await import("../../../../packages/server/src/routes/admin-vocabulary.ts");
   const { Hono } = await import("hono");

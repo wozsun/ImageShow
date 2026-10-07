@@ -7,10 +7,10 @@ import { GalleryCardRevealRegistry } from "./gallery-card-reveal.js";
 import type { GalleryWindowPosition } from "./gallery-data-window.js";
 import type { GalleryTileRenderProps } from "./gallery-tile-rendering.js";
 import { GalleryTile } from "./GalleryTile.js";
-import type { GalleryImageCard } from "../../lib/types.js";
+import type { GalleryImageCardDto } from "@imageshow/shared/browser";
 
 type GalleryVirtualWindowProps = {
-  cardSubtitle: (card: GalleryImageCard) => string;
+  cardSubtitle: (card: GalleryImageCardDto) => string;
   imageQuery: string;
   onOpen: GalleryTileRenderProps["onOpen"];
   positions: readonly GalleryWindowPosition[];

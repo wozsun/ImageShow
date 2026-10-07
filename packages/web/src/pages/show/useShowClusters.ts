@@ -3,7 +3,8 @@ import {
   unsetSelector,
   type PublicImageListResponseDto,
   type ShowClusterGroup,
-  type ShowOrder
+  type ShowOrder,
+  type EditableImageSnapshotDto
 } from "@imageshow/shared/browser";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, isApiClientError } from "../../lib/api/client.js";
@@ -18,7 +19,6 @@ import {
   imageMatchesFilters,
   shuffledImageBatch
 } from "../../lib/gallery/image-browse.js";
-import type { EditableImageSnapshot } from "../../lib/types.js";
 import {
   clusterQueueReserve,
   clusterRingCapacity,
@@ -288,7 +288,7 @@ export function useShowClusters(group: ShowClusterGroup, order: ShowOrder, enabl
   );
 
   const updateImage = useCallback(
-    (snapshot: EditableImageSnapshot) => {
+    (snapshot: EditableImageSnapshotDto) => {
       if (removedImageIdsRef.current.has(snapshot.id)) return;
       targetedRequestsRef.current.get(snapshot.id)?.abort();
       targetedRequestsRef.current.delete(snapshot.id);

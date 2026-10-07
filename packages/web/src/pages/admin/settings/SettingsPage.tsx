@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { RuntimeConfigResponseDto, RuntimeConfigSaveRequestDto } from "@imageshow/shared/browser";
+import { type RuntimeConfigResponseDto, type RuntimeConfigSaveRequestDto, adminApiBasePath } from "@imageshow/shared/browser";
 import { api, apiValidationIssues } from "../../../lib/api/client.js";
-import { adminApiBasePath } from "../../../lib/constants.js";
 import { queryKeys } from "../../../lib/api/query-keys.js";
 import { invalidateRuntimeData } from "../../../lib/api/query-invalidation.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import { AsyncActionButton } from "../../../components/actions/AsyncActionButton.js";
-import { ConfirmDialog } from "../../../components/feedback/ConfirmDialog.js";
+import { ConfirmDialog } from "../../../components/dialog/ConfirmDialog.js";
 import { QueryErrorState } from "../../../components/feedback/QueryErrorState.js";
 import { WorkspaceScrollBody } from "../../../components/layout/WorkspaceScrollBody.js";
 import { WorkspaceHeader } from "../../../components/layout/WorkspaceHeader.js";

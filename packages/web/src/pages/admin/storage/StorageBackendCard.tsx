@@ -6,7 +6,7 @@ import {
   useAsyncActionStatus,
   type AsyncActionStatus
 } from "../../../hooks/useAsyncActionStatus.js";
-import type { StorageBackendAdmin } from "../../../lib/types.js";
+import type { StorageBackendAdminDto } from "@imageshow/shared/browser";
 import {
   storageBackendLabel,
   storageTypeLabel
@@ -27,7 +27,7 @@ export function StorageBackendCard({
   onToggleEnabled,
   onRetryCleanup
 }: {
-  backend: StorageBackendAdmin;
+  backend: StorageBackendAdminDto;
   hasNonLocalBackend: boolean;
   busy: string;
   sortBusy: boolean;

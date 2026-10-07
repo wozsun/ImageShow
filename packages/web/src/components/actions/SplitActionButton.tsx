@@ -6,9 +6,9 @@ import {
   type ReactNode,
   type RefObject
 } from "react";
-import { AnchoredPopup } from "../feedback/AnchoredPopup.js";
-import { DirectActivationButton } from "../feedback/DirectActivationButton.js";
-import { MenuItemButton } from "../feedback/MenuItemButton.js";
+import { AnchoredPopup } from "../menu/AnchoredPopup.js";
+import { DirectActivationButton } from "./DirectActivationButton.js";
+import { MenuItemButton } from "../menu/MenuItemButton.js";
 import { AdminIcon, type AdminIconName } from "../icon/AdminIcon.js";
 import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
 import { preloadIntentProps } from "../../lib/ui/preload-intent.js";

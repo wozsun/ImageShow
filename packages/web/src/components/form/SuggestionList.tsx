@@ -5,8 +5,8 @@ import type {
   KeyboardEvent,
   SetStateAction
 } from "react";
-import { AnchoredPopup } from "../feedback/AnchoredPopup.js";
-import { MenuItemButton } from "../feedback/MenuItemButton.js";
+import { AnchoredPopup } from "../menu/AnchoredPopup.js";
+import { MenuItemButton } from "../menu/MenuItemButton.js";
 import { FacetSuggestionLabel } from "../data-display/FacetSuggestionLabel.js";
 import type { AnchoredMenuSize } from "../../lib/ui/menu-position.js";
 import type { FacetSuggestion } from "../../lib/ui/facet-input.js";

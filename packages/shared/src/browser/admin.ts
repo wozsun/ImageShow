@@ -1,14 +1,5 @@
-import type { AdminRole, LogLevel } from "./common.ts";
+import type { LogLevel } from "./log-levels.ts";
 import type { AdminImageDetailItemDto } from "./images.ts";
-
-export type AdminUserDto = {
-  username: string;
-  role: AdminRole;
-};
-
-export type AdminUsersResponseDto = {
-  items: AdminUserDto[];
-};
 
 export type LogFileSummaryDto = {
   name: string;
@@ -51,7 +42,7 @@ export type AdminOverviewDto = {
   light: number;
   top_themes: Array<{ theme: string; count: number }>;
   recent: AdminImageDetailItemDto[];
-  redis_cache: {
+  ready_image_cache: {
     state: string;
     synchronized: boolean;
     rebuilding: boolean;
@@ -127,7 +118,7 @@ export type AdminRedisStatusDto = {
     used_memory_rss_bytes: number | null;
     fragmentation_ratio: number | null;
   };
-  image_projection: ReadyImageCacheAdminStatusDto;
+  ready_image_cache: ReadyImageCacheAdminStatusDto;
 };
 
 export type AdminCheckStatusDto = {
@@ -166,4 +157,84 @@ export type AdminTrashCheckDto = {
     deleted_at: string;
     purge_pending: boolean;
   }>;
+};
+
+export const adminImagePageLimit = 60;
+
+export const adminBasePath = "/admin";
+
+export const adminApiBasePath = "/api/admin";
+
+export const adminImageSortFields = ["image_time", "created_at"] as const;
+
+export const adminImageOrders = ["latest", "oldest"] as const;
+
+export type AdminImageSort = {
+  sort_by: (typeof adminImageSortFields)[number];
+  order: (typeof adminImageOrders)[number];
+};
+
+export const defaultAdminImageSort: Readonly<AdminImageSort> = {
+  sort_by: "image_time",
+  order: "latest"
+};
+
+// 管理端界面偏好以 PostgreSQL 为权威，并由浏览器本地存储提供首帧与离线兜底。
+// 将键和值域集中在 shared；新增偏好时，类型、服务端校验和前端投影会同步暴露缺口。
+const adminColorSchemes = ["light", "dark", "system"] as const;
+
+const vocabularyViewModes = ["list", "card"] as const;
+
+export const adminPreferenceValueOptions = {
+  color_scheme: adminColorSchemes,
+  image_sort_by: adminImageSortFields,
+  image_sort_order: adminImageOrders,
+  image_thumbnail_fit: ["cover", "contain"],
+  theme_view_mode: vocabularyViewModes,
+  tag_view_mode: vocabularyViewModes,
+  author_view_mode: vocabularyViewModes
+} as const;
+
+export const adminPreferencesMaxBytes = 4 * 1024;
+
+export type AdminColorScheme = (typeof adminColorSchemes)[number];
+
+export type AdminPreferenceKey = keyof typeof adminPreferenceValueOptions;
+
+export const adminPreferenceKeys = Object.freeze(
+  Object.keys(adminPreferenceValueOptions) as AdminPreferenceKey[]
+);
+
+export type AdminPreferenceValues = {
+  [Key in AdminPreferenceKey]: (typeof adminPreferenceValueOptions)[Key][number];
+};
+
+export const defaultAdminPreferences: Readonly<AdminPreferenceValues> = Object.freeze({
+  color_scheme: "system",
+  image_sort_by: defaultAdminImageSort.sort_by,
+  image_sort_order: defaultAdminImageSort.order,
+  image_thumbnail_fit: "cover",
+  theme_view_mode: "card",
+  tag_view_mode: "card",
+  author_view_mode: "card"
+});
+
+export type AdminPreferences = Partial<AdminPreferenceValues>;
+
+export function normalizeAdminPreferences(value: unknown): AdminPreferences {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const input = value as Record<string, unknown>;
+  const preferences: Record<string, string> = {};
+  for (const key of adminPreferenceKeys) {
+    const candidate = input[key];
+    const options = adminPreferenceValueOptions[key] as readonly string[];
+    if (typeof candidate === "string" && options.includes(candidate)) {
+      preferences[key] = candidate;
+    }
+  }
+  return preferences as AdminPreferences;
+}
+
+export type AdminPreferencesResponseDto = {
+  preferences: AdminPreferences;
 };

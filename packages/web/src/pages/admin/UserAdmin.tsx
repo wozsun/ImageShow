@@ -1,6 +1,6 @@
 import { useId, useRef, useState, type FormEvent, type RefObject } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AdminUsersResponseDto } from "@imageshow/shared/browser";
+import { type AdminUsersResponseDto, adminApiBasePath, slugPattern, type AdminUserDto } from "@imageshow/shared/browser";
 import { api, isApiClientError } from "../../lib/api/client.js";
 import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
@@ -9,9 +9,9 @@ import { WorkspaceScrollBody } from "../../components/layout/WorkspaceScrollBody
 import { WorkspaceToolbar } from "../../components/layout/WorkspaceToolbar.js";
 import { useWorkspaceToolbarCollapse } from "../../hooks/useWorkspaceToolbarCollapse.js";
 import { WorkspaceToolbarScrollbar } from "../../components/layout/WorkspaceToolbarScrollbar.js";
-import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
-import { DialogFrame } from "../../components/feedback/DialogFrame.js";
-import { adminApiBasePath, slugFormatHint, slugPattern } from "../../lib/constants.js";
+import { ConfirmDialog } from "../../components/dialog/ConfirmDialog.js";
+import { DialogFrame } from "../../components/dialog/DialogFrame.js";
+import { slugFormatHint } from "../../components/form/slug-format.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import { copyTextToClipboard } from "../../lib/ui/clipboard.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
@@ -23,7 +23,6 @@ import {
   isValidAdminPassword,
   passwordPolicyHint
 } from "../../lib/auth/password.js";
-import type { AdminUser } from "../../lib/types.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 import { FieldError } from "../../components/form/FieldError.js";
@@ -62,8 +61,8 @@ export function UserAdmin() {
 
   const [mutation, setMutation] = useState<"" | "delete">("");
   const [createError, setCreateError] = useState("");
-  const [confirmDelete, setConfirmDelete] = useState<AdminUser | null>(null);
-  const [resetting, setResetting] = useState<AdminUser | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<AdminUserDto | null>(null);
+  const [resetting, setResetting] = useState<AdminUserDto | null>(null);
   const resetPasswordTriggerRef = useRef<HTMLButtonElement | null>(null);
   const createAction = useAsyncActionStatus({ resultDurationMs: null });
   const generatePasswordStatus = useAsyncActionStatus();
@@ -259,7 +258,7 @@ function UserCard({
   onResetPassword,
   onDelete
 }: {
-  user: AdminUser;
+  user: AdminUserDto;
   onResetPassword: (trigger: HTMLButtonElement) => void;
   onDelete: () => void;
 }) {

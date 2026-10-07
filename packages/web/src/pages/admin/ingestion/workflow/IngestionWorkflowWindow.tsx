@@ -7,8 +7,8 @@ import {
   useState,
   type RefObject
 } from "react";
-import { ConfirmDialog } from "../../../../components/feedback/ConfirmDialog.js";
-import { DialogFrame } from "../../../../components/feedback/DialogFrame.js";
+import { ConfirmDialog } from "../../../../components/dialog/ConfirmDialog.js";
+import { DialogFrame } from "../../../../components/dialog/DialogFrame.js";
 // 上传能力本身已经按需加载；不足 6 KiB（压缩后）的详情共享样式与逻辑留在
 // 同一能力块，避免任务首击再产生一个懒加载边界。
 import { ImageDetailModal } from "../../../../components/image/ImageDetailModal.js";
@@ -18,11 +18,7 @@ import type { SelectOption } from "../../../../lib/ui/select-options.js";
 import type { PrepareImageAttributeClear } from "../../../../lib/image-draft.js";
 import { useTwoStepConfirmation } from "../../../../hooks/useTwoStepConfirmation.js";
 import { useIngestionDuplicateDetails } from "../queue/useIngestionDuplicateDetails.js";
-import type {
-  FacetOption,
-  ImageDraft,
-  AdminImageListItem
-} from "../../../../lib/types.js";
+import type { FacetOptionDto, ImageDraftDto, AdminImageListItemDto } from "@imageshow/shared/browser";
 import type { IngestionJob, IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
 
 import type { IngestionPreviewTarget } from "../queue/cards/DuplicateMatchPanel.js";
@@ -60,14 +56,14 @@ type IngestionWorkflowWindowProps = {
   onClose: (options?: IngestionWorkflowCloseOptions) => void;
   defaults: IngestionAttributeDefaults;
   onDefaultsChange: (defaults: IngestionAttributeDefaults) => void;
-  themes: FacetOption[];
-  tags: FacetOption[];
-  authors: FacetOption[];
+  themes: FacetOptionDto[];
+  tags: FacetOptionDto[];
+  authors: FacetOptionDto[];
   importParseErrors: ImportManifestParseError[];
   onClearImportParseErrors: () => void;
   storageName: (slug: string) => string;
   onAddFiles: (files: FileList | null) => void;
-  onPatchJob: (job: IngestionJob, patch: Partial<ImageDraft>) => void;
+  onPatchJob: (job: IngestionJob, patch: Partial<ImageDraftDto>) => void;
   onCancelJob: (job: IngestionJob) => void;
   onRetryJob: (job: IngestionJob) => void;
   onRemoveJob: (job: IngestionJob) => void;
@@ -251,7 +247,7 @@ export function IngestionWorkflowWindow({
 }: IngestionWorkflowWindowProps) {
   const fileInputId = useId();
   const [defaultsExpanded, setDefaultsExpanded] = useState(false);
-  const [detailItem, setDetailItem] = useState<AdminImageListItem | null>(null);
+  const [detailItem, setDetailItem] = useState<AdminImageListItemDto | null>(null);
   const [preview, setPreview] = useState<IngestionPreviewTarget | null>(null);
   const [pendingCleanup, setPendingCleanup] = useState<Readonly<{
     actionId: IngestionCleanupActionId;
@@ -352,7 +348,7 @@ export function IngestionWorkflowWindow({
   const openJobDetail = useCallback(
     (
       job: IngestionJob,
-      item: AdminImageListItem,
+      item: AdminImageListItemDto,
       opener: HTMLElement
     ) => {
       const card = opener.closest<HTMLElement>("[data-ingestion-job-id]");

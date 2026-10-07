@@ -1,7 +1,7 @@
 import {
   DirectActivationButton,
   type DirectActivationButtonProps
-} from "./DirectActivationButton.js";
+} from "../actions/DirectActivationButton.js";
 
 /**
  * Shared activation boundary for items rendered in anchored menus.

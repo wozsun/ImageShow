@@ -8,6 +8,7 @@ export type {
 } from "./image-editor-types.js";
 
 export type ImageEditorCapabilityModule = typeof import("./image-editor-capability.js");
+export type ImageEditorOpenResult = "opened" | "failed" | "interrupted";
 
 export const loadImageEditorCapabilityModule =
   createPageLifetimeModuleLoader<ImageEditorCapabilityModule>(

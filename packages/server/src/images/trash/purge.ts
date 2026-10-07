@@ -15,7 +15,7 @@ import {
   assertStorageRemovalResults,
   removeStorageObjectsAndConfirm
 } from "../../storage/objects/access.ts";
-import { invalidateEntityCountCaches } from "../../vocab/vocab-cache.ts";
+import { invalidateEntityCountCaches } from "../../vocab/cache.ts";
 import { withTrashMembershipLock } from "./membership-lock.ts";
 import { imageHasTrashPurgeJobSql } from "./purge-state.ts";
 import type { BackgroundJob } from "../../jobs/types.ts";

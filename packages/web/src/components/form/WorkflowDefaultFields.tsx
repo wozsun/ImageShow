@@ -4,7 +4,7 @@ import { NamedSlugInput } from "./NamedSlugInput.js";
 import { SelectMenu } from "./SelectMenu.js";
 import { TagInput } from "./TagInput.js";
 import type { SelectOption } from "../../lib/ui/select-options.js";
-import type { FacetOption } from "../../lib/types.js";
+import type { FacetOptionDto } from "@imageshow/shared/browser";
 
 export type WorkflowDefaultValues = {
   device: string;
@@ -44,9 +44,9 @@ export function WorkflowDefaultFields({
   };
   deviceOptions: readonly SelectOption[];
   brightnessOptions: readonly SelectOption[];
-  themes: FacetOption[];
-  authors: FacetOption[];
-  tags: FacetOption[];
+  themes: FacetOptionDto[];
+  authors: FacetOptionDto[];
+  tags: FacetOptionDto[];
   placeholders: {
     theme: string;
     author: string;

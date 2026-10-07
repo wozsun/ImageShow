@@ -1,4 +1,4 @@
-import { randomQueryLimits } from "./common.ts";
+import { randomQueryLimits } from "./random-limits.ts";
 
 type TagClause = readonly [string, ...string[]];
 export type TagExpression = { anyOf: readonly [TagClause, ...TagClause[]] } | null;

@@ -10,12 +10,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   adminPermissions,
   type AdminImageSort,
-  type AdminSettings
+  type AdminSettings,
+  type AdminImageListItemDto,
+  type EditableImageSnapshotDto
 } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { StableButtonLabel } from "../../../components/data-display/StableButtonLabel.js";
 import { TwoStepConfirmButton } from "../../../components/actions/TwoStepConfirmButton.js";
-import { ConfirmDialog } from "../../../components/feedback/ConfirmDialog.js";
+import { ConfirmDialog } from "../../../components/dialog/ConfirmDialog.js";
 import {
   ActionFeedbackOutlet,
   ActionFeedbackRegion,
@@ -28,7 +30,6 @@ import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import { AdminSettingsBoundary } from "../../../components/feedback/AdminSettingsBoundary.js";
 import { useIngestionVocabulary } from "../../../lib/api/ingestion-vocabulary.js";
 import { useStorageNameResolver } from "../../../lib/api/storage-options.js";
-import type { AdminImageListItem, EditableImageSnapshot } from "../../../lib/types.js";
 import { createPageLifetimeModuleLoader } from "../../../lib/page-lifetime-module-loader.js";
 import { AdminImageCard } from "./AdminImageCard.js";
 import {
@@ -190,7 +191,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
     clearSelection: selection.clear,
     invalidateData
   });
-  const detailCapability = useAdminImageDetailCapability<AdminImageListItem>((error) => {
+  const detailCapability = useAdminImageDetailCapability<AdminImageListItemDto>((error) => {
     reportAdminUiError("image_admin.detail_load", error);
     showFeedback("图片详情加载失败，请重新加载页面", "error");
   });
@@ -313,19 +314,16 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
     ).finally(() => setIdInputPending(false));
   };
   // ID 弹窗保持到编辑弹窗就绪，二者在同一次渲染中交接，避免中间露出页面。
-  const openEditorForImageIds = async (items: EditableImageSnapshot[]) => {
-    if (!idInput) return false;
+  const openEditorForImageIds = async (items: EditableImageSnapshotDto[]) => {
+    if (!idInput) return "interrupted" as const;
     const { intent, opener } = idInput;
-    let opened = false;
-    await editorCapability.open(
+    return editorCapability.open(
       { sources: items, intent, fromDialog: true },
       opener,
       () => {
-        opened = true;
         setIdInput(null);
       }
     );
-    return opened;
   };
   const selectedEditorPending = Boolean(
     editorCapability.pending &&

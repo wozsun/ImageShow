@@ -1,5 +1,6 @@
 import type { ImageVariant, ImageVariantsDto } from "./image-variants.ts";
-import { normalizeHttpsUrlInput, type Brightness, type Device } from "./common.ts";
+import { normalizeHttpsUrlInput } from "./url-input.ts";
+import { type Brightness, type Device } from "./image-classification.ts";
 import type {
   AdminImageListItemDto,
   ImageCardBaseDto,
@@ -508,3 +509,7 @@ export type IngestionQueueActionResultDto = {
     }
   >;
 };
+
+export const ingestionBatchHardLimit = 3_600;
+
+export const ingestionQueueSnapshotMaxItems = 100;

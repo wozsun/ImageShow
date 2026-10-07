@@ -1,4 +1,4 @@
-import type { ApiSuccessResponseDto } from "./common.ts";
+import type { ApiSuccessResponseDto } from "./api.ts";
 
 export type StorageBackendDeleteBlocker =
   "built_in" | "default" | "images" | "ingestion_sessions" | "cleanup_jobs";
@@ -99,3 +99,5 @@ export type StorageBackendAdminDto = StorageBackendAdminBaseDto &
 export type StorageBackendsAdminResponseDto = {
   backends: StorageBackendAdminDto[];
 };
+
+export type StorageType = "local" | "s3";

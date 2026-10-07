@@ -2,12 +2,11 @@ import { useCallback, type Ref } from "react";
 import type { AltchaWidgetElement } from "altcha";
 import type { AltchaGlobal } from "altcha/types";
 import type {} from "altcha/types/react";
-import { altchaSolveTimeoutMs } from "@imageshow/shared/browser";
+import { altchaSolveTimeoutMs, adminApiBasePath } from "@imageshow/shared/browser";
 import "altcha/external";
 import "altcha/altcha.css";
 import "altcha/i18n/zh-cn";
 import pbkdf2WorkerUrl from "altcha/workers/pbkdf2?worker&url";
-import { adminApiBasePath } from "../../../lib/constants.js";
 import "../../../styles/admin/login-challenge.css";
 
 function createPbkdf2Worker() {

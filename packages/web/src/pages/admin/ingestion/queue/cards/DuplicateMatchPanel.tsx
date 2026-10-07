@@ -1,7 +1,6 @@
-import { imageVariantUrl } from "@imageshow/shared/browser";
+import { imageVariantUrl, type AdminImageListItemDto } from "@imageshow/shared/browser";
 import { ImageThumbnailFrame } from "../../../../../components/image/ImageThumbnailFrame.js";
 import { formatImageClassification, imageDisplayTitle } from "../../../../../lib/ui/formatters.js";
-import type { AdminImageListItem } from "../../../../../lib/types.js";
 
 export type IngestionPreviewTarget = {
   jobId: string;
@@ -23,10 +22,10 @@ export function DuplicateMatchPanel({
   onConfirm,
   onCancel
 }: {
-  libraryItems: AdminImageListItem[];
+  libraryItems: AdminImageListItemDto[];
   disabled: boolean;
   confirmDisabled?: boolean;
-  onOpenDetail: (item: AdminImageListItem, opener: HTMLElement) => void;
+  onOpenDetail: (item: AdminImageListItemDto, opener: HTMLElement) => void;
   onConfirm: () => void;
   onCancel: () => void;
 }) {

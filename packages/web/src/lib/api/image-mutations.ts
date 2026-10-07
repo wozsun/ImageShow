@@ -1,11 +1,11 @@
-import type {
-  ImagePurgeRequestDto,
-  ImagePurgeResponseDto,
-  ImageRestoreResponseDto,
-  ImageTrashResponseDto
+import {
+  type ImagePurgeRequestDto,
+  type ImagePurgeResponseDto,
+  type ImageRestoreResponseDto,
+  type ImageTrashResponseDto,
+  adminApiBasePath
 } from "@imageshow/shared/browser";
 import { api } from "./client.js";
-import { adminApiBasePath } from "../constants.js";
 
 function imageActionRequest<T>(path: string, body: unknown) {
   return api<T>(`${adminApiBasePath}/images/${path}`, {

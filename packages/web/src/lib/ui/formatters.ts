@@ -1,4 +1,4 @@
-import type { AdminImageListItem } from "../types.js";
+import type { AdminImageListItemDto } from "@imageshow/shared/browser";
 
 export function shortImageId(id: string) {
   return `#${id.slice(-12)}`;
@@ -23,7 +23,7 @@ export function facetDisplayName(
 }
 
 export function formatImageClassification(
-  item: Pick<AdminImageListItem, "device" | "brightness" | "theme">
+  item: Pick<AdminImageListItemDto, "device" | "brightness" | "theme">
 ) {
   return [`${item.device}/${item.brightness}`, item.theme].filter(Boolean).join(" · ");
 }

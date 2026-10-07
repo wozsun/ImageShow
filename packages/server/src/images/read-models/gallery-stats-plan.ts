@@ -8,7 +8,7 @@ import {
   type TagExpression
 } from "@imageshow/shared/browser";
 import { ApiError } from "../../core/api-error.ts";
-import type { VocabularyReadAccess } from "../../vocab/vocab-cache.ts";
+import type { VocabularyReadAccess } from "../../vocab/cache.ts";
 import {
   createImageFilterPlan,
   resolveImageFilterPlan,

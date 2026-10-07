@@ -4,7 +4,7 @@ import { ApiError } from "../core/api-error.ts";
 import {
   invalidateEntityCountCaches,
   refreshEntityVocabularies
-} from "./vocab-cache.ts";
+} from "./cache.ts";
 
 export type VocabularyEntity = "author" | "tag" | "theme";
 

@@ -13,7 +13,7 @@ import {
   getAuthorVocab,
   getTagVocab,
   getThemeVocab
-} from "../../vocab/vocab-cache.ts";
+} from "../../vocab/cache.ts";
 
 type FacetMembershipRow = {
   themes: string[];

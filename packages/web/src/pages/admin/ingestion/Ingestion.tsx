@@ -6,14 +6,13 @@ import {
   useRef,
   useState
 } from "react";
-import type { AdminSettings } from "@imageshow/shared/browser";
+import type { AdminSettings, FacetOptionDto } from "@imageshow/shared/browser";
 import { storageBackendLabel } from "../../../lib/ui/select-options.js";
 import { useIngestionVocabulary } from "../../../lib/api/ingestion-vocabulary.js";
 import {
   storageNameResolver,
   useStorageOptions
 } from "../../../lib/api/storage-options.js";
-import type { FacetOption } from "../../../lib/types.js";
 import type { IngestionJob, IngestionAttributeDefaults } from "./queue/model/ingestion-job.js";
 
 import { ingestionJobNeedsDuplicateConfirmation } from "./queue/model/duplicate-match.js";
@@ -38,7 +37,7 @@ import { type IngestionActivation } from "./ingestion-activation.js";
 import "../../../styles/admin/image-workflow.css";
 import "../../../styles/admin/ingestion.css";
 
-const EMPTY_FACET_OPTIONS: FacetOption[] = [];
+const EMPTY_FACET_OPTIONS: FacetOptionDto[] = [];
 type ImportSourceDialogModule = typeof import("./import/ImportSourceDialog.js");
 
 function initialAttributeDefaults(): IngestionAttributeDefaults {

@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { api } from "../../../lib/api/client.js";
 import { AsyncActionButton } from "../../../components/actions/AsyncActionButton.js";
 import { PasswordInput } from "../../../components/form/PasswordInput.js";
-import { adminApiBasePath } from "../../../lib/constants.js";
+import { adminApiBasePath } from "@imageshow/shared/browser";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import { isValidAdminPassword, passwordPolicyHint } from "../../../lib/auth/password.js";
 import { useAuthSessionQuery } from "../../../hooks/useAuthSession.js";

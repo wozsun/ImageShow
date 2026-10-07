@@ -18,7 +18,7 @@ type ReadyCacheFilterIndexModule =
   typeof import("../../../../packages/server/src/images/ready-cache/indexes/filter.ts");
 type RuntimeAvailabilityModule =
   typeof import("../../../../packages/server/src/core/runtime-availability.ts");
-type VocabCacheModule = typeof import("../../../../packages/server/src/vocab/vocab-cache.ts");
+type VocabCacheModule = typeof import("../../../../packages/server/src/vocab/cache.ts");
 
 await runIntegrationScenario(async (runtime) => {
   const adminImages = (await import(
@@ -47,7 +47,7 @@ await runIntegrationScenario(async (runtime) => {
     runtime.moduleUrl("packages/server/src/core/runtime-availability.ts")
   )) as RuntimeAvailabilityModule;
   const vocabCache = (await import(
-    runtime.moduleUrl("packages/server/src/vocab/vocab-cache.ts")
+    runtime.moduleUrl("packages/server/src/vocab/cache.ts")
   )) as VocabCacheModule;
   const { Hono } = await import("hono");
   const { registerPublicRoutes } = await import("../../../../packages/server/src/routes/public.ts");

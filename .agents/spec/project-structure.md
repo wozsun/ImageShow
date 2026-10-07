@@ -31,6 +31,7 @@ packages/web ─────► packages/shared
 - `packages/shared` 只保存前后端共同需要的配置默认值、稳定类型、常量、DTO 与浏览器安全纯规则。
 - 默认入口可供 Server 与构建配置使用；Web 只通过浏览器安全入口读取可进入 bundle 的契约。
 - 数据库行型、执行所有权、Node.js 能力和未脱敏凭据不得进入浏览器入口。
+- 浏览器安全契约按鉴权、后台、图片、词表、存储、接入及 API 边界分别维护，入口只汇出这些领域；领域间直接导入所属模块，不通过入口反向汇聚。
 
 ## Server
 
@@ -40,7 +41,7 @@ packages/web ─────► packages/shared
 index / http-app / routes
           │
           ▼
-images / storage / random / jobs / checks / vocab / authors / tags / themes / users
+images / storage / random / jobs / checks / vocab / users
           │
           ▼
 core / config
@@ -55,7 +56,7 @@ core / config
 - `core/redis/` 只拥有唯一 client、连接与能力探测和通用 Redis 原语；具体领域拥有自己的 Lua、命令注册、参数布局和返回解析，不以导入副作用反转依赖方向。
 - 三档名称、对象目录、资源路径与随机 API 尺寸统一使用 `large/medium/small`；数据库保留 `l_/m_/s_` 列前缀，列映射由图片事实读取模块持有。
 - `images/` 拥有图片读写、展示、分类、回收站、缩略图、read model、ready cache 与 Ingestion；分类只更新 metadata 与必要投影，不得依赖或触发对象搬迁。`trash/` 集中回收站与永久删除流程，`serving/` 集中图片寻址、对象响应与外部原图处理。正式展示图与缩略图属于公开资源，外部原图由管理路由先校验会话再交给 `serving/`，访问与投影规则见[安全与主机](../reference/security.md#会话与鉴权)。回收站永久删除的逐图意图由 `background_job.target_id` 与幂等键持有，metadata 不保存任务字段。
-- 词表领域拥有词条与关联的集合修改事务，复用图片领域的 revision 与缓存交接；不取得对象位置或存储传输职责。
+- `vocab/` 统一拥有作者、标签、主题的查询与集合修改事务，复用图片领域的 revision 与缓存交接；不取得对象位置或存储传输职责。
 - `images/storage-location/` 拥有正式图片后端位置事务、并发协调及提交后缓存交接；`storage/` 提供存储 I/O 与清理能力，不取得图片位置事务所有权。正式对象键独立于可编辑分类，只有接入、后端迁移、删除和显式运维迁移可以创建、复制或删除正式对象。
 - `images/ingestion/` 统一拥有 Upload / Import 会话、队列、raw、来源、执行、提交、取消、清理和 Worker；`raw/` 拥有 `data/temp` 内的统一文件、租约与清理，来源由任务信息保存。会话状态不得进入通用 `jobs/` 或建立第二套恢复真相。
 - `images/variants/` 拥有三档编码、文件核验与事实投影；shared 拥有地址表边界、档位规则和固定 WebP 对象键。
@@ -77,6 +78,8 @@ hooks ──► lib
 
 - `pages/` 负责编排路由页面，页面专属组件、Hook、查询和状态机就近维护。
 - `components/` 只保存稳定跨页面 UI；`hooks/` 只保存稳定跨页面生命周期或交互所有者；`lib/` 保存无界面客户端、查询契约和纯能力，三者不得反向依赖具体页面。
+- 通用弹窗与 portal 归 `components/dialog/`，锚定菜单归 `components/menu/`，直接激活动作归 `components/actions/`；`components/feedback/` 只拥有操作反馈与加载、错误边界。
+- Web 直接消费 shared 的 DTO 与公共常量，不另建总类型别名层；页面表单类型就近维护，公开图片组合类型与画廊预算归 `lib/gallery/`。
 - 公开浏览的 URL 筛选动作由同一 Hook 持有，导航组件只组合共同视图；画廊与展映分别拥有页面生命周期。展映入口保留路由懒加载，渲染实现位于页面所属的 `pixi/`。
 - 普通公开页面与后台共用会话所有者；嵌入路由始终是访客，不挂载会话所有者，共享详情按可选会话上下文消费身份，不直接读取认证缓存或另建探测入口。
 - `pages/admin/ingestion/` 以 Ingestion 为上位领域，以 `upload` / `import` 为来源子模式；queue、workflow、来源 owner 与浏览器资源所有权保持单一。

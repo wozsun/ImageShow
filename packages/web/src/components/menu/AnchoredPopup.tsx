@@ -15,7 +15,7 @@ import {
   localizeAnchoredPosition
 } from "../../lib/ui/menu-position.js";
 import { OverlayScrollbar } from "../layout/OverlayScrollbar.js";
-import { DialogPortalTargetContext } from "./DialogPortalContext.js";
+import { DialogPortalTargetContext } from "../dialog/DialogPortalContext.js";
 import { InteractionSurfaceContext } from "../../lib/ui/interaction-surface.js";
 
 type AnchoredPopupProps = Omit<ComponentPropsWithoutRef<"div">, "children" | "ref"> & {

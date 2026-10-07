@@ -86,7 +86,7 @@ test("[Web/后台] ready cache 检查面板区分当前数量与完整重建进�
               used_memory_rss_bytes: 789,
               fragmentation_ratio: 1
             },
-            image_projection: projection
+            ready_image_cache: projection
           },
           error: null
         }
@@ -193,7 +193,7 @@ test("[Web/后台] ready cache 检查面板区分当前数量与完整重建进�
         complete: true,
         source: "deep",
         measured_at: "2026-08-11T00:00:05.000Z",
-        image_projection_usage: {
+        ready_image_cache_usage: {
           core: {
             key_count: 8,
             member_count: 456,
@@ -261,7 +261,7 @@ test("[Web/后台] ready cache 检查面板区分当前数量与完整重建进�
                 ...query.data.redis,
                 data: {
                   ...query.data.redis.data,
-                  image_projection: rebuildingProjection
+                  ready_image_cache: rebuildingProjection
                 }
               }
             }
@@ -299,7 +299,7 @@ test("[Web/后台] 自动 Redis 占用检测在 Strict Mode 单飞并在重新�
       complete: true,
       source: "deep",
       measured_at: "2026-08-11T00:00:05.000Z",
-      image_projection_usage: {
+      ready_image_cache_usage: {
         core: { key_count: 8, member_count: 123, memory_bytes: 8_192 },
         derived: { key_count: 0, member_count: 0, memory_bytes: 0 }
       }
@@ -751,7 +751,7 @@ test("[Web/后台] 检查页保留完整 Redis 快照并串行化自动检测与
           used_memory_rss_bytes: 789,
           fragmentation_ratio: 1
         },
-        image_projection: projection(rebuilding)
+        ready_image_cache: projection(rebuilding)
       },
       error: null
     }
@@ -766,7 +766,7 @@ test("[Web/后台] 检查页保留完整 Redis 快照并串行化自动检测与
       complete,
       source: "deep",
       measured_at: measuredAt,
-      image_projection_usage: {
+      ready_image_cache_usage: {
         core: {
           key_count: 8,
           member_count: 124,

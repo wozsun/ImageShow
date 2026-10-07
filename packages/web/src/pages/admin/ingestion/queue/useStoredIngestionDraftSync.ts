@@ -7,9 +7,9 @@ import {
 } from "react";
 import {
   ingestionBatchHardLimit,
-  ingestionStatusBatchMaxItems
+  ingestionStatusBatchMaxItems,
+  type ImageDraftDto
 } from "@imageshow/shared/browser";
-import type { ImageDraft } from "../../../../lib/types.js";
 import type { IngestionJob } from "./model/ingestion-job.js";
 import { isApiClientError } from "../../../../lib/api/client.js";
 import type { IngestionQueueAction } from "./model/ingestion-queue-state.js";
@@ -140,7 +140,7 @@ export function useStoredIngestionDraftSync({
     (
       id: string,
       sync: PendingDraftSync,
-      authoritativeDraft?: ImageDraft
+      authoritativeDraft?: ImageDraftDto
     ) => {
       if (syncsRef.current.get(id) !== sync) return;
       syncsRef.current.delete(id);
@@ -570,7 +570,7 @@ export function useStoredIngestionDraftSync({
   const updateJobDraft = useCallback(
     (
       id: string,
-      patch: Partial<ImageDraft>
+      patch: Partial<ImageDraftDto>
     ) => {
       const current = jobsRef.current.find((job) => job.id === id);
       dispatch({ type: "patch-draft", id, patch });

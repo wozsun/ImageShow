@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect } from "react";
 import { useLocation } from "react-router";
 import { ensureMeta } from "../../lib/ui/document-meta.js";
-import { adminBasePath } from "../../lib/constants.js";
+import { adminBasePath } from "@imageshow/shared/browser";
 import { useSiteConfig } from "../../lib/api/site-queries.js";
 import { applyUiColorContext } from "../../lib/ui/apply-ui-color-context.js";
 

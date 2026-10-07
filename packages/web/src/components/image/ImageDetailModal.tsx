@@ -1,4 +1,10 @@
-import { imageVariantUrl } from "@imageshow/shared/browser";
+import {
+  imageVariantUrl,
+  type AdminImageDetailItemDto,
+  type EditableImageSnapshotDto,
+  type AdminImageListItemDto,
+  type ImageDetailItemDto
+} from "@imageshow/shared/browser";
 import {
   Component,
   Suspense,
@@ -17,13 +23,7 @@ import {
   formatDate
 } from "../../lib/ui/formatters.js";
 import { brightnessOptionLabel, deviceOptionLabel } from "../../lib/ui/select-options.js";
-import type {
-  AdminImageDetailItem,
-  EditableImageSnapshot,
-  AdminImageListItem,
-  ImageDetailItem,
-  PublicImageItem
-} from "../../lib/types.js";
+import type { PublicImageItem } from "../../lib/gallery/public-image.js";
 import { useGalleryFacets } from "../../lib/api/site-queries.js";
 import { createGalleryTaxonomyDisplayFormatter } from "../../lib/gallery/card-display.js";
 import { useOptionalAuthSessionQuery } from "../../hooks/useAuthSession.js";
@@ -36,9 +36,9 @@ import {
 } from "../../hooks/useMediaQuery.js";
 import { OverlayScrollbar } from "../layout/OverlayScrollbar.js";
 import { ImageDescriptionSlot } from "./ImageDescriptionSlot.js";
-import { DialogLayerPortal } from "../feedback/DialogLayerPortal.js";
-import { DialogPortalTargetContext } from "../feedback/DialogPortalContext.js";
-import { DirectActivationButton } from "../feedback/DirectActivationButton.js";
+import { DialogLayerPortal } from "../dialog/DialogLayerPortal.js";
+import { DialogPortalTargetContext } from "../dialog/DialogPortalContext.js";
+import { DirectActivationButton } from "../actions/DirectActivationButton.js";
 import { LazyImageAdminDetails } from "./image-admin-details-loader.js";
 import "../../styles/image-detail.css";
 
@@ -86,9 +86,9 @@ class ImageAdminDetailsModuleBoundary extends Component<
   }
 }
 
-function applyEditedSnapshot<T extends ImageDetailItem>(
+function applyEditedSnapshot<T extends ImageDetailItemDto>(
   item: T,
-  snapshot: EditableImageSnapshot | null
+  snapshot: EditableImageSnapshotDto | null
 ): T {
   if (snapshot?.id !== item.id) return item;
   return {
@@ -107,25 +107,25 @@ type ImageDetailModalProps =
       onDetailRetry?: () => void;
       onTrashCommitted?: (imageId: string) => void | Promise<void>;
       onTrashed?: (imageId: string) => void;
-      onItemUpdated?: (item: EditableImageSnapshot) => void;
+      onItemUpdated?: (item: EditableImageSnapshotDto) => void;
       onItemRefreshRequested?: (imageId: string) => void;
       returnFocusRef?: RefObject<HTMLElement | null>;
     }
   | {
-      item: AdminImageDetailItem | AdminImageListItem;
+      item: AdminImageDetailItemDto | AdminImageListItemDto;
       onClose: () => void;
       admin: true;
       storageLabel: string;
       onTrashCommitted?: (imageId: string) => void | Promise<void>;
       onTrashed?: (imageId: string) => void;
-      onItemUpdated?: (item: EditableImageSnapshot) => void;
+      onItemUpdated?: (item: EditableImageSnapshotDto) => void;
       onItemRefreshRequested?: (imageId: string) => void;
       returnFocusRef?: RefObject<HTMLElement | null>;
     };
 
 export function ImageDetailModal(props: ImageDetailModalProps) {
   const { onClose } = props;
-  const [editedSnapshot, setEditedSnapshot] = useState<EditableImageSnapshot | null>(null);
+  const [editedSnapshot, setEditedSnapshot] = useState<EditableImageSnapshotDto | null>(null);
   const admin = props.admin === true;
   const authQuery = useOptionalAuthSessionQuery();
   const showAdminDetails = admin
@@ -151,7 +151,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
     [exit.requestClose, props.onTrashed]
   );
   const handleItemUpdated = useCallback(
-    (nextItem: EditableImageSnapshot) => {
+    (nextItem: EditableImageSnapshotDto) => {
       setEditedSnapshot(nextItem);
       props.onItemUpdated?.(nextItem);
     },

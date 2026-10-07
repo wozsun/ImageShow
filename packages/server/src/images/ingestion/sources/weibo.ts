@@ -1,7 +1,7 @@
 import { appConfig } from "@imageshow/shared";
 import type { WeiboImportResultDto } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../../../config/runtime-config-store.ts";
-import { resolveWeiboAuthorSlugs } from "../../../authors/query.ts";
+import { resolveWeiboAuthorSlugs } from "../../../vocab/authors/query.ts";
 import { parseJsonlManifest } from "./jsonl.ts";
 import {
   createWeiboVisitorCookie,

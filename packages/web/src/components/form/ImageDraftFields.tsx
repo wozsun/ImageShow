@@ -1,10 +1,9 @@
-import { imageDescriptionMaxLength, imageTitleMaxLength } from "@imageshow/shared/browser";
+import { imageDescriptionMaxLength, imageTitleMaxLength, type FacetOptionDto, type ImageDraftDto } from "@imageshow/shared/browser";
 import { useId } from "react";
 import { SelectMenu } from "./SelectMenu.js";
 import { NamedSlugInput } from "./NamedSlugInput.js";
 import { TagInput } from "./TagInput.js";
 import type { SelectOption } from "../../lib/ui/select-options.js";
-import type { FacetOption, ImageDraft } from "../../lib/types.js";
 
 export type ImageDraftDeferredField =
   "title" | "theme" | "author" | "original" | "source" | "description";
@@ -12,7 +11,7 @@ export type ImageDraftDeferredField =
 type ImageDraftDeferredPlainField = Exclude<ImageDraftDeferredField, "theme" | "author">;
 
 export type ImageDraftDeferredEditing = Readonly<{
-  values: Pick<ImageDraft, ImageDraftDeferredPlainField>;
+  values: Pick<ImageDraftDto, ImageDraftDeferredPlainField>;
   onFocus: (field: ImageDraftDeferredField) => void;
   onTextChange: (field: ImageDraftDeferredPlainField, value: string) => void;
   onCommit: (field: ImageDraftDeferredField, value: string) => void;
@@ -33,11 +32,11 @@ export function ImageDraftFields({
   changed = {},
   deferredEditing
 }: {
-  draft: ImageDraft;
-  onPatch: (patch: Partial<ImageDraft>) => void;
-  themes: FacetOption[];
-  allTags: FacetOption[];
-  authors: FacetOption[];
+  draft: ImageDraftDto;
+  onPatch: (patch: Partial<ImageDraftDto>) => void;
+  themes: FacetOptionDto[];
+  allTags: FacetOptionDto[];
+  authors: FacetOptionDto[];
   deviceOptions: readonly SelectOption[];
   brightnessOptions: readonly SelectOption[];
   disabled?: boolean;
@@ -90,7 +89,7 @@ export function ImageDraftFields({
         <SelectMenu
           className={`image-fields-device${changedFields.device ? " is-changed" : ""}`}
           value={draft.device}
-          onChange={(value) => onPatch({ device: value as ImageDraft["device"] })}
+          onChange={(value) => onPatch({ device: value as ImageDraftDto["device"] })}
           disabled={disabled}
           options={deviceOptions}
           ariaLabel={`${ariaPrefix} 设备`}
@@ -98,7 +97,7 @@ export function ImageDraftFields({
         <SelectMenu
           className={`image-fields-brightness${changedFields.brightness ? " is-changed" : ""}`}
           value={draft.brightness}
-          onChange={(value) => onPatch({ brightness: value as ImageDraft["brightness"] })}
+          onChange={(value) => onPatch({ brightness: value as ImageDraftDto["brightness"] })}
           disabled={disabled}
           options={brightnessOptions}
           ariaLabel={`${ariaPrefix} 亮度`}

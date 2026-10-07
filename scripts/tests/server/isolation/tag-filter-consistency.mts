@@ -19,7 +19,7 @@ await runIntegrationScenario(async (runtime) => {
     await import("../../../../packages/server/src/images/ready-cache/query.ts");
   const { createImageBrowseContext } =
     await import("../../../../packages/server/src/images/cursor.ts");
-  const vocab = await import("../../../../packages/server/src/vocab/vocab-cache.ts");
+  const vocab = await import("../../../../packages/server/src/vocab/cache.ts");
   const { listAdminImages } =
     await import("../../../../packages/server/src/images/read-models/admin-images.ts");
   const { updateImages } = await import("../../../../packages/server/src/images/image-update.ts");
@@ -669,7 +669,7 @@ await runIntegrationScenario(async (runtime) => {
     assert.equal((await restoreImages([changed.id])).restored, 1);
     await assertMembership(true);
     const { updateThemeDisplayName } =
-      await import("../../../../packages/server/src/themes/mutations.ts");
+      await import("../../../../packages/server/src/vocab/themes/mutations.ts");
     await updateThemeDisplayName("matrix-empty", "已重命名");
     assert.equal(
       (await getPublicGalleryFacets(neverAbortedSignal)).themes

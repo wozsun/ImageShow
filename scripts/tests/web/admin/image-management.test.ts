@@ -6,7 +6,7 @@ import {
   type AdminCheckStatusDto,
   type AdminOverviewDto
 } from "../../../../packages/shared/src/browser.ts";
-import type { PublicImageItem } from "../../../../packages/web/src/lib/types.ts";
+import type { PublicImageItem } from "../../../../packages/web/src/lib/gallery/public-image.ts";
 import {
   ApiClientError,
   clearCsrfToken
@@ -41,7 +41,7 @@ test("[Web/后台] 概览渲染当前、历史与未知 Redis 占用且重建结
   const { ActionFeedbackProvider } =
     await import("../../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
 
-  const overviewResult = (redisCache: AdminOverviewDto["redis_cache"]): AdminOverviewDto => ({
+  const overviewResult = (readyImageCache: AdminOverviewDto["ready_image_cache"]): AdminOverviewDto => ({
     gallery: 7,
     total: 7,
     local: 7,
@@ -62,7 +62,7 @@ test("[Web/后台] 概览渲染当前、历史与未知 Redis 占用且重建结
     light: 0,
     top_themes: [],
     recent: [],
-    redis_cache: redisCache
+    ready_image_cache: readyImageCache
   });
   const cacheResult = (
     currentBytes: number | null,
@@ -70,7 +70,7 @@ test("[Web/后台] 概览渲染当前、历史与未知 Redis 占用且重建结
     historicalBytes: number | null,
     historicalMeasuredAt: string | null,
     rebuilding = false
-  ): AdminOverviewDto["redis_cache"] => ({
+  ): AdminOverviewDto["ready_image_cache"] => ({
     state: rebuilding ? "rebuilding" : "ready",
     synchronized: !rebuilding,
     rebuilding,
@@ -107,7 +107,7 @@ test("[Web/后台] 概览渲染当前、历史与未知 Redis 占用且重建结
           used_memory_rss_bytes: 8_192,
           fragmentation_ratio: 1
         },
-        image_projection: {
+        ready_image_cache: {
           readable: !rebuilding,
           rebuilding,
           synchronized: !rebuilding,

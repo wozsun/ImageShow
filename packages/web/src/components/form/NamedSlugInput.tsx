@@ -1,6 +1,5 @@
-import { unsetSelector } from "@imageshow/shared/browser";
+import { unsetSelector, type FacetOptionDto } from "@imageshow/shared/browser";
 import { SlugComboInput } from "./SlugComboInput.js";
-import type { FacetOption } from "../../lib/types.js";
 import { parseFacetSlug } from "../../lib/ui/facet-input.js";
 
 function parseNamedSlug(value: string) {
@@ -15,7 +14,7 @@ export function NamedSlugInput({
   placeholder,
   ...rest
 }: {
-  options: FacetOption[];
+  options: FacetOptionDto[];
   noun: string;
   value: string | null;
   onChange: (value: string) => void;

@@ -10,15 +10,15 @@ import {
   loadImageEditorCapabilityModule,
   type ImageEditorCapabilityModule,
   type ImageEditorIntent,
+  type ImageEditorOpenResult,
   type ImageEditorTarget
 } from "./image-editor-capability-loader.js";
 import { AsyncIntentFence } from "../../../lib/async-intent-fence.js";
-import type { EditableImageSnapshot } from "../../../lib/types.js";
-import type { IngestionVocabularyDto } from "@imageshow/shared/browser";
+import type { EditableImageSnapshotDto, IngestionVocabularyDto } from "@imageshow/shared/browser";
 
 type PreparedImageEditor = {
   module: ImageEditorCapabilityModule;
-  items: EditableImageSnapshot[];
+  items: EditableImageSnapshotDto[];
   vocabulary: IngestionVocabularyDto;
 };
 
@@ -118,7 +118,7 @@ export function useImageEditorCapability({
       opener: HTMLElement,
       // 与会话写入同步执行，交接方可在同一次渲染中关闭自己的弹窗。
       onOpened?: () => void
-    ) => {
+    ): Promise<ImageEditorOpenResult> => {
       const requestFence = requestFenceRef.current;
       const requestSequence = requestFence.begin();
       const nextPending = {
@@ -130,7 +130,7 @@ export function useImageEditorCapability({
         const prepared = await prepare(target);
         if (!requestFence.isCurrent(requestSequence)
           || !opener.isConnected) {
-          return;
+          return "interrupted";
         }
         returnFocusRef.current = opener;
         onOpened?.();
@@ -139,10 +139,13 @@ export function useImageEditorCapability({
           intent: target.intent ?? "edit",
           fromDialog: target.fromDialog ?? false
         });
+        return "opened";
       } catch (error) {
         if (requestFence.isCurrent(requestSequence)) {
           onOpenErrorRef.current?.(error);
+          return "failed";
         }
+        return "interrupted";
       } finally {
         if (requestFence.isCurrent(requestSequence)) {
           setPending(null);
@@ -164,7 +167,7 @@ export function useImageEditorCapability({
     setSession(null);
   }, []);
 
-  const updateItems = useCallback((items: EditableImageSnapshot[]) => {
+  const updateItems = useCallback((items: EditableImageSnapshotDto[]) => {
     preparationRef.current = null;
     setSession((current) => (current ? { ...current, items } : current));
   }, []);

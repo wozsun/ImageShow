@@ -78,7 +78,7 @@ export async function readAdminPostgresqlStatus(): Promise<AdminPostgresqlStatus
 async function readAdminRedisStatus(): Promise<AdminRedisStatusDto> {
   const startedAt = performance.now();
   await pingRedis();
-  const [info, imageProjection] = await Promise.all([
+  const [info, readyImageCache] = await Promise.all([
     redis.info("server", "memory"),
     readReadyImageCacheAdminStatus(null)
   ]);
@@ -97,7 +97,7 @@ async function readAdminRedisStatus(): Promise<AdminRedisStatusDto> {
       used_memory_rss_bytes: memory.usedMemoryRss,
       fragmentation_ratio: finiteNumber(fields.get("mem_fragmentation_ratio"))
     },
-    image_projection: imageProjection
+    ready_image_cache: readyImageCache
   };
 }
 
@@ -127,8 +127,8 @@ export async function readAdminCheckStatus(
     )
   ]);
   if (redisStatus.status === "ok") {
-    redisStatus.data.image_projection = applyReadyImageAuthoritativeRevision(
-      redisStatus.data.image_projection,
+    redisStatus.data.ready_image_cache = applyReadyImageAuthoritativeRevision(
+      redisStatus.data.ready_image_cache,
       postgresql.status === "ok"
         ? postgresql.data.authoritative_revision
         : null

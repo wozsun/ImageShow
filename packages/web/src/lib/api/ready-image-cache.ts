@@ -4,11 +4,11 @@ import {
   useQueryClient,
   type QueryClient
 } from "@tanstack/react-query";
-import type {
-  AdminCheckStatusDto,
-  AdminOverviewDto
+import {
+  type AdminCheckStatusDto,
+  type AdminOverviewDto,
+  adminApiBasePath
 } from "@imageshow/shared/browser";
-import { adminApiBasePath } from "../constants.js";
 import { api } from "./client.js";
 import { queryKeys } from "./query-keys.js";
 import { adminCheckStatusRefetchInterval } from "./ready-image-cache-polling.js";
@@ -18,7 +18,7 @@ export const readyImageCacheRebuildPath = `${adminApiBasePath}/cache/ready-image
 
 export function readyImageProjection(status: AdminCheckStatusDto | undefined) {
   return status?.redis.status === "ok"
-    ? status.redis.data.image_projection
+    ? status.redis.data.ready_image_cache
     : undefined;
 }
 
@@ -39,7 +39,7 @@ function reconcileOverviewAfterStatus(
 
   const overviewState = client.getQueryState<AdminOverviewDto>(queryKeys.overview);
   if (overviewState?.isInvalidated
-    || overviewState?.data?.redis_cache.rebuilding) {
+    || overviewState?.data?.ready_image_cache.rebuilding) {
     void client.invalidateQueries({
       queryKey: queryKeys.overview,
       exact: true,

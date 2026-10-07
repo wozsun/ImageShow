@@ -89,14 +89,15 @@ import {
   ingestionRawPath,
   ingestionPreparedFile,
   ingestionPreparedPath,
-  parseIngestionTempFileName
+  parseIngestionTempFileName,
+  ingestionPreparedFiles
 } from "../../../packages/server/src/images/ingestion/raw/paths.ts";
 import {
   extractWeiboPost,
   parseWeiboPostUrl
 } from "../../../packages/server/src/images/ingestion/sources/weibo-parser.ts";
 import { weiboPostToJsonl } from "../../../packages/server/src/images/ingestion/sources/weibo.ts";
-import { deriveAuthorIdentityFromLink } from "../../../packages/server/src/authors/identity.ts";
+import { deriveAuthorIdentityFromLink } from "../../../packages/server/src/vocab/authors/identity.ts";
 import { canonicalImportMetadata } from "../../../packages/server/src/images/ingestion/sessions/import-metadata.ts";
 import { createWeiboRequestScheduler } from "../../../packages/server/src/images/ingestion/sources/weibo-request-scheduler.ts";
 import { WeiboImportError } from "../../../packages/server/src/images/ingestion/sources/weibo-types.ts";
@@ -3588,4 +3589,3 @@ test("[Server/内容接入] 内容接入 SSE 先监听再快照、串行验权�
   assert.equal(closeAdminSessionConnections([session.id]), 0);
   resolveValidation(session);
 });
-import { ingestionPreparedFiles } from "../../../packages/server/src/images/ingestion/raw/paths.ts";

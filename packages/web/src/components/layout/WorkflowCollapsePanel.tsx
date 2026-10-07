@@ -5,7 +5,7 @@ import {
   mobileViewportMediaQuery,
   useMediaQuery
 } from "../../hooks/useMediaQuery.js";
-import { DirectActivationButton } from "../feedback/DirectActivationButton.js";
+import { DirectActivationButton } from "../actions/DirectActivationButton.js";
 import { Icon } from "../icon/Icon.js";
 import { InteractionSurfaceContext } from "../../lib/ui/interaction-surface.js";
 

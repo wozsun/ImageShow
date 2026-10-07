@@ -8,10 +8,10 @@ import { runIntegrationScenario } from "./integration-runtime.mts";
 import { interceptSqlQueries, withCommitFault } from "./database-faults.mts";
 
 await runIntegrationScenario(async (runtime) => {
-  const tags = await import("../../../../packages/server/src/tags/mutations.ts");
-  const themes = await import("../../../../packages/server/src/themes/mutations.ts");
-  const authors = await import("../../../../packages/server/src/authors/mutations.ts");
-  const vocab = await import("../../../../packages/server/src/vocab/vocab-cache.ts");
+  const tags = await import("../../../../packages/server/src/vocab/tags/mutations.ts");
+  const themes = await import("../../../../packages/server/src/vocab/themes/mutations.ts");
+  const authors = await import("../../../../packages/server/src/vocab/authors/mutations.ts");
+  const vocab = await import("../../../../packages/server/src/vocab/cache.ts");
   const { setVocabularySortOrder } =
     await import("../../../../packages/server/src/vocab/sort-order.ts");
   const { registerAdminVocabularyRoutes } =

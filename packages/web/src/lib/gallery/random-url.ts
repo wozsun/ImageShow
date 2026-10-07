@@ -1,4 +1,5 @@
 import {
+  type RandomMethod,
   parseTagFilter,
   tagFilterValues,
   readableFilterSearch,
@@ -8,7 +9,8 @@ import {
   type RandomImageSize,
   type TagFilterValue
 } from "@imageshow/shared/browser";
-import type { RandomResponseMode } from "../types.js";
+
+export type RandomResponseMode = "" | RandomMethod;
 
 export function buildRandomUrl(input: {
   origin?: string;

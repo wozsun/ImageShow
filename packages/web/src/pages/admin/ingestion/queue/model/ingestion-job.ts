@@ -5,9 +5,10 @@ import type {
   IngestionVariantQualityDto,
   ImportItemInputDto,
   ServerIngestionStatusDto,
-  UploadIntentItemInputDto
+  UploadIntentItemInputDto,
+  AdminImageListItemDto,
+  ImageDraftDto
 } from "@imageshow/shared/browser";
-import type { AdminImageListItem, ImageDraft } from "../../../../../lib/types.js";
 
 export type IngestionAttributeDefaults = {
   device: Device | "auto";
@@ -24,7 +25,7 @@ type CommitFailureCheckpoint = "ready" | "committing" | "unknown";
 export type IngestionCommitIntent = {
   attemptId: string;
   md5: string;
-  metadata: ImageDraft;
+  metadata: ImageDraftDto;
 };
 type IngestionResultState = "pending" | "recovering" | "hydrated";
 
@@ -59,13 +60,13 @@ export type IngestionJob = {
   preview: string;
   previewFull?: string;
   objectUrl?: string;
-  draft: ImageDraft;
+  draft: ImageDraftDto;
   width: number;
   height: number;
   originalWidth?: number;
   originalHeight?: number;
   transferProgress?: number;
-  duplicates: AdminImageListItem[];
+  duplicates: AdminImageListItemDto[];
   duplicateCount?: number;
   duplicateDecision: "upload" | "undecided" | "confirmed";
   detectedClassification?: IngestionDetectedClassification;

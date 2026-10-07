@@ -1,7 +1,4 @@
-import {
-  galleryLoadBufferScreens,
-  galleryResidenceBufferScreens
-} from "../../lib/constants.js";
+import { galleryLoadBufferScreens, galleryResidenceBufferScreens } from "../../lib/gallery/gallery-budget.js";
 
 export type GalleryImageVisibility = {
   inViewport: boolean;

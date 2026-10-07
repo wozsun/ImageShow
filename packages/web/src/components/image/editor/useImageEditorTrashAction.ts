@@ -4,7 +4,7 @@ import {
   type SetStateAction
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { ImageTrashResponseDto } from "@imageshow/shared/browser";
+import type { ImageTrashResponseDto, EditableImageSnapshotDto } from "@imageshow/shared/browser";
 import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
 import { moveImagesToTrash } from "../../../lib/api/image-mutations.js";
 import { readEditableImageSnapshots } from "../../../lib/api/image-edit.js";
@@ -13,7 +13,6 @@ import {
   invalidateImageDataAfterTrash
 } from "../../../lib/api/query-invalidation.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
-import type { EditableImageSnapshot } from "../../../lib/types.js";
 import type { ImageMetadataSessionState } from "./image-metadata-session.js";
 import {
   imageTrashIdsNeedingSnapshot,
@@ -65,7 +64,7 @@ export function useImageEditorTrashAction({
         imageIds,
         response
       );
-      let authoritativeItems: EditableImageSnapshot[] | null = [];
+      let authoritativeItems: EditableImageSnapshotDto[] | null = [];
       if (idsNeedingSnapshot.length) {
         try {
           const snapshot = await readEditableImageSnapshots(idsNeedingSnapshot);

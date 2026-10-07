@@ -1,12 +1,19 @@
-import { imageVariantUrl } from "@imageshow/shared/browser";
-import { storageObjectKey } from "@imageshow/shared/browser";
+import {
+  imageVariantUrl,
+  storageObjectKey,
+  adminPermissions,
+  type Brightness,
+  type Device,
+  type FacetOptionDto,
+  type EditableImageSnapshotDto,
+  type ImageDraftDto
+} from "@imageshow/shared/browser";
 import { lazy, Suspense, useEffect, useRef, useState, type RefObject } from "react";
-import { adminPermissions } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../icon/AdminIcon.js";
 import { AsyncActionButton } from "../../actions/AsyncActionButton.js";
-import { ConfirmDialog } from "../../feedback/ConfirmDialog.js";
+import { ConfirmDialog } from "../../dialog/ConfirmDialog.js";
 import { TwoStepConfirmButton } from "../../actions/TwoStepConfirmButton.js";
-import { DialogFrame } from "../../feedback/DialogFrame.js";
+import { DialogFrame } from "../../dialog/DialogFrame.js";
 import { WorkflowDefaultFields } from "../../form/WorkflowDefaultFields.js";
 import { WorkflowCollapsePanel } from "../../layout/WorkflowCollapsePanel.js";
 import { ImagePreviewModal } from "../ImagePreviewModal.js";
@@ -21,13 +28,6 @@ import {
   commonImageDeviceOptions
 } from "../../../lib/ui/select-options.js";
 import { storageNameResolver, useStorageOptions } from "../../../lib/api/storage-options.js";
-import type {
-  Brightness,
-  Device,
-  FacetOption,
-  EditableImageSnapshot,
-  ImageDraft
-} from "../../../lib/types.js";
 import {
   imageAttributeClearPatch,
   mergeCommonImageAttributes,
@@ -88,13 +88,13 @@ export function ImageMetadataEditorDialog({
   onStorageMigrationSucceeded,
   returnFocusRef
 }: {
-  items: EditableImageSnapshot[];
+  items: EditableImageSnapshotDto[];
   intent?: ImageEditorIntent;
   fromDialog?: boolean;
   pageSize: number;
-  themes: FacetOption[];
-  allTags: FacetOption[];
-  authors: FacetOption[];
+  themes: FacetOptionDto[];
+  allTags: FacetOptionDto[];
+  authors: FacetOptionDto[];
   onClose: () => void;
   onTrashCommitted: (imageIds: string[]) => void | Promise<void>;
   publicImageMembershipHandled?: boolean;
@@ -159,7 +159,7 @@ export function ImageMetadataEditorDialog({
   const paginationAvailable = totalPages > 1;
   const visibleItems = activeItems.slice((page - 1) * pageSize, page * pageSize);
   useEffect(() => setPage((current) => Math.min(current, totalPages)), [totalPages]);
-  const patchDraft = (id: string, patch: Partial<ImageDraft>) =>
+  const patchDraft = (id: string, patch: Partial<ImageDraftDto>) =>
     setSession((current) => ({
       ...current,
       drafts: {

@@ -1,12 +1,11 @@
 import { useCallback, useState } from "react";
-import type { ImagePurgeRequestDto } from "@imageshow/shared/browser";
+import type { ImagePurgeRequestDto, AdminImageListItemDto } from "@imageshow/shared/browser";
 import {
   moveImagesToTrash,
   purgeImages,
   restoreImages
 } from "../../../lib/api/image-mutations.js";
 import { readEditableImageSnapshots } from "../../../lib/api/image-edit.js";
-import type { AdminImageListItem } from "../../../lib/types.js";
 import {
   createActionFeedback,
   type ActionFeedbackState
@@ -119,7 +118,7 @@ export function useImageAdminOperations({
   clearSelection,
   invalidateData
 }: {
-  items: AdminImageListItem[];
+  items: AdminImageListItemDto[];
   clearSelection: () => void;
   invalidateData: () => Promise<unknown>;
 }) {

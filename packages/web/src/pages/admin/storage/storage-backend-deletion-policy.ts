@@ -1,9 +1,9 @@
-import {
-  type StorageBackendDeleteAction,
-  type StorageBackendDeleteBlocker
+import type {
+  StorageBackendDeleteAction,
+  StorageBackendDeleteBlocker,
+  StorageBackendAdminDto
 } from "@imageshow/shared/browser";
 import { isApiClientError } from "../../../lib/api/client.js";
-import type { StorageBackendAdmin } from "../../../lib/types.js";
 
 const storageBackendDeleteBlockers = new Set<StorageBackendDeleteBlocker>([
   "built_in",
@@ -29,7 +29,7 @@ function countFromDetails(
     : fallback;
 }
 
-export function storageBackendDeletionReasons(backend: StorageBackendAdmin) {
+export function storageBackendDeletionReasons(backend: StorageBackendAdminDto) {
   return backend.deletion.blockers.map((blocker) => {
     switch (blocker) {
       case "built_in":
@@ -47,9 +47,9 @@ export function storageBackendDeletionReasons(backend: StorageBackendAdmin) {
 }
 
 export function storageBackendAfterDeleteRejection(
-  backend: StorageBackendAdmin,
+  backend: StorageBackendAdminDto,
   error: unknown
-): StorageBackendAdmin | null {
+): StorageBackendAdminDto | null {
   if (!isApiClientError(error)) return null;
   if (error.code !== "storage_default_delete"
     && error.code !== "storage_backend_in_use")

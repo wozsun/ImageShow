@@ -1,11 +1,11 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import {
   adminPermissions,
-  type AdminCheckStatusDto
+  type AdminCheckStatusDto,
+  adminApiBasePath
 } from "@imageshow/shared/browser";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { api } from "../../../lib/api/client.js";
-import { adminApiBasePath } from "../../../lib/constants.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { StableButtonLabel } from "../../../components/data-display/StableButtonLabel.js";
@@ -492,7 +492,7 @@ const CHECK_RESULT_LABELS: Record<string, string> = {
   connection: "连接状态",
   deep_inspection: "当前键空间深检",
   prefix_counts: "键数量统计",
-  image_projection: "Redis 图片投影",
+  ready_image_cache: "Redis 图片投影",
   core: "核心投影",
   derived: "派生缓存",
   recent_errors: "最近投影错误",

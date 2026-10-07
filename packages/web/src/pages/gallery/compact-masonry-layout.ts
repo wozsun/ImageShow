@@ -1,4 +1,4 @@
-import { galleryMaxMountedTiles } from "../../lib/constants.js";
+import { galleryMaxMountedTiles } from "../../lib/gallery/gallery-budget.js";
 
 export type GalleryCompactGeometry = {
   columnCount: number;

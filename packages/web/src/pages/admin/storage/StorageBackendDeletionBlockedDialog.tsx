@@ -1,14 +1,14 @@
 import { useRef } from "react";
-import { DialogFrame } from "../../../components/feedback/DialogFrame.js";
+import { DialogFrame } from "../../../components/dialog/DialogFrame.js";
 import { storageBackendDisplay } from "../../../lib/ui/select-options.js";
-import type { StorageBackendAdmin } from "../../../lib/types.js";
+import type { StorageBackendAdminDto } from "@imageshow/shared/browser";
 import { storageBackendDeletionReasons } from "./storage-backend-deletion-policy.js";
 
 export function StorageBackendDeletionBlockedDialog({
   backend,
   onClose
 }: {
-  backend: StorageBackendAdmin;
+  backend: StorageBackendAdminDto;
   onClose: () => void;
 }) {
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);

@@ -90,7 +90,7 @@ export async function getOverviewStats(): Promise<AdminOverviewDto> {
       count: item.count
     })),
     recent,
-    redis_cache: {
+    ready_image_cache: {
       state: readyImageCache.state,
       synchronized: readyImageCache.synchronized,
       rebuilding: readyImageCache.rebuilding,

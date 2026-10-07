@@ -107,7 +107,7 @@ function deadlineInspectionResponse(options: {
       options.deepInspection,
       options.now
     ),
-    image_projection: options.projection,
+    ready_image_cache: options.projection,
     issues: ["Redis 手动检查达到总期限；部分结果不代表当前总量"]
   };
 }
@@ -236,7 +236,7 @@ export async function inspectRedisState(
         currentPersistedMeta.itemCount === 0
           ? READY_IMAGE_EMPTY_CORE_KEYS.length
           : READY_IMAGE_CORE_KEYS.length;
-      const observedCoreKeys = currentDeepInspection.image_projection_usage.core.key_count;
+      const observedCoreKeys = currentDeepInspection.ready_image_cache_usage.core.key_count;
       if (observedCoreKeys !== expectedCoreKeys) {
         issues.push(`统一图片缓存核心键数量异常：${observedCoreKeys}/${expectedCoreKeys}`);
       }
@@ -261,7 +261,7 @@ export async function inspectRedisState(
         keyspace: parseRedisInfo(currentKeyspaceInfo)
       },
       deep_inspection: currentDeepInspection,
-      image_projection: currentProjection,
+      ready_image_cache: currentProjection,
       issues
     };
   } catch (error) {

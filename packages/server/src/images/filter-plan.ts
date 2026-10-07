@@ -11,11 +11,11 @@ import {
   type Device
 } from "@imageshow/shared/browser";
 import { appConfig } from "@imageshow/shared";
-import { resolveAuthorSlugs } from "../authors/query.ts";
+import { resolveAuthorSlugs } from "../vocab/authors/query.ts";
 import { ApiError } from "../core/api-error.ts";
-import type { VocabularyReadAccess } from "../vocab/vocab-cache.ts";
-import { resolveTagTermMap } from "../tags/query.ts";
-import { resolveThemeSlugs } from "../themes/query.ts";
+import type { VocabularyReadAccess } from "../vocab/cache.ts";
+import { resolveTagTermMap } from "../vocab/tags/query.ts";
+import { resolveThemeSlugs } from "../vocab/themes/query.ts";
 
 export type ImageSelectorGroup = {
   include: string[];

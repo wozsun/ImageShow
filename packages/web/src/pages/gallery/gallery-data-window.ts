@@ -1,13 +1,6 @@
-import type { PublicImageListResponseDto } from "@imageshow/shared/browser";
+import type { PublicImageListResponseDto, EditableImageSnapshotDto, GalleryImageCardDto } from "@imageshow/shared/browser";
 import { shuffledImageBatch } from "../../lib/gallery/image-browse.js";
-import {
-  galleryDataWindowFullItemBudget,
-  galleryMaxMountedTiles
-} from "../../lib/constants.js";
-import type {
-  EditableImageSnapshot,
-  GalleryImageCard
-} from "../../lib/types.js";
+import { galleryDataWindowFullItemBudget, galleryMaxMountedTiles } from "../../lib/gallery/gallery-budget.js";
 import {
   CompactMasonryLayout,
   type CompactMasonryPosition,
@@ -18,7 +11,7 @@ type GalleryWindowPage = {
   cursor: string;
   nextCursor: string;
   ids: string[];
-  items: GalleryImageCard[] | null;
+  items: GalleryImageCardDto[] | null;
   needsRefresh: boolean;
   fullBytes: number;
   startIndex: number;
@@ -50,7 +43,7 @@ type GalleryPageFailure = {
 
 export type GalleryWindowPosition = CompactMasonryPosition & {
   id: string;
-  item: GalleryImageCard | null;
+  item: GalleryImageCardDto | null;
   pageIndex: number;
 };
 
@@ -88,7 +81,7 @@ export type GalleryDataWindowDebugSnapshot = GalleryDataWindowSnapshot & {
   materializedPositions: number;
 };
 
-function estimateCardBytes(item: GalleryImageCard) {
+function estimateCardBytes(item: GalleryImageCardDto) {
   const stringCharacters =
     item.id.length +
     item.title.length +
@@ -98,18 +91,18 @@ function estimateCardBytes(item: GalleryImageCard) {
   return stringCharacters * 2 + item.tags.length * 8 + 96;
 }
 
-function pageFullBytes(items: readonly GalleryImageCard[]) {
+function pageFullBytes(items: readonly GalleryImageCardDto[]) {
   return items.reduce((total, item) => total + estimateCardBytes(item), 0);
 }
 
-function cardRatio(item: GalleryImageCard) {
+function cardRatio(item: GalleryImageCardDto) {
   return item.height / item.width;
 }
 
 function itemsInStoredOrder(
   ids: readonly string[],
-  items: readonly GalleryImageCard[],
-  retainedItems?: readonly GalleryImageCard[] | null
+  items: readonly GalleryImageCardDto[],
+  retainedItems?: readonly GalleryImageCardDto[] | null
 ) {
   if (ids.length !== items.length) return null;
   const byId = new Map(items.map((item) => [item.id, item]));
@@ -122,13 +115,13 @@ function itemsInStoredOrder(
     return retained && galleryCardsEqual(retained, item) ? retained : item;
   });
   return ordered.every((item) => item !== undefined)
-    ? ordered as GalleryImageCard[]
+    ? ordered as GalleryImageCardDto[]
     : null;
 }
 
 function galleryCardsEqual(
-  left: GalleryImageCard,
-  right: GalleryImageCard
+  left: GalleryImageCardDto,
+  right: GalleryImageCardDto
 ) {
   return (
     left.id === right.id &&
@@ -143,9 +136,9 @@ function galleryCardsEqual(
 }
 
 function galleryCardFromSnapshot(
-  current: GalleryImageCard,
-  snapshot: EditableImageSnapshot
-): GalleryImageCard {
+  current: GalleryImageCardDto,
+  snapshot: EditableImageSnapshotDto
+): GalleryImageCardDto {
   const next = {
     id: current.id,
     title: snapshot.title,
@@ -154,7 +147,7 @@ function galleryCardFromSnapshot(
     width: snapshot.width,
     height: snapshot.height,
     tags: [...snapshot.tags]
-  } satisfies GalleryImageCard;
+  } satisfies GalleryImageCardDto;
   return galleryCardsEqual(current, next) ? current : next;
 }
 
@@ -173,7 +166,7 @@ export class GalleryDataWindow {
   readonly #fullItemBudget: number;
   readonly #initialLimit: number;
   readonly #randomOrder: boolean;
-  readonly #confirmedEdits = new Map<string, EditableImageSnapshot>();
+  readonly #confirmedEdits = new Map<string, EditableImageSnapshotDto>();
   readonly #removedIds = new Set<string>();
   readonly #pendingCursors = new Map<string, Pick<GalleryPageRequest, "kind" | "token">>();
   readonly #failedCursors = new Map<string, GalleryPageFailure>();
@@ -379,7 +372,7 @@ export class GalleryDataWindow {
 
   prepareImageRefresh(
     imageId: string,
-    authoritativeItem?: EditableImageSnapshot
+    authoritativeItem?: EditableImageSnapshotDto
   ): GalleryPageIntent | null {
     if (!authoritativeItem) this.#confirmedEdits.delete(imageId);
     const itemIndex = this.indexOfId(imageId);
@@ -736,7 +729,7 @@ export class GalleryDataWindow {
     this.#layout.truncate(0);
   }
 
-  #currentItems(items: readonly GalleryImageCard[]) {
+  #currentItems(items: readonly GalleryImageCardDto[]) {
     return items
       .filter((item) => !this.#removedIds.has(item.id))
       .map((item) => {

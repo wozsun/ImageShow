@@ -6,7 +6,7 @@ import {
 } from "@imageshow/shared/browser";
 import { CopyButton } from "../actions/CopyButton.js";
 import { SelectMenu } from "../form/SelectMenu.js";
-import { AnchoredPopup } from "../feedback/AnchoredPopup.js";
+import { AnchoredPopup } from "../menu/AnchoredPopup.js";
 import { Icon, type IconName } from "../icon/Icon.js";
 import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
 import { useOneShotAnimation } from "../../hooks/useOneShotAnimation.js";

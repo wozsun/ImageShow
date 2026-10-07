@@ -1,4 +1,4 @@
-import type { ImageDraft } from "../../../../../lib/types.js";
+import type { ImageDraftDto } from "@imageshow/shared/browser";
 import type {
   IngestionCommitIntent,
   IngestionJob,
@@ -74,7 +74,7 @@ export type IngestionQueueAction =
       type: "patch-many";
       patches: ReadonlyMap<string, Partial<IngestionJob>>;
     }
-  | { type: "patch-draft"; id: string; patch: Partial<ImageDraft> }
+  | { type: "patch-draft"; id: string; patch: Partial<ImageDraftDto> }
   | {
       type: "remove";
       ids: Set<string>;
@@ -294,7 +294,7 @@ export function isUncommittedIngestionJob(job: IngestionJob) {
   return job.status !== "done" && ingestionJobCanLeaveQueue(job);
 }
 
-function patchJobDraft(job: IngestionJob, patch: Partial<ImageDraft>): IngestionJob {
+function patchJobDraft(job: IngestionJob, patch: Partial<ImageDraftDto>): IngestionJob {
   if (job.commitIntent) return job;
   if (patch.theme !== undefined) patch = { ...patch, theme: normalizeNamedSlug(patch.theme) };
   if (patch.author !== undefined) patch = { ...patch, author: normalizeNamedSlug(patch.author) };

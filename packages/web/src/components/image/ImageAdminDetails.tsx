@@ -12,7 +12,13 @@ import {
   clearCsrfToken,
   isApiClientError
 } from "../../lib/api/client.js";
-import { adminApiBasePath } from "../../lib/constants.js";
+import {
+  adminApiBasePath,
+  type AdminImageDetailItemDto,
+  type EditableImageSnapshotDto,
+  type ImageAdminInfoDto,
+  type AdminImageListItemDto
+} from "@imageshow/shared/browser";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import { clearSessionProbeHint } from "../../lib/api/auth-session.js";
 import { useAuthSessionQuery } from "../../hooks/useAuthSession.js";
@@ -26,24 +32,18 @@ import { preloadIntentProps } from "../../lib/ui/preload-intent.js";
 import { storageBackendLabel } from "../../lib/ui/select-options.js";
 import { useImageEditorCapability } from "./editor/useImageEditorCapability.js";
 import { Icon } from "../icon/Icon.js";
-import type {
-  AdminImageDetailItem,
-  EditableImageSnapshot,
-  ImageAdminInfo,
-  AdminImageListItem
-} from "../../lib/types.js";
 // 公开详情可在已确认的管理员会话中独立加载本模块；这里只带入管理详情自身样式，
 // 完整的管理表单色契约继续等到用户明确打开编辑器时再加载。
 import "../../styles/admin/image-details.css";
 
-type AdminDetailSource = AdminImageDetailItem | AdminImageListItem;
+type AdminDetailSource = AdminImageDetailItemDto | AdminImageListItemDto;
 
-function isAdminImageListItem(item: AdminDetailSource): item is AdminImageListItem {
+function isAdminImageListItem(item: AdminDetailSource): item is AdminImageListItemDto {
   return "status" in item;
 }
 
 function adminImageInfoQueryOptions(imageId: string) {
-  return queryOptions<ImageAdminInfo>({
+  return queryOptions<ImageAdminInfoDto>({
     queryKey: [...queryKeys.adminImageInfo, imageId],
     queryFn: ({ signal }) =>
       api(`${adminApiBasePath}/images/${encodeURIComponent(imageId)}/admin-info`, { signal }),
@@ -73,7 +73,7 @@ export function ImageAdminDetails({
   imageId: string;
   adminItem: AdminDetailSource | null;
   adminStorageLabel?: string;
-  onItemUpdated?: (item: EditableImageSnapshot) => void;
+  onItemUpdated?: (item: EditableImageSnapshotDto) => void;
   onItemRefreshRequested?: (imageId: string) => void;
   onItemTrashCommitted?: (imageId: string) => void | Promise<void>;
   onItemTrashed?: (imageId: string) => void;
@@ -103,7 +103,7 @@ export function ImageAdminDetails({
   const [editError, setEditError] = useState("");
   const [editNotice, setEditNotice] = useState("");
   const [migratedStorageLabel, setMigratedStorageLabel] = useState("");
-  const [refreshedAdminInfo, setRefreshedAdminInfo] = useState<ImageAdminInfo | null>(null);
+  const [refreshedAdminInfo, setRefreshedAdminInfo] = useState<ImageAdminInfoDto | null>(null);
 
   const denyAdminAccess = useCallback((clearSession: boolean) => {
     if (clearSession) {
@@ -219,7 +219,7 @@ export function ImageAdminDetails({
     // 这里优先复用结果，避免随后再以同一个 key 发起第二次请求。后台保存或迁移后
     // 仍按需读取一次 updated_at 与权威存储显示名。
     if (expanded && !adminStorageLabel) {
-      const queryState = queryClient.getQueryState<ImageAdminInfo>(
+      const queryState = queryClient.getQueryState<ImageAdminInfoDto>(
         adminImageInfoQueryOptions(imageId).queryKey
       );
       if (queryState?.error) throw queryState.error;
@@ -245,7 +245,7 @@ export function ImageAdminDetails({
         setMigratedStorageLabel("");
       }
       const committedForCurrent = commit?.updates.some((update) => update.id === imageId) === true;
-      const applySnapshot = (item: EditableImageSnapshot) => {
+      const applySnapshot = (item: EditableImageSnapshotDto) => {
         onItemUpdated?.(item);
         editorCapability.updateItems([item]);
       };
@@ -258,7 +258,7 @@ export function ImageAdminDetails({
         onItemRefreshRequested?.(imageId);
       }
       const { snapshotResult, adjacentDataResult } =
-        await capabilityModule.refreshImageEditorAfterSave<ImageAdminInfo>({
+        await capabilityModule.refreshImageEditorAfterSave<ImageAdminInfoDto>({
           queryClient,
           imageIds: [imageId],
           commit,

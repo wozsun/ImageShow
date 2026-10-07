@@ -74,7 +74,7 @@ import {
 import { createWeiboImportBatchManifest } from "../images/ingestion/sources/weibo.ts";
 import { WeiboImportError } from "../images/ingestion/sources/weibo-types.ts";
 import { adminSessionOf } from "../core/http/admin-session-context.ts";
-import { getIngestionVocabulary } from "../vocab/vocab-cache.ts";
+import { getIngestionVocabulary } from "../vocab/cache.ts";
 
 function authenticatedUsername(c: Context) {
   return adminSessionOf(c).username;

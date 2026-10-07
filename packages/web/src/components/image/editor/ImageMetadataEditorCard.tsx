@@ -1,5 +1,10 @@
-import { imageVariantUrl } from "@imageshow/shared/browser";
-import { storageObjectKey } from "@imageshow/shared/browser";
+import {
+  imageVariantUrl,
+  storageObjectKey,
+  type FacetOptionDto,
+  type EditableImageSnapshotDto,
+  type ImageDraftDto
+} from "@imageshow/shared/browser";
 import { AdminIcon } from "../../icon/AdminIcon.js";
 import { ImageDraftFields } from "../../form/ImageDraftFields.js";
 import { ImageThumbnailFrame } from "../ImageThumbnailFrame.js";
@@ -13,11 +18,6 @@ import {
   cardBrightnessSelectOptions,
   editCardDeviceSelectOptions
 } from "../../../lib/ui/select-options.js";
-import type {
-  FacetOption,
-  EditableImageSnapshot,
-  ImageDraft
-} from "../../../lib/types.js";
 import type { ImageEditorIntent } from "./image-editor-types.js";
 import {
   imageMetadataCardSaveState,
@@ -41,18 +41,18 @@ export function ImageMetadataEditorCard({
   onRemove,
   onPreview
 }: {
-  item: EditableImageSnapshot;
-  draft: ImageDraft;
+  item: EditableImageSnapshotDto;
+  draft: ImageDraftDto;
   changed: ImageMetadataChanges;
   lastSaveReport: ImageMetadataSaveReport | null;
   multipleItems: boolean;
   intent: ImageEditorIntent;
   busy: boolean;
-  themes: FacetOption[];
-  allTags: FacetOption[];
-  authors: FacetOption[];
+  themes: FacetOptionDto[];
+  allTags: FacetOptionDto[];
+  authors: FacetOptionDto[];
   storageName: string;
-  onPatch: (patch: Partial<ImageDraft>) => void;
+  onPatch: (patch: Partial<ImageDraftDto>) => void;
   onRemove: () => void;
   onPreview: (opener: HTMLElement) => void;
 }) {

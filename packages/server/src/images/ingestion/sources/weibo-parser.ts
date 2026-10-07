@@ -9,7 +9,7 @@ import {
   scalarString,
   type UnknownRecord
 } from "./weibo-values.ts";
-import { isWeiboUserId } from "../../../authors/identity.ts";
+import { isWeiboUserId } from "../../../vocab/authors/identity.ts";
 
 /** Parses one supported Weibo post URL into its canonical identifiers. */
 export function parseWeiboPostUrl(input: string): ParsedWeiboPostUrl {

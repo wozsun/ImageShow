@@ -1,7 +1,4 @@
-import {
-  galleryLoadBufferScreens,
-  galleryVirtualOverscanScreens
-} from "../../lib/constants.js";
+import { galleryLoadBufferScreens, galleryVirtualOverscanScreens } from "../../lib/gallery/gallery-budget.js";
 import type { GalleryDataWindowViewport } from "./gallery-data-window.js";
 
 export const galleryRenderViewportHysteresisScreens = 0.5;

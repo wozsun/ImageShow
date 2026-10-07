@@ -4,7 +4,7 @@ import { ProgressiveImage } from "./ProgressiveImage.js";
 import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
 import { usePageScrollLock } from "../../hooks/usePageScrollLock.js";
 import { useDialogFocus } from "../../hooks/useDialogFocus.js";
-import { DialogLayerPortal } from "../feedback/DialogLayerPortal.js";
+import { DialogLayerPortal } from "../dialog/DialogLayerPortal.js";
 
 export function ImagePreviewModal({
   src,

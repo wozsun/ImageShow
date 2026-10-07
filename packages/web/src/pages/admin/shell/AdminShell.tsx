@@ -2,7 +2,7 @@ import { lazy, useLayoutEffect } from "react";
 import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, clearCsrfToken } from "../../../lib/api/client.js";
-import { adminApiBasePath, adminBasePath } from "../../../lib/constants.js";
+import { adminApiBasePath, adminBasePath } from "@imageshow/shared/browser";
 import { clearSessionProbeHint } from "../../../lib/api/auth-session.js";
 import { useAuthSessionQuery } from "../../../hooks/useAuthSession.js";
 import { QueryErrorState } from "../../../components/feedback/QueryErrorState.js";

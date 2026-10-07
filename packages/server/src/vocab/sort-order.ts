@@ -4,7 +4,7 @@ import {
   assertVocabularySlug,
   withVocabularyMutationSync
 } from "./mutation-sync.ts";
-import type { EntityCacheKind } from "./vocab-cache.ts";
+import type { EntityCacheKind } from "./cache.ts";
 
 export async function setVocabularySortOrder(
   entity: EntityCacheKind,

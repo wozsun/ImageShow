@@ -9,22 +9,22 @@ import {
   AsyncActionButton,
   type AsyncActionPresentation
 } from "../../../components/actions/AsyncActionButton.js";
-import { DialogFrame } from "../../../components/feedback/DialogFrame.js";
+import { DialogFrame } from "../../../components/dialog/DialogFrame.js";
 import { FieldError } from "../../../components/form/FieldError.js";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { OverlayScrollbar } from "../../../components/layout/OverlayScrollbar.js";
-import type { ImageEditorIntent } from "../../../components/image/editor/image-editor-capability-loader.js";
+import type { ImageEditorIntent, ImageEditorOpenResult } from "../../../components/image/editor/image-editor-capability-loader.js";
 import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
 import { readEditableImageSnapshots } from "../../../lib/api/image-edit.js";
 import {
   imageIdInputMaxItems,
   parseImageIdInput
 } from "./image-id-input.js";
-import type { EditableImageSnapshot } from "../../../lib/types.js";
+import type { EditableImageSnapshotDto } from "@imageshow/shared/browser";
 import "../../../styles/admin/import-source-dialog.css";
 
 type ParsedImageIds = {
-  items: EditableImageSnapshot[];
+  items: EditableImageSnapshotDto[];
   invalid: string[];
   missing: string[];
 };
@@ -47,7 +47,7 @@ export function ImageIdInputDialog({
   intent: ImageEditorIntent;
   onClose: () => void;
   /** 打开编辑弹窗；成功时由调用方在同一次渲染中关闭本弹窗。 */
-  onResolved: (items: EditableImageSnapshot[]) => Promise<boolean>;
+  onResolved: (items: EditableImageSnapshotDto[]) => Promise<ImageEditorOpenResult>;
   returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const inputId = useId();
@@ -80,12 +80,14 @@ export function ImageIdInputDialog({
     onClose();
   };
 
-  const openEditor = async (items: EditableImageSnapshot[]) => {
+  const openEditor = async (items: EditableImageSnapshotDto[]) => {
     setOpening(true);
-    const opened = await onResolved(items);
-    if (opened) return true;
+    const result = await onResolved(items);
+    if (result === "opened") return true;
     setOpening(false);
-    setError("未能打开编辑弹窗，请关闭后重试");
+    setError(result === "failed"
+      ? "编辑器加载失败，请重新加载页面"
+      : "未能打开编辑弹窗，请关闭后重试");
     return false;
   };
 
@@ -107,7 +109,7 @@ export function ImageIdInputDialog({
     requestControllerRef.current = controller;
     setError("");
     try {
-      const snapshots: EditableImageSnapshot[] = ids.length
+      const snapshots: EditableImageSnapshotDto[] = ids.length
         ? (await readEditableImageSnapshots(ids, controller.signal)).items
         : [];
       if (controller.signal.aborted) return false;
@@ -194,7 +196,7 @@ export function ImageIdInputDialog({
             </div>
             <div className="import-source-panel">
               <p className="hint import-source-hint" id={hintId}>
-                填写完整的图片 ID（UUID），可用换行、空格或逗号分隔，最多 {imageIdInputMaxItems} 项。
+                填写完整的图片 UUID，可用换行、空格或逗号分隔，最多 {imageIdInputMaxItems} 项。
               </p>
               <div className="import-source-input-region">
                 <textarea

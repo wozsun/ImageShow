@@ -18,7 +18,8 @@ import {
   normalizeAdminPreferences,
   type AdminPermission,
   type AdminPreferences,
-  type AuthStateDto
+  type AuthStateDto,
+  adminBasePath
 } from "@imageshow/shared/browser";
 import { authExpiredEvent, clearCsrfToken } from "../lib/api/client.js";
 import {
@@ -31,7 +32,6 @@ import {
 } from "../lib/api/auth-session.js";
 import { queryKeys } from "../lib/api/query-keys.js";
 import { sameAdminPreferences } from "../lib/api/admin-preference-cache.js";
-import { adminBasePath } from "../lib/constants.js";
 
 type AuthSessionContextValue = Readonly<{
   query: UseQueryResult<AuthState>;

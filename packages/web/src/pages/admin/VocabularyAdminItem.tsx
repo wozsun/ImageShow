@@ -1,15 +1,15 @@
 import { useLayoutEffect, useState, type ReactNode } from "react";
-import type {
-  AdminEntityDto,
-  AuthorDto,
-  AuthorMutationResponseDto
+import {
+  type AdminEntityDto,
+  type AuthorDto,
+  type AuthorMutationResponseDto,
+  adminApiBasePath
 } from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
 import { AsyncActionButton, type AsyncActionPresentation } from "../../components/actions/AsyncActionButton.js";
 import { SortOrderInput } from "../../components/actions/SortOrderInput.js";
 import type { ActionFeedbackTarget } from "../../components/feedback/ActionFeedbackRegion.js";
 import { SlugChip } from "../../components/data-display/SlugChip.js";
-import { adminApiBasePath } from "../../lib/constants.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 
 export const vocabularyColumnLabels = {

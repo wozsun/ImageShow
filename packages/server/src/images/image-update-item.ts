@@ -1,11 +1,10 @@
-import type { Brightness, Device } from "@imageshow/shared/browser";
+import type { Brightness, Device, ImageUpdateItemInputDto } from "@imageshow/shared/browser";
 import type { PoolClient } from "pg";
-import { ensureAuthorWithMutationLockHeld } from "../authors/mutations.ts";
+import { ensureAuthorWithMutationLockHeld } from "../vocab/authors/mutations.ts";
 import { ApiError } from "../core/api-error.ts";
 import { withAdvisoryLocksOnClient } from "../core/database/advisory-locks.ts";
 import { pool } from "../core/database/pools.ts";
 import { logger } from "../core/logger.ts";
-import type { ImageUpdateItemInputDto } from "@imageshow/shared/browser";
 import { withTransactionOnClient } from "../core/database/transactions.ts";
 import { resolveStorageAccess } from "../storage/backends/registry.ts";
 import { isStorageObjectNotFound } from "../storage/objects/not-found.ts";
@@ -14,15 +13,15 @@ import {
   imageStorageMutationLockKey,
   withStorageLocationReadAndAdvisoryLocksOnClient
 } from "../storage/maintenance-lock.ts";
-import { replaceImageTagAssociations } from "../tags/mutations.ts";
-import { resolveTagSlugs } from "../tags/query.ts";
-import { ensureThemeWithMutationLockHeld } from "../themes/mutations.ts";
+import { replaceImageTagAssociations } from "../vocab/tags/mutations.ts";
+import { resolveTagSlugs } from "../vocab/tags/query.ts";
+import { ensureThemeWithMutationLockHeld } from "../vocab/themes/mutations.ts";
 import {
   invalidateOrCollectEntityCountCaches,
   refreshEntityVocabularies,
   type EntityCacheKind,
   type EntityCountCacheInvalidationBatch
-} from "../vocab/vocab-cache.ts";
+} from "../vocab/cache.ts";
 import { vocabularyAssociationLockRequests } from "../vocab/mutation-sync.ts";
 import { detectBrightness } from "./brightness.ts";
 import { withNormalizationAdmission } from "./normalization-admission.ts";

@@ -1,4 +1,11 @@
-import { unsetSelector } from "@imageshow/shared/browser";
+import {
+  unsetSelector,
+  type AuthorDto as Author,
+  type FacetOptionDto,
+  type IngestionVocabularyDto,
+  type TagDto as Tag,
+  type ThemeDto as Theme
+} from "@imageshow/shared/browser";
 import { randomUUID } from "node:crypto";
 import { appConfig } from "@imageshow/shared";
 import { coalesce } from "../core/coalesce.ts";
@@ -15,17 +22,10 @@ import {
   setRedisJson,
   setRequiredRedisJson
 } from "../core/redis/json.ts";
-import type {
-  AuthorDto as Author,
-  FacetOptionDto,
-  IngestionVocabularyDto,
-  TagDto as Tag,
-  ThemeDto as Theme
-} from "@imageshow/shared/browser";
 import {
   projectAuthorDerivedIdentity,
   type AuthorIdentityColumns
-} from "../authors/identity.ts";
+} from "./authors/identity.ts";
 
 const THEME_VOCAB_KEY = "imageshow:theme_vocab";
 const TAG_VOCAB_KEY = "imageshow:tag_vocab";

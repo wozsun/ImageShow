@@ -1,8 +1,7 @@
-import { imageVariantUrl } from "@imageshow/shared/browser";
+import { imageVariantUrl, type AdminImageListItemDto } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { TwoStepConfirmButton } from "../../../components/actions/TwoStepConfirmButton.js";
 import { ThumbnailImage } from "../../../components/image/ThumbnailImage.js";
-import type { AdminImageListItem } from "../../../lib/types.js";
 import {
   formatDate,
   formatImageClassification,
@@ -11,7 +10,7 @@ import {
 import { preloadIntentProps } from "../../../lib/ui/preload-intent.js";
 
 type AdminImageCardProps = {
-  item: AdminImageListItem;
+  item: AdminImageListItemDto;
   storageName: (item: { storage_slug: string }) => string;
   checked: boolean;
   busy: boolean;

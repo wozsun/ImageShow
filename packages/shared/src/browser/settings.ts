@@ -1,5 +1,5 @@
 import type { NormalizeProfile } from "./image-variants.ts";
-import type { LogLevel, SiteVersionSettings } from "./common.ts";
+import type { LogLevel } from "./log-levels.ts";
 import type { ImportSourceTypeDto } from "./ingestion.ts";
 import type { PublicImageOrder, RandomImageSize } from "./images.ts";
 
@@ -231,4 +231,9 @@ export type RuntimeConfigResponseDto = AdminSettingsResponseDto & {
 export type RuntimeConfigSaveRequestDto = {
   config: RuntimeConfig;
   revision: string;
+};
+
+export type SiteVersionSettings = {
+  enabled: boolean;
+  link_enabled: boolean;
 };

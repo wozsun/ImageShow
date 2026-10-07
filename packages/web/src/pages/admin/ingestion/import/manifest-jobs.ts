@@ -1,4 +1,4 @@
-import type { ImageDraft } from "../../../../lib/types.js";
+import type { ImageDraftDto } from "@imageshow/shared/browser";
 import { normalizeNamedSlug } from "../../../../lib/image-draft.js";
 import type {
   IngestionCommonAttributeField,
@@ -32,7 +32,7 @@ function createManifestItemDraft(
   item: ImportManifestItem,
   defaults: IngestionAttributeDefaults,
   retainOriginalLink: boolean
-): ImageDraft {
+): ImageDraftDto {
   return {
     title: item.title ?? "",
     description: item.description ?? "",

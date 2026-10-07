@@ -4,14 +4,14 @@ import {
   adminPermissions,
   type AdminPermission,
   type AdminPreferences,
-  type AdminRole
+  type AdminRole,
+  adminBasePath
 } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { OverlayScrollbar } from "../../../components/layout/OverlayScrollbar.js";
 import { MobileNavigation } from "../../../components/navigation/MobileNavigation.js";
 import { RouteLoadBoundary } from "../../../components/feedback/RouteLoadBoundary.js";
 import { ActionFeedbackProvider } from "../../../components/feedback/ActionFeedbackRegion.js";
-import { adminBasePath } from "../../../lib/constants.js";
 import {
   AdminPreferencesProvider,
   useAdminPreference

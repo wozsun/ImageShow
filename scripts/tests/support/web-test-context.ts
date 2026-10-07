@@ -5,10 +5,7 @@ import type {
   AdminImageListItemDto,
   CompletedIngestionImageDto
 } from "../../../packages/shared/src/browser.ts";
-import type {
-  EditableImageSnapshot,
-  GalleryImageCard
-} from "../../../packages/web/src/lib/types.ts";
+import type { EditableImageSnapshotDto, GalleryImageCardDto } from "@imageshow/shared/browser";
 import type { IngestionJob } from "../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-job.ts";
 import { publicNavigationAutoHideDelayMs } from "../../../packages/web/src/lib/ui/public-navigation.ts";
 
@@ -16,7 +13,7 @@ export function galleryCard(
   id: string,
   width = 100,
   height = 100
-): GalleryImageCard {
+): GalleryImageCardDto {
   return {
     id,
     title: id,
@@ -90,8 +87,8 @@ export function adminImageListItem(
 }
 export function editableImage(
   id: string,
-  overrides: Partial<EditableImageSnapshot> = {}
-): EditableImageSnapshot {
+  overrides: Partial<EditableImageSnapshotDto> = {}
+): EditableImageSnapshotDto {
   return {
     id,
     title: id + "-title",
