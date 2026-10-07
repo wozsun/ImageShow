@@ -10,9 +10,9 @@ import {
   type Brightness,
   type Device
 } from "@imageshow/shared/browser";
+import { appConfig } from "@imageshow/shared";
 import { resolveAuthorSlugs } from "../authors/query.ts";
 import { ApiError } from "../core/api-error.ts";
-import { splitSelectors } from "./selectors.ts";
 import type { VocabularyReadAccess } from "../vocab/vocab-cache.ts";
 import { resolveTagTermMap } from "../tags/query.ts";
 import { resolveThemeSlugs } from "../themes/query.ts";
@@ -43,6 +43,41 @@ type ImageFilterInput = {
 const IMAGE_FILTER_AXES = devices.flatMap((device) =>
   brightnesses.map((brightness) => ({ device, brightness }))
 );
+
+const disallowedSelectorCharacters = /[\u0000-\u001f\u007f]/u;
+
+function splitSelectors(rawValues: string[]): { include: string[]; exclude: string[] } {
+  const values = [
+    ...new Set(
+      rawValues
+        .flatMap((value) => value.split(","))
+        .map((value) => value.trim().toLowerCase())
+        .filter(Boolean)
+    )
+  ];
+  if (values.length > appConfig.randomQuery.maxSelectorsPerField) {
+    throw new ApiError(
+      400,
+      "validation_error",
+      `Too many selectors; maximum ${appConfig.randomQuery.maxSelectorsPerField}`
+    );
+  }
+  const include: string[] = [];
+  const exclude: string[] = [];
+  for (const value of values) {
+    const excluded = value.startsWith("!");
+    const bare = excluded ? value.slice(1).trim() : value;
+    if (
+      !bare ||
+      [...bare].length > appConfig.randomQuery.maxSelectorCharacters ||
+      disallowedSelectorCharacters.test(bare)
+    ) {
+      throw new ApiError(400, "validation_error", "Invalid image selector");
+    }
+    (excluded ? exclude : include).push(bare);
+  }
+  return { include, exclude };
+}
 
 function normalizedGroup(
   group: Partial<ImageSelectorGroup> | undefined,

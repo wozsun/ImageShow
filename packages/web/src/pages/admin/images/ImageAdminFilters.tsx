@@ -4,7 +4,7 @@ import {
   devices as imageDevices,
   type IngestionVocabularyDto
 } from "@imageshow/shared/browser";
-import { FacetSelector } from "../../../components/data-display/FacetSelector.js";
+import { FacetSelector } from "./FacetSelector.js";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { SelectMenu } from "../../../components/form/SelectMenu.js";
 import {

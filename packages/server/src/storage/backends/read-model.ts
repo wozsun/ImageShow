@@ -5,7 +5,7 @@ import type {
 } from "@imageshow/shared/browser";
 import { listStorageBackends } from "./registry.ts";
 import { listUnresolvedMoveCleanupJobCounts } from "../cleanup/repository.ts";
-import { resolveStorageBackendDeletionState } from "./deletion.ts";
+import { resolveStorageBackendDeletionState } from "./deletion-policy.ts";
 import { activeIngestionStorageCounts } from "../../images/ingestion/cleanup/storage-references.ts";
 
 export async function listStorageBackendOptions(): Promise<StorageBackendOptionDto[]> {

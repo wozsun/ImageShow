@@ -19,7 +19,7 @@ import { createConfigStreamHarness, ingestionJob } from "../support/web-test-con
 import { dispatchDomEvent, inputText } from "../support/dom-events.ts";
 import { installProperties, installPropertyDescriptors } from "../support/property-descriptors.ts";
 
-test("[Web/主题] 模糊候选键盘选择提交真实 slug，直接输入仍可新建", async (t) => {
+test("[Web/工作流属性] 模糊候选键盘选择提交真实 slug，直接输入仍可新建", async (t) => {
   const h = await createConfigStreamHarness(t);
   const { NamedSlugInput } = await import("../../../packages/web/src/components/form/NamedSlugInput.tsx");
   const values: string[] = [];
@@ -68,7 +68,7 @@ test("[Web/主题] 模糊候选键盘选择提交真实 slug，直接输入仍�
 });
 
 for (const surface of ["默认属性", "图片编辑"] as const) {
-  test(`[Web/词条搜索] ${surface}的主题、作者与标签共用拼音高亮并提交原 slug`, async (t) => {
+  test(`[Web/工作流属性] ${surface}的主题、作者与标签共用拼音高亮并提交原 slug`, async (t) => {
     const h = await createConfigStreamHarness(t);
     const { WorkflowDefaultFields } = await import(
       "../../../packages/web/src/components/form/WorkflowDefaultFields.tsx"
@@ -151,7 +151,7 @@ for (const surface of ["默认属性", "图片编辑"] as const) {
 }
 
 for (const kind of ["主题", "标签"] as const) {
-  test(`[Web/词条搜索] ${kind}组词沿用已确认结果，选择后忽略迟到输入法事件`, async (t) => {
+  test(`[Web/工作流属性] ${kind}组词沿用已确认结果，选择后忽略迟到输入法事件`, async (t) => {
     const h = await createConfigStreamHarness(t);
     const { NamedSlugInput } = await import("../../../packages/web/src/components/form/NamedSlugInput.tsx");
     const { TagInput } = await import("../../../packages/web/src/components/form/TagInput.tsx");
@@ -219,7 +219,7 @@ for (const kind of ["主题", "标签"] as const) {
   });
 }
 
-test("[Web/主题] 保留值输入按留空处理且不提示新建主题", async (t) => {
+test("[Web/工作流属性] 保留值输入按留空处理且不提示新建主题", async (t) => {
   const h = await createConfigStreamHarness(t);
   const { NamedSlugInput } = await import("../../../packages/web/src/components/form/NamedSlugInput.tsx");
   const values: string[] = [];
@@ -253,7 +253,7 @@ test("[Web/主题] 保留值输入按留空处理且不提示新建主题", asyn
   assert.equal(input.value, "");
 });
 
-test("[Web/批量属性] 显式清空只更新指定分类，普通应用保留空输入并追加去重标签", () => {
+test("[Web/工作流属性] 显式清空只更新指定分类，普通应用保留空输入并追加去重标签", () => {
   const draft = ingestionJob().draft;
   const cases = {
     theme: { ...draft, theme: null },
@@ -297,7 +297,7 @@ test("[Web/批量属性] 显式清空只更新指定分类，普通应用保留�
   );
 });
 
-test("[Web/批量属性] 确认期间的本地接管按原身份清空，已覆盖任务与重试实例不扩大范围", async (t) => {
+test("[Web/工作流属性] 确认期间的本地接管按原身份清空，已覆盖任务与重试实例不扩大范围", async (t) => {
   const harness = await createConfigStreamHarness(t);
   const { React } = harness;
   const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
@@ -398,7 +398,7 @@ test("[Web/批量属性] 确认期间的本地接管按原身份清空，已覆�
   assert.equal(harness.pending.length, 0, "本地身份捕获不额外查询或提交队列");
 });
 
-test("[Web/批量属性] 清空冻结水位，部分失败只重试失败身份，未知响应复用请求号", async (t) => {
+test("[Web/工作流属性] 清空冻结水位，部分失败只重试失败身份，未知响应复用请求号", async (t) => {
   const harness = await createConfigStreamHarness(t);
   const { React } = harness;
   const { useIngestionQueueActions } =
@@ -554,7 +554,7 @@ for (const failure of [
   },
   { label: "成功正文损坏", status: 200, body: '{"items":' }
 ]) {
-  test(`[Web/批量属性] 后续页${failure.label}时续传原游标，保留此前逐项结果且不重复通知`, async (t) => {
+  test(`[Web/工作流属性] 后续页${failure.label}时续传原游标，保留此前逐项结果且不重复通知`, async (t) => {
     const harness = await createConfigStreamHarness(t);
     const { React } = harness;
     const { useIngestionQueueActions } =
@@ -651,7 +651,7 @@ for (const failure of [
   });
 }
 
-test("[Web/批量属性] 移动浮层拥有菜单与确认框，按层关闭且确认不触发父表单保存", async (t) => {
+test("[Web/工作流属性] 移动浮层拥有菜单与确认框，按层关闭且确认不触发父表单保存", async (t) => {
   const { registerHooks } = await import("node:module");
   const cssHooks = registerHooks({
     load(url, context, nextLoad) {

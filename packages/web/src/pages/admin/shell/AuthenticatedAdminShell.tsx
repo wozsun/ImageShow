@@ -16,7 +16,7 @@ import {
   AdminPreferencesProvider,
   useAdminPreference
 } from "../../../hooks/useAdminPreferences.js";
-import { useAdminColorScheme } from "../../../hooks/useAdminColorScheme.js";
+import { useAdminColorScheme } from "./useAdminColorScheme.js";
 import {
   advanceAdminColorSchemeCycle,
   nextAdminColorScheme,

@@ -1,22 +1,22 @@
-import { ApiError } from "../core/api-error.ts";
+import { ApiError } from "../../core/api-error.ts";
 import {
   isAllowedExternalImageContentType,
   isExternalImageRejection,
   safeFetchExternalImage
-} from "../core/external-image-fetch.ts";
+} from "../../core/external-image-fetch.ts";
 import {
   noStoreCacheControl,
   safeResponseHeaderValue,
   safeRedirectLocation
-} from "../core/http/headers.ts";
+} from "../../core/http/headers.ts";
 import {
   proxyEtagForUpstream,
   proxyLastModified,
   proxyLastModifiedForUpstream304,
   upstreamIfModifiedSinceForProxy,
   upstreamIfNoneMatchForProxy
-} from "../core/http/proxy-validators.ts";
-import { contentType } from "../storage/objects/keys.ts";
+} from "../../core/http/proxy-validators.ts";
+import { contentType } from "../../storage/objects/keys.ts";
 
 export const externalImageProxyTimeoutMs = 12_000;
 export const externalImageProxyUserAgent =

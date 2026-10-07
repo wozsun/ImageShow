@@ -4,8 +4,8 @@ import {
   readSystemPrefersDark,
   resolveUiColorContext,
   systemColorSchemeMediaQuery
-} from "../lib/ui/color-scheme.js";
-import { applyUiColorContext } from "../lib/ui/apply-ui-color-context.js";
+} from "../../../lib/ui/color-scheme.js";
+import { applyUiColorContext } from "../../../lib/ui/apply-ui-color-context.js";
 
 /**
  * 在后台外观可以接管启动底色后应用管理员偏好；自动模式额外订阅设备外观变化。

@@ -1,7 +1,7 @@
 {
   "name": "imageshow",
   "private": true,
-  "version": "6.7.7",
+  "version": "6.7.8",
   "type": "module",
   "workspaces": [
     "packages/*"
@@ -23,7 +23,7 @@
     "verify:build": "node scripts/tests/verify/run.mjs build",
     "verify:runtime": "node scripts/tests/verify/run.mjs runtime",
     "verify:release": "node scripts/tests/verify/run.mjs release",
-    "test:final:web": "tsx --import ./scripts/tests/support/web-assets.mjs --test scripts/tests/final-web.test.ts",
+    "test:web": "tsx --import ./scripts/tests/support/web-assets.mjs --test scripts/tests/web.test.ts",
     "admin:reset-password": "node --env-file-if-exists=.env packages/server/src/admin-password-cli.ts reset-password",
     "start": "npm run start -w @imageshow/server"
   },

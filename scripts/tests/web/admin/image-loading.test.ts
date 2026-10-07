@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { parseHTML } from "linkedom";
 
-test("[Web/后台访问] 缩略图真实挂载只请求一次并忽略快速换源的迟到结果", async () => {
+test("[Web/后台] 缩略图真实挂载只请求一次并忽略快速换源的迟到结果", async () => {
   const { window, document } = parseHTML("<!doctype html><html><body></body></html>");
   const React = await import("react");
   const requestAnimationFrame = (callback: FrameRequestCallback) =>

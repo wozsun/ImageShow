@@ -105,10 +105,10 @@ export function AppRoutes() {
               <Route
                 path="/home"
                 element={
-                  data.site.home.enabled === false ? (
-                    publicFallback(rootPath)
-                  ) : (
+                  data.site.home.enabled ? (
                     <HomePage site={data.site} />
+                  ) : (
+                    publicFallback(rootPath)
                   )
                 }
               />
@@ -143,14 +143,12 @@ export function AppRoutes() {
                 element={
                   !data.embed.enabled ? (
                     publicFallback(rootPath)
-                  ) : data.site.home.enabled === false ? (
-                    embeddedBrowsePath ? (
-                      <Navigate to={embeddedBrowsePath} replace />
-                    ) : (
-                      publicFallback(rootPath)
-                    )
-                  ) : (
+                  ) : data.site.home.enabled ? (
                     <HomePage embedded site={data.site} />
+                  ) : embeddedBrowsePath ? (
+                    <Navigate to={embeddedBrowsePath} replace />
+                  ) : (
+                    publicFallback(rootPath)
                   )
                 }
               />

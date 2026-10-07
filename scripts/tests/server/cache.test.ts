@@ -59,7 +59,7 @@ import { measureReadyImageCoreMemory } from "../../../packages/server/src/images
 import { READY_IMAGE_CORE_KEYS } from "../../../packages/server/src/images/ready-cache/keys.ts";
 import { sampleResolvedReadyImageIndex } from "../../../packages/server/src/images/ready-cache/random-sampler.ts";
 import { inspectRedisKeyspaceDeep } from "../../../packages/server/src/checks/redis-deep-inspection.ts";
-import { inspectRedisState } from "../../../packages/server/src/checks/redis-inspect.ts";
+import { inspectRedisState } from "../../../packages/server/src/checks/redis-inspection.ts";
 import type { RedisOperationalState } from "../../../packages/server/src/core/runtime-availability.ts";
 
 import {

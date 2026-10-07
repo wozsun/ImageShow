@@ -16,7 +16,7 @@
     }
   },
   "include": [
-    "final-*.test.ts",
+    "*.test.ts",
     "server/**/*.ts",
     "server/**/*.mts",
     "support/**/*.ts",

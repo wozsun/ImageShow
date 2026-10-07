@@ -13,7 +13,7 @@ import { queryKeys } from "../../../../packages/web/src/lib/api/query-keys.ts";
 
 import { createConfigStreamHarness } from "../../support/web-test-context.ts";
 
-test("[Web/后台访问] 独立视图偏好默认卡片，接收跨窗口 pending 只同步外观并支持重入恢复", async (t) => {
+test("[Web/后台] 独立视图偏好默认卡片，接收跨窗口 pending 只同步外观并支持重入恢复", async (t) => {
   const h = await createConfigStreamHarness(t);
   const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
   const { AdminPreferencesProvider, useAdminPreference } = await import("../../../../packages/web/src/hooks/useAdminPreferences.tsx");
@@ -69,7 +69,7 @@ test("[Web/后台访问] 独立视图偏好默认卡片，接收跨窗口 pendin
   assert.deepEqual(JSON.parse(stored.get(key)!).pending, {});
 });
 
-test("[Web/后台访问] 偏好队列随账号卸载终止，迟到响应不写入新账号且原账号可恢复", async (t) => {
+test("[Web/后台] 偏好队列随账号卸载终止，迟到响应不写入新账号且原账号可恢复", async (t) => {
   const h = await createConfigStreamHarness(t, { honorAbort: false });
   const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
   const { AdminPreferencesProvider, useAdminPreference } =
@@ -163,7 +163,7 @@ test("[Web/后台访问] 偏好队列随账号卸载终止，迟到响应不写�
   assert.deepEqual(JSON.parse(stored.get("imageshow.admin.preferences.A")!).pending, {});
 });
 
-test("[Web/后台访问] 跨标签页更新后旧偏好回执只触发一次重验证，旧队列不重放", async (t) => {
+test("[Web/后台] 跨标签页更新后旧偏好回执只触发一次重验证，旧队列不重放", async (t) => {
   const h = await createConfigStreamHarness(t);
   const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
   const { AdminPreferencesProvider, useAdminPreference } =
@@ -273,7 +273,7 @@ test("[Web/后台访问] 跨标签页更新后旧偏好回执只触发一次重�
   assert.deepEqual(JSON.parse(stored.get(key)!).pending, {});
 });
 
-test("[Web/后台访问] 偏好写入在取消读取期间卸载也不发送 PATCH", async (t) => {
+test("[Web/后台] 偏好写入在取消读取期间卸载也不发送 PATCH", async (t) => {
   const h = await createConfigStreamHarness(t);
   const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
   const { AdminPreferencesProvider, useAdminPreference } =
@@ -310,7 +310,7 @@ test("[Web/后台访问] 偏好写入在取消读取期间卸载也不发送 PAT
   assert.equal(h.pending.length, 0);
 });
 
-test("[Web/后台访问] 后台偏好五分钟内聚焦零请求且首次过期重验证命中 304", async () => {
+test("[Web/后台] 后台偏好五分钟内聚焦零请求且首次过期重验证命中 304", async () => {
   const { window, document } = parseHTML(
     "<!doctype html><html><body><div id=root></div></body></html>"
   );

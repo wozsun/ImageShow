@@ -30,11 +30,12 @@ import {
   resolveImageAdminScopeTotal
 } from "../../../../packages/web/src/pages/admin/images/image-admin-list-query.ts";
 import { emptyImageAdminFilters } from "../../../../packages/web/src/pages/admin/images/ImageAdminFilters.tsx";
-import { galleryCard } from "../../support/web-test-context.ts";
+import { editableImage, galleryCard } from "../../support/web-test-context.ts";
+import { inputText } from "../../support/dom-events.ts";
 
 import { installControlledClock } from "../../support/controlled-clock.ts";
 
-test("[Web/后台访问] API 拒绝损坏成功响应且保留已有查询快照和安全 HTTP 错误", async () => {
+test("[Web/后台] API 拒绝损坏成功响应且保留已有查询快照和安全 HTTP 错误", async () => {
   const { QueryClient } = await import("@tanstack/react-query");
   const originalFetch = globalThis.fetch;
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -91,7 +92,7 @@ test("[Web/后台访问] API 拒绝损坏成功响应且保留已有查询快照
     client.clear();
   }
 });
-test("[Web/后台访问] 条件读取只让 304 复用旧 ETag，新的 200 表示必须自带验证器", async () => {
+test("[Web/后台] 条件读取只让 304 复用旧 ETag，新的 200 表示必须自带验证器", async () => {
   const previousFetch = Object.getOwnPropertyDescriptor(globalThis, "fetch");
   const validators: Array<string | null> = [];
   let request = 0;
@@ -138,7 +139,7 @@ test("[Web/后台访问] 条件读取只让 304 复用旧 ETag，新的 200 表�
     }
   }
 });
-test("[Web/后台访问] 后台模块预加载只响应可执行意图并复用页面生命周期请求", async () => {
+test("[Web/后台] 后台模块预加载只响应可执行意图并复用页面生命周期请求", async () => {
   let immediatePreloads = 0;
   const immediateBindings = preloadIntentProps(() => {
     immediatePreloads += 1;
@@ -252,7 +253,7 @@ test("[Web/后台访问] 后台模块预加载只响应可执行意图并复用�
   }
 });
 
-test("[Web/后台访问] 后台图片数字页由单一目标查询直达并隔离分页 scope", async (t) => {
+test("[Web/后台] 后台图片数字页由单一目标查询直达并隔离分页 scope", async (t) => {
   const filters = {
     ...emptyImageAdminFilters,
     device: "pc",
@@ -472,7 +473,7 @@ test("[Web/后台访问] 后台图片数字页由单一目标查询直达并隔�
   assert.equal(target.searchParams.get("order"), "latest");
 });
 
-test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试并一次夹紧", async (t) => {
+test("[Web/后台] 后台数字页 Hook 在 Strict Mode 下直达、重试并一次夹紧", async (t) => {
   const { window, document } = parseHTML(
     "<!doctype html><html><body><div id=root></div></body></html>"
   );
@@ -821,7 +822,7 @@ test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试
     }
   }
 });
-test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页码、操作后夹紧及权限", async (t) => {
+test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、操作后夹紧及权限", async (t) => {
   const { window, document } = parseHTML(
     "<!doctype html><html><body><div id=root></div></body></html>"
   );
@@ -1471,6 +1472,9 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
         deleted_at: null
       }));
       const initialReadyItems = readyItems.slice(0, 2);
+      // 按 ID 指定的图片不在当前列表页上，只由快照接口返回。
+      const offPageImageId = "00000000-0000-7000-8000-000000000014";
+      const snapshotBodies: Array<{ ids: string[] }> = [];
       const trashedIds = new Set<string>();
       const trashBodies: Array<{ ids: string[] }> = [];
       const releaseTrashMutations: Array<() => void> = [];
@@ -1501,6 +1505,16 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
         }
         if (url.pathname === "/api/admin/ingestion/vocabulary") {
           return jsonResponse({ themes: [], tags: [], authors: [] });
+        }
+        if (url.pathname === "/api/admin/images/snapshot") {
+          assert.equal(init?.method, "POST");
+          const body = JSON.parse(String(init?.body)) as { ids: string[] };
+          snapshotBodies.push(body);
+          return jsonResponse({
+            items: body.ids
+              .filter((id) => id === offPageImageId && !trashedIds.has(id))
+              .map((id) => editableImage(id))
+          });
         }
         if (url.pathname === "/api/admin/images/trash") {
           assert.equal(init?.method, "POST");
@@ -1693,6 +1707,118 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
           "刷新失败时必须保留缓存卡片并明确要求重新加载"
         );
         assert.ok(container.querySelector(".image-admin-feedback-region .action-feedback-error"));
+
+        // 未勾选时按 ID 指定图片：弹窗模块加载期间页面根节点由同一页面锁隔离而按钮外观不变，
+        // 弹窗挂载后由其自身的锁接替；删除用途两步确认后提交的 ids 与输入一致。
+        const idInputDialogPath = "/packages/web/src/pages/admin/images/ImageIdInputDialog.tsx";
+        const idInputDialogHold = Promise.withResolvers<void>();
+        const idInputDialogHoldGlobal = "imageshowTestHoldImageIdInputDialog";
+        Object.defineProperty(globalThis, idInputDialogHoldGlobal, {
+          configurable: true,
+          value: idInputDialogHold.promise
+        });
+        // 让页面的按需导入停在测试控制的 Promise 上，以观察弹窗挂载前的间隙；
+        // 真实模块经带查询串的地址原样加载。
+        let idInputDialogLoadIntercepted = false;
+        const idInputDialogHooks = registerHooks({
+          load(url, context, nextLoad) {
+            if (!url.endsWith(idInputDialogPath)) return nextLoad(url, context);
+            idInputDialogLoadIntercepted = true;
+            const source =
+              `await globalThis.${idInputDialogHoldGlobal}; export * from ${JSON.stringify(`${url}?real`)};`;
+            return { format: "module", source, shortCircuit: true };
+          }
+        });
+        try {
+          const idDeleteEntry = () =>
+            [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+              (button) => button.textContent === "删除图片"
+            ) ?? null;
+          await waitFor(
+            () => idDeleteEntry()?.disabled === false,
+            "ID delete entry did not become available after the single trash"
+          );
+          const entry = idDeleteEntry();
+          const cardEdit = container.querySelector<HTMLButtonElement>(
+            'button[aria-label^="编辑图片："]'
+          );
+          const uploadTrigger = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+            (button) => button.textContent === "上传图片"
+          );
+          assert.ok(entry);
+          assert.ok(cardEdit);
+          assert.ok(uploadTrigger);
+          assert.notEqual(container.inert, true);
+          await React.act(async () => {
+            entry.dispatchEvent(new window.Event("click", { bubbles: true }));
+          });
+          // 模块仍被扣住：根节点已 inert、弹窗尚未挂载，各入口按钮既不禁用也不标忙。
+          assert.equal(
+            idInputDialogLoadIntercepted,
+            true,
+            "ID 弹窗模块须首次由本用例加载，否则观察不到挂载前的间隙"
+          );
+          assert.equal(container.inert, true, "ID 弹窗模块加载期间页面根节点必须 inert");
+          assert.equal(container.getAttribute("aria-hidden"), "true");
+          assert.equal(document.querySelector("[data-dialog-frame]"), null);
+          for (const button of [entry, cardEdit, uploadTrigger]) {
+            assert.equal(button.disabled, false);
+            assert.equal(button.getAttribute("aria-busy"), null);
+          }
+          idInputDialogHold.resolve();
+          await waitFor(
+            () => Boolean(document.querySelector("[data-dialog-frame].import-source-overlay")),
+            "image ID dialog did not mount after its module loaded"
+          );
+          assert.equal(container.inert, true, "弹窗挂载后页面锁由弹窗自身接替");
+          const idTextarea = document.querySelector<HTMLTextAreaElement>(
+            'textarea[aria-label="图片 ID"]'
+          );
+          assert.ok(idTextarea);
+          await React.act(async () => {
+            inputText(window as unknown as Window, idTextarea, ` ${offPageImageId.toUpperCase()} `);
+          });
+          await click(buttonWithText("解析"));
+          await waitFor(
+            () => Boolean(document.querySelector("[data-dialog-frame].edit-modal")),
+            "delete-intent editor did not open from the ID dialog"
+          );
+          assert.equal(
+            document.querySelector(".import-source-overlay"),
+            null,
+            "ID 弹窗必须在编辑弹窗就绪的同一次渲染中关闭"
+          );
+          assert.equal(snapshotBodies.length, 1);
+          assert.deepEqual(snapshotBodies[0]!.ids, [offPageImageId]);
+          const deleteButton = () =>
+            document.querySelector<HTMLButtonElement>(".image-editor-delete-button");
+          assert.equal(deleteButton()?.getAttribute("aria-label"), "删除 1 张");
+          await click(deleteButton()!);
+          assert.equal(trashBodies.length, 2);
+          assert.equal(deleteButton()?.getAttribute("aria-label"), "确认删除");
+          await click(deleteButton()!);
+          await waitFor(
+            () => trashBodies.length === 3,
+            "ID delete did not submit after the second click"
+          );
+          assert.deepEqual(trashBodies[2], { ids: [offPageImageId] });
+          await React.act(async () => releaseTrashMutations.shift()?.());
+          await waitFor(
+            () =>
+              pendingTrashRefreshes.length === 1 &&
+              Boolean(container.querySelector(".image-admin-feedback-region .action-feedback-success")),
+            "ID delete result was not rendered before list refresh"
+          );
+          await React.act(async () => pendingTrashRefreshes.shift()?.resolve());
+          await waitFor(
+            () => !document.querySelector("[data-dialog-frame]") && container.inert !== true,
+            "ID delete did not close the editor and release the page lock"
+          );
+        } finally {
+          idInputDialogHold.resolve();
+          idInputDialogHooks.deregister();
+          Reflect.deleteProperty(globalThis, idInputDialogHoldGlobal);
+        }
       } finally {
         await React.act(async () => root.unmount());
         client.clear();
@@ -1956,7 +2082,7 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
     }
   }
 });
-test("[Web/后台访问] 图片元数据保存按实际字段失效投影并复用权威详情", async (t) => {
+test("[Web/后台] 图片元数据保存按实际字段失效投影并复用权威详情", async (t) => {
   const { QueryClient } = await import("@tanstack/react-query");
   const createClient = () => {
     const client = new QueryClient({

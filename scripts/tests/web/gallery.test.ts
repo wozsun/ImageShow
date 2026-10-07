@@ -18,7 +18,11 @@ import {
   initialPublicImageNavigationState
 } from "../../../packages/web/src/lib/ui/public-image-navigation-visibility.ts";
 import { CompactMasonryLayout } from "../../../packages/web/src/pages/gallery/compact-masonry-layout.ts";
-import { GalleryDataWindow } from "../../../packages/web/src/pages/gallery/gallery-data-window.ts";
+import type { PublicImageListResponseDto } from "../../../packages/shared/src/browser.ts";
+import {
+  GalleryDataWindow,
+  type GalleryPageIntent
+} from "../../../packages/web/src/pages/gallery/gallery-data-window.ts";
 import {
   createGalleryRenderViewport,
   galleryRenderViewportHysteresisScreens,
@@ -27,10 +31,7 @@ import {
 import { GalleryCardRevealRegistry } from "../../../packages/web/src/pages/gallery/gallery-card-reveal.ts";
 import { imageDisplayTitle } from "../../../packages/web/src/lib/ui/formatters.ts";
 import {
-  galleryCardDto,
   galleryCard,
-  syntheticGalleryPage,
-  resolveGalleryIntent,
   createConfigStreamHarness,
   editableImage
 } from "../support/web-test-context.ts";
@@ -40,6 +41,39 @@ import {
   activateGalleryRestorationSession,
   reusableGalleryRestorationSession
 } from "../../../packages/web/src/pages/gallery/gallery-restoration.ts";
+
+function syntheticGalleryPage({
+  count,
+  start,
+  total
+}: {
+  count: number;
+  start: number;
+  total: number;
+}): PublicImageListResponseDto {
+  const end = Math.min(total, start + count);
+  return {
+    items: Array.from({ length: end - start }, (_, offset) => {
+      const index = start + offset;
+      const serial = String(index).padStart(12, "0");
+      return galleryCard(
+        `00000000-0000-7000-8000-${serial}`,
+        index % 3 === 0 ? 900 : 1600,
+        index % 3 === 0 ? 1600 : 900
+      );
+    }),
+    next_cursor: end < total ? `cursor-${end}` : null
+  };
+}
+function resolveGalleryIntent(
+  window: GalleryDataWindow,
+  intent: GalleryPageIntent,
+  payload: PublicImageListResponseDto
+) {
+  const request = window.claimRequest(intent);
+  assert.ok(request);
+  assert.equal(window.resolvePage(request, payload), true);
+}
 
 test("[Web/画廊] 首页目录、瀑布流、分页预载与滚动导航组成完整公开浏览流程", () => {
   const unset = { slug: "null", image_count: 7 };
@@ -215,7 +249,7 @@ test("[Web/画廊] 画廊标题只使用标题或 UUID 后十二位", () => {
 });
 test("[Web/画廊] 公开列表 slug 复用 facets 生成卡片与详情显示值", () => {
   const item = {
-    ...galleryCardDto("00000000-0000-7000-8000-000000000001"),
+    ...galleryCard("00000000-0000-7000-8000-000000000001"),
     theme: "night",
     tags: ["blue", "stars"]
   };

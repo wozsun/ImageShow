@@ -42,7 +42,7 @@ import {
   listQuery
 } from "../../../packages/server/src/routes/validation/images.ts";
 
-test("[Server/标签] 基础任一与全部归一并保留单标签编辑方式", () => {
+test("[Server/筛选] 基础任一与全部归一并保留单标签编辑方式", () => {
   const any = parseTagFilter([" B, a,a "]);
   assert.deepEqual(any.expression, { anyOf: [["a"], ["b"]] });
   assert.equal(any.termCount, 2);
@@ -57,7 +57,7 @@ test("[Server/标签] 基础任一与全部归一并保留单标签编辑方式"
   assert.equal(parseTagFilter([]).expression, null);
 });
 
-test("[Server/标签] 列表与统计接受标签分组并统一段数与词项预算", () => {
+test("[Server/筛选] 列表与统计接受标签分组并统一段数与词项预算", () => {
   const inputs = [
     (tag: string[]) => listQuery.safeParse({ view: "gallery", limit: 60, tag }),
     (tag: string[]) => adminImageListQuery.safeParse({ tag }),
@@ -80,7 +80,7 @@ test("[Server/标签] 列表与统计接受标签分组并统一段数与词项�
   assert.equal(mixed?.anyOf.length, 2);
 });
 
-test("[Server/标签] 词项预算按规范表达式计数并独立约束原始输入", () => {
+test("[Server/筛选] 词项预算按规范表达式计数并独立约束原始输入", () => {
   assert.equal(parseTagFilter(Array(32).fill("a")).termCount, 1);
   assert.throws(() => parseTagFilter(Array(33).fill("a")), TagFilterError);
   assert.equal(parseTagFilter([Array(33).fill("a").join(",")]).termCount, 1);
@@ -113,7 +113,7 @@ test("[Server/标签] 词项预算按规范表达式计数并独立约束原始�
   }
 });
 
-test("[Server/标签] slug 优先于显示名且未知分支使完整条件失败", async () => {
+test("[Server/筛选] slug 优先于显示名且未知分支使完整条件失败", async () => {
   const terms = await resolveTermSlugMap(
     async () => [
       { slug: "live", display_name: "现场" },
@@ -139,7 +139,7 @@ test("[Server/标签] slug 优先于显示名且未知分支使完整条件失�
   assert.throws(() => parseTagFilter(["all:现场,live", "empty"]), { kind: "mixed" });
 });
 
-test("[Server/标签] 查询签名统一等价写法并保留全部和分支边界", () => {
+test("[Server/筛选] 查询签名统一等价写法并保留全部和分支边界", () => {
   const plan = (values: string[]) =>
     createImageFilterPlan({ tag: parseTagFilter(values, "mixed").expression });
   assert.equal(plan(["a,b"]).signature, plan(["b", "a,a"]).signature);
@@ -149,7 +149,7 @@ test("[Server/标签] 查询签名统一等价写法并保留全部和分支边�
   assert.equal(imageFilterPlanWithout(plan(["all:a,b", "c"]), "tag").signature, plan([]).signature);
 });
 
-test("[Server/标签] 随机查询接受混合条件、忽略未知名称并限制总词项", async () => {
+test("[Server/筛选] 随机查询接受混合条件、忽略未知名称并限制总词项", async () => {
   const parse = (search: string) =>
     parseRandomQuery(new URL("https://img.example.com/random?" + search), "redirect");
   const parsed = parse("tag=all:a,b&tag=c&theme=!blocked&author=owner");
@@ -189,7 +189,7 @@ test("[Server/标签] 随机查询接受混合条件、忽略未知名称并限�
   assert.equal(excessive.status, 400);
 });
 
-test("[Server/标签] 可读链接保留逻辑标点并往返编码特殊字符", () => {
+test("[Server/筛选] 可读链接保留逻辑标点并往返编码特殊字符", () => {
   const params = new URLSearchParams();
   params.append("tag", "all:a&b,c+d");
   params.append("tag", "#现场%完成");
@@ -198,7 +198,7 @@ test("[Server/标签] 可读链接保留逻辑标点并往返编码特殊字符"
   assert.deepEqual([...new URLSearchParams(search)], [...params]);
 });
 
-test("[Server/标签] 有限集合运算与图片资格一致且重叠分支只产生一个成员", () => {
+test("[Server/筛选] 有限集合运算与图片资格一致且重叠分支只产生一个成员", () => {
   const slugs = ["a", "b", "c", "d"];
   const images = Array.from({ length: 16 }, (_, id) => ({
     id,

@@ -34,7 +34,7 @@ export function normalizeIngestionDraftUrl(
 }
 
 export const ingestionDuplicateDecisions = ["upload", "confirmed"] as const;
-export type IngestionDuplicateDecision = (typeof ingestionDuplicateDecisions)[number];
+type IngestionDuplicateDecision = (typeof ingestionDuplicateDecisions)[number];
 
 export type ImportManifestItemDto = {
   line: number;
@@ -113,9 +113,9 @@ export const importSourceTypes = ["url", "jsonl", "weibo"] as const;
 export type ImportSourceTypeDto = (typeof importSourceTypes)[number];
 
 export const ingestionSourceTypes = ["upload", ...importSourceTypes] as const;
-export type IngestionSourceTypeDto = (typeof ingestionSourceTypes)[number];
+type IngestionSourceTypeDto = (typeof ingestionSourceTypes)[number];
 
-export const serverIngestionStatuses = [
+const serverIngestionStatuses = [
   "queued",
   "downloading",
   "received",
@@ -224,7 +224,7 @@ export type ImportAcceptResultDto = {
 /** Final encoder quality; null means the source WebP was preserved. */
 export type IngestionVariantQualityDto = Record<ImageVariant, number | null>;
 
-export type ServerIngestionPreparedDto = {
+type ServerIngestionPreparedDto = {
   original_width: number;
   original_height: number;
   md5: string;
@@ -357,10 +357,6 @@ export type IngestionQueueEventDto =
       type: "ping";
       queue: IngestionQueueTypeDto;
     };
-
-export type IngestionStatusInputDto = {
-  items: IngestionSessionPairDto[];
-};
 
 export type IngestionStatusItemDto = IngestionSessionPairDto &
   (

@@ -12,7 +12,7 @@ import {
   externalImageProxyTimeoutMs,
   externalImageProxyUserAgent,
   proxyExternalImage
-} from "../external-image-proxy.ts";
+} from "./external-image-proxy.ts";
 import { readImageServingRecordById } from "./record.ts";
 import {
   displayUrlForOriginalComparison,

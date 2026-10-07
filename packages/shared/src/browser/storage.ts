@@ -41,7 +41,7 @@ export type StorageBackendMigrationErrorSampleDto = {
   message: string;
 };
 
-export type StorageBackendMigrationResultDto = {
+type StorageBackendMigrationResultDto = {
   source: string;
   target: string;
   migrated: number;

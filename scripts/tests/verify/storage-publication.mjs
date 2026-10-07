@@ -11,7 +11,7 @@ const loadServer = (path) => import(new URL(path, "file:///app/packages/server/d
 const { LocalStorageDriver } = await loadServer("storage/drivers/local.js");
 const { safeStoragePath } = await loadServer("storage/objects/keys.js");
 
-test("[Server/local发布] 文件及目录同步失败阻止确认，既有目标重新确认持久化", async (t) => {
+test("[Server/local 发布] 文件及目录同步失败阻止确认，既有目标重新确认持久化", async (t) => {
   const driver = new LocalStorageDriver();
   const originalOpen = fs.open;
   const originalLink = fs.link;

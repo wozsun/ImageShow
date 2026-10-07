@@ -4,7 +4,7 @@
 
 ## 新增测试
 
-完整验收 `npm run verify:release` 是唯一的通过标准。新功能、重构和普通修复默认不新增测试：行为变化使现有断言失效时原地修改；只有数据完整性、权限与安全、取消与资源释放、故障恢复或公开接口契约在完整验收中没有任何覆盖，或缺陷曾漏过完整验收时，才在所属领域的现有用例中补最少的断言，并清理被覆盖的重复断言。不写内部函数、单个组件或 Hook 的单元测试；新增测试文件、统一入口装配、场景选择器或支撑工具需要先说明理由并经维护者同意。
+完整验收 `npm run verify:release` 是唯一的通过标准。何时修改受跟踪测试、补断言，以及新增测试文件、统一入口装配、场景选择器或支撑工具的准入，见 [测试准入](../../.agents/spec/test-admission.md)。
 
 ## 首次运行
 
@@ -21,11 +21,11 @@ npm run verify:release
 
 | 路径 | 职责 |
 | --- | --- |
-| `final-server.test.ts` | Server 统一入口，只按确定顺序装配领域套件 |
-| `final-web.test.ts` | Web 统一入口，只按确定顺序装配领域套件 |
+| `server.test.ts` | Server 统一入口，只按确定顺序装配领域套件 |
+| `web.test.ts` | Web 统一入口，只按确定顺序装配领域套件 |
 | `server/` | 配置、HTTP / 鉴权、进程、缓存、存储、图片、内容接入和数据库集成 |
 | `web/` | 共享交互、公开导航、画廊、后台、内容接入、表单和展映 |
-| `web/admin-access/` | 后台交互、偏好、图片查询与管理、认证、图片加载和检查页；`web/admin-access.test.ts` 按稳定顺序装配 |
+| `web/admin/` | 后台交互、偏好、图片查询与管理、认证、图片加载和检查页；`web/admin.test.ts` 按稳定顺序装配 |
 | `web/ingestion/` | 接入队列模型、连接、动作、草稿、重复处理、接管清理与窗口交互；`web/ingestion.test.ts` 按稳定顺序装配 |
 | `verify/` | 源码、构建、运行时门禁和发布前总编排 |
 | `support/` | DOM / 全局属性恢复、可控时钟、有界轮询、进程树和隔离目录等窄职责支撑 |
@@ -43,15 +43,15 @@ npm run verify:release
 已完成构建时可单独运行行为测试：
 
 ```bash
-node --test --test-isolation=none scripts/tests/final-server.test.ts
-npm run test:final:web
+node --test --test-isolation=none scripts/tests/server.test.ts
+npm run test:web
 ```
 
 领域测试使用名称前缀，可在统一入口中选择；筛选后应看到实际执行的匹配用例，不能把只有入口文件或全部跳过的结果当成通过。例如：
 
 ```bash
-npx tsx --test --test-name-pattern="^\[Server/内容接入\]" scripts/tests/final-server.test.ts
-npx tsx --import ./scripts/tests/support/web-assets.mjs --test --test-name-pattern="^\[Web/展映\]" scripts/tests/final-web.test.ts
+npx tsx --test --test-name-pattern="^\[Server/内容接入\]" scripts/tests/server.test.ts
+npx tsx --import ./scripts/tests/support/web-assets.mjs --test --test-name-pattern="^\[Web/展映\]" scripts/tests/web.test.ts
 ```
 
 数据库集成、其中的存储 / 接入跨域合同与 Web 队列 Hook 还提供进程环境变量选择内部具名场景。数据库始终先自行准备本次 PostgreSQL / Redis；每个跨域合同使用独立数据库并清空一次性 Redis，Web 场景始终建立自己的 DOM、请求模拟与 React root：
@@ -82,7 +82,7 @@ PowerShell 中使用 `$env:IMAGESHOW_DATABASE_SCENARIO = "cold-redis"`、`$env:I
 | 正式提交 | `ingestion-commit-guards`、`commit-success`、`commit-conflict`、`commit-recovery` |
 | 接入文件生命周期 | `ingestion-raw-lifecycle`、`ingestion-orphan-lifecycle` |
 
-Web 定向命令使用 `--import ./scripts/tests/support/web-assets.mjs` 加载组件样式桩；真实 CSS 排版由浏览器验收覆盖，`test:final:web` 已包含此选项。
+Web 定向命令使用 `--import ./scripts/tests/support/web-assets.mjs` 加载组件样式桩；真实 CSS 排版由浏览器验收覆盖，`test:web` 已包含此选项。
 
 Web 队列场景值为 `strict-mode`、`empty-reconnect`、`reconnect-pagination`、`handoff-completion`。不设置变量时执行完整场景，未知值会失败而不是产生零测试通过。
 

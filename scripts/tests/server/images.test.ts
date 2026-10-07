@@ -233,7 +233,7 @@ test("[Server/图片] 完成结果统一分类图片与存储配置断连并保�
   });
 });
 
-test("[Server/主题] null 保留给未设置主题与作者，写入以 JSON null 表示未设置且不限制标签", async () => {
+test("[Server/图片] null 保留给未设置主题与作者，写入以 JSON null 表示未设置且不限制标签", async () => {
   const { imageAuthorInput, imageThemeInput } =
     await import("../../../packages/server/src/images/metadata-named-slugs.ts");
   const { themeCreateInput, tagCreateInput, authorSlugInput } =
@@ -1694,7 +1694,7 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
 });
 test("[Server/图片] 原图代理使用私有重验证缓存，条件请求及 HEAD 释放上游正文", async (t) => {
   const { proxyExternalImage } =
-    await import("../../../packages/server/src/images/external-image-proxy.ts");
+    await import("../../../packages/server/src/images/serving/external-image-proxy.ts");
   const { proxyEtagForUpstream } =
     await import("../../../packages/server/src/core/http/proxy-validators.ts");
   const originalFetch = globalThis.fetch;
@@ -2482,7 +2482,7 @@ test("[Server/图片] 安全抓取在预取消时不联网，原图代理取消�
   const { safeFetchExternalImage } =
     await import("../../../packages/server/src/core/external-image-fetch.ts");
   const { proxyExternalImage } =
-    await import("../../../packages/server/src/images/external-image-proxy.ts");
+    await import("../../../packages/server/src/images/serving/external-image-proxy.ts");
   const originalFetch = globalThis.fetch;
   t.after(() => {
     globalThis.fetch = originalFetch;

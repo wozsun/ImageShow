@@ -5,7 +5,7 @@
       "project": ["scripts/**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}"],
       "entry": [
         "scripts/build/process-tree.d.mts",
-        "scripts/tests/final-*.test.ts",
+        "scripts/tests/*.test.ts",
         "scripts/tests/server/isolation/*.mts",
         "scripts/tests/verify/source-contract.mjs",
         "scripts/tests/verify/markdown-links.mjs",
@@ -28,6 +28,9 @@
         "react-router",
         "sharp"
       ]
+    },
+    "packages/shared": {
+      "includeEntryExports": true
     },
     "packages/server": {
       "entry": ["src/healthcheck-cli.ts"]

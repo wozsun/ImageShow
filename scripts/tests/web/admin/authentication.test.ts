@@ -10,7 +10,7 @@ import {
 
 import { AuthSessionRefreshCoordinator } from "../../../../packages/web/src/lib/api/auth-session.ts";
 
-test("[Web/后台访问] 认证刷新失败后会释放在途状态并允许成功重试", async () => {
+test("[Web/后台] 认证刷新失败后会释放在途状态并允许成功重试", async () => {
   const coordinator = new AuthSessionRefreshCoordinator();
   let refreshCount = 0;
 
@@ -27,7 +27,7 @@ test("[Web/后台访问] 认证刷新失败后会释放在途状态并允许成�
   });
   assert.equal(refreshCount, 2);
 });
-test("[Web/后台访问] 认证会话恢复保持最新刷新并只注册一个过期监听器", async () => {
+test("[Web/后台] 认证会话恢复保持最新刷新并只注册一个过期监听器", async () => {
   const { window, document } = parseHTML(
     "<!doctype html><html><body><div id=root></div></body></html>"
   );

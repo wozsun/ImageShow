@@ -1,6 +1,7 @@
 import "../support/web-environment.ts";
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
+import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { parseHTML } from "linkedom";
 import {
@@ -37,6 +38,7 @@ import {
   smallerShowWaterfallImages
 } from "../../../packages/web/src/pages/show/pixi/show-pixi-layout.ts";
 import { ShowPixiCamera } from "../../../packages/web/src/pages/show/pixi/show-pixi-camera.ts";
+import { ShowPixiFloatScene } from "../../../packages/web/src/pages/show/pixi/show-pixi-float-scene.ts";
 import { ShowPixiWaterfallScene } from "../../../packages/web/src/pages/show/pixi/show-pixi-waterfall-scene.ts";
 import {
   ShowPixiRuntime,
@@ -44,14 +46,9 @@ import {
 } from "../../../packages/web/src/pages/show/pixi/show-pixi-runtime.ts";
 import type { ShowPixiTextureCache } from "../../../packages/web/src/pages/show/pixi/show-pixi-texture-cache.ts";
 import type { ShowPixiVisibleItem } from "../../../packages/web/src/pages/show/pixi/show-pixi-types.ts";
+import type { ShowImageCardDto } from "../../../packages/shared/src/browser.ts";
 import {
   createPublicNavigationHarness,
-  showImages,
-  createCameraTestElement,
-  installPixiPaletteFixture,
-  createFloatSceneHarness,
-  floatCardPositions,
-  createTextureRecoveryHarness,
   editableImage,
   createConfigStreamHarness
 } from "../support/web-test-context.ts";
@@ -65,6 +62,358 @@ import { imageBatchTier } from "../../../packages/web/src/lib/gallery/image-brow
 import { showInitialBatchLimit } from "../../../packages/web/src/pages/show/show-browse.ts";
 import { installControlledClock } from "../support/controlled-clock.ts";
 
+function showImages(count: number): ShowImageCardDto[] {
+  return Array.from({ length: count }, (_, index) => ({id: `00000000-0000-7000-8000-${String(index).padStart(12, "0")}`,title: `Image ${index}`,width: index % 2 ? 1600 : 900,height: index % 2 ? 900 : 1600,base_url:"/images"}));
+}
+function createCameraTestElement(width = 800, height = 600) {
+  const listeners = new Map<string, Set<(event: Record<string, unknown>) => void>>();
+  const capturedPointers = new Set<number>();
+  const element = {
+    addEventListener(type: string, listener: (event: Record<string, unknown>) => void) {
+      const entries = listeners.get(type) ?? new Set();
+      entries.add(listener);
+      listeners.set(type, entries);
+    },
+    removeEventListener(type: string, listener: (event: Record<string, unknown>) => void) {
+      listeners.get(type)?.delete(listener);
+    },
+    getBoundingClientRect: () => ({
+      bottom: height,
+      height,
+      left: 0,
+      right: width,
+      top: 0,
+      width,
+      x: 0,
+      y: 0,
+      toJSON: () => ({})
+    }),
+    hasPointerCapture: (pointerId: number) => capturedPointers.has(pointerId),
+    releasePointerCapture: (pointerId: number) => capturedPointers.delete(pointerId),
+    setPointerCapture: (pointerId: number) => capturedPointers.add(pointerId)
+  } as unknown as HTMLElement;
+  return {
+    element,
+    emit(type: string, values: Record<string, unknown>) {
+      let prevented = false;
+      const event = {
+        button: 0,
+        cancelable: true,
+        clientX: 0,
+        clientY: 0,
+        deltaMode: 0,
+        deltaX: 0,
+        deltaY: 0,
+        pointerId: 1,
+        pointerType: "mouse",
+        preventDefault: () => {
+          prevented = true;
+        },
+        timeStamp: 0,
+        ...values
+      };
+      for (const listener of listeners.get(type) ?? []) listener(event);
+      return prevented;
+    },
+    listenerCount: () => [...listeners.values()].reduce(
+      (total, entries) => total + entries.size,
+      0
+    )
+  };
+}
+function installPixiPaletteFixture(t: TestContext) {
+  // Exercise the production palette using its real CSS values. Geometry tests
+  // do not need a GPU, but cards now correctly share the browser color owner.
+  const css = ["semantic-colors.css", "gallery-semantic-colors.css"]
+    .map((name) => readFileSync(`packages/web/src/styles/${name}`, "utf8"))
+    .join("\n");
+  const tokens = new Map(
+    [...css.matchAll(/(--[\w-]+):\s*([^;]+);/gu)]
+      .map((match) => [match[1], match[2].trim()])
+  );
+  const globals = {
+    document: { documentElement: {} },
+    getComputedStyle: () => ({ getPropertyValue: (key: string) => tokens.get(key) ?? "" })
+  };
+  const originals = new Map(
+    Object.keys(globals).map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)])
+  );
+  for (const [key, value] of Object.entries(globals)) {
+    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+  }
+  t.after(() => {
+    for (const [key, descriptor] of originals) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else delete (globalThis as Record<string, unknown>)[key];
+    }
+  });
+}
+function createFloatSceneHarness(
+  t: TestContext,
+  {
+    width = 1440,
+    height = 900,
+    sizeIndex = defaultShowFloatSizeIndex,
+    count = 700,
+    hasMore = count > 500
+  }: {
+    width?: number;
+    height?: number;
+    sizeIndex?: number;
+    count?: number;
+    hasMore?: boolean;
+  } = {}
+) {
+  installPixiPaletteFixture(t);
+  const dpr = Object.getOwnPropertyDescriptor(globalThis, "devicePixelRatio");
+  Object.defineProperty(globalThis, "devicePixelRatio", { configurable: true, value: 1 });
+  t.after(() => {
+    if (dpr) Object.defineProperty(globalThis, "devicePixelRatio", dpr);
+    else delete (globalThis as Record<string, unknown>).devicePixelRatio;
+  });
+  type Acquisition = {
+    key: string;
+    active: boolean;
+    shared: boolean;
+    readyAtAcquire: boolean;
+    notify: Parameters<ShowPixiTextureCache["acquire"]>[2];
+  };
+  const acquisitions: Acquisition[] = [];
+  const ready = new Set<string>();
+  const cache = {
+    acquire(
+      url: string,
+      lod: Parameters<ShowPixiTextureCache["acquire"]>[1],
+      notify: Acquisition["notify"]
+    ) {
+      const key = `${url}:${lod.pixelWidth}x${lod.pixelHeight}`;
+      const acquisition: Acquisition = {
+        key,
+        active: true,
+        shared: acquisitions.some((entry) => entry.active && entry.key === key),
+        readyAtAcquire: ready.has(key),
+        notify
+      };
+      acquisitions.push(acquisition);
+      if (ready.has(key))
+        queueMicrotask(() => {
+          if (acquisition.active) notify(Texture.EMPTY, false, 0);
+        });
+      return {
+        release: () => {
+          acquisition.active = false;
+        }
+      };
+    }
+  } as unknown as ShowPixiTextureCache;
+  let visibleItems: readonly ShowPixiVisibleItem[] = [];
+  let requests = 0;
+  let pointerY = height / 2;
+  let pointerTime = 0;
+  const movements: number[] = [];
+  const movementPointerTypes: Array<string | undefined> = [];
+  const target = createCameraTestElement(width, height);
+  const scene = new ShowPixiFloatScene({
+    width,
+    height,
+    sizeIndex,
+    images: showImages(count),
+    hasMore,
+    dataKey: "desktop-float",
+    order: "latest",
+    inputElement: target.element,
+    textureCache: cache,
+    // Geometry/stream tests never create a renderer or open the browser.
+    renderer: {} as Renderer,
+    running: false,
+    reducedMotion: false,
+    speed: 28,
+    onNeedImages: () => {
+      requests += 1;
+    },
+    onOpen: () => undefined,
+    onVisibleItems: (items) => {
+      visibleItems = items;
+    },
+    onSizeIndexChange: (index) => index,
+    onManualVerticalMovement: (delta, pointerType) => {
+      movements.push(delta);
+      movementPointerTypes.push(pointerType);
+    }
+  });
+  scene.update(0);
+  t.after(() => {
+    scene.destroy();
+    scene.destroy();
+    assert.equal(target.listenerCount(), 0);
+    assert.equal(acquisitions.filter((entry) => entry.active).length, 0);
+    assert.deepEqual(visibleItems, []);
+  });
+  return {
+    scene,
+    target,
+    visibleItems: () => visibleItems,
+    acquisitions,
+    movements,
+    movementPointerTypes,
+    requests: () => requests,
+    activeLeases: () => acquisitions.filter((entry) => entry.active),
+    resolveTextures() {
+      for (const entry of acquisitions) {
+        if (!entry.active) continue;
+        ready.add(entry.key);
+        entry.notify(Texture.EMPTY, false, 0);
+      }
+    },
+    advance(frames: number) {
+      for (let frame = 0; frame < frames; frame += 1) scene.update(16);
+    },
+    dragBy(delta: number) {
+      if (scene.stats().activePointers === 0) {
+        target.emit("pointerdown", { clientY: pointerY, timeStamp: pointerTime });
+      }
+      pointerY += delta;
+      pointerTime += 16;
+      target.emit("pointermove", { clientY: pointerY, timeStamp: pointerTime });
+      scene.update(16);
+    }
+  };
+}
+function floatCardPositions(scene: ShowPixiFloatScene) {
+  return scene.root.children.map((root) => {
+    const bounds = root.hitArea as Rectangle;
+    return {
+      root,
+      x: root.x,
+      y: root.y,
+      width: bounds.width,
+      height: bounds.height,
+      rotation: root.rotation
+    };
+  });
+}
+type TextureRecoveryHarnessOptions = {
+  maximumEntries?: number;
+  maximumPixels?: number;
+  maximumUnreferenced?: number;
+  maximumInFlight?: number;
+  generateMipmaps?: boolean;
+};
+
+async function createTextureRecoveryHarness(
+  t: TestContext,
+  {
+    maximumEntries = 1,
+    maximumPixels = maximumEntries * 128 * 128,
+    maximumUnreferenced = 0,
+    maximumInFlight = 1,
+    generateMipmaps = false
+  }: TextureRecoveryHarnessOptions = {}
+) {
+  installPixiPaletteFixture(t);
+  const { ShowPixiTextureCache } =
+    await import("../../../packages/web/src/pages/show/pixi/show-pixi-texture-cache.ts");
+  const { ShowPixiCard, ShowPixiPerspectiveCoordinator } =
+    await import("../../../packages/web/src/pages/show/pixi/show-pixi-card.ts");
+  const requests: string[] = [];
+  const holds = new Map<string, Promise<void>>();
+  const statuses = new Map<string, number>();
+  let offline = false;
+  let decodeFails = false;
+  let failurePhase: "headers" | "body" = "headers";
+  const globals = {
+    window: { location: new URL("https://img.example/show") },
+    devicePixelRatio: 1,
+    fetch: async (url: string) => {
+      requests.push(url);
+      await holds.get(url);
+      if (offline) {
+        if (failurePhase === "headers") throw new TypeError("Failed to fetch");
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.error(new TypeError("Response interrupted"));
+            }
+          })
+        );
+      }
+      return new Response(new Blob(["image"]), {
+        status: statuses.get(url) ?? (url.includes("missing") ? 404 : 200)
+      });
+    },
+    createImageBitmap: async (_blob: Blob, options: ImageBitmapOptions = {}) => {
+      if (decodeFails) throw new Error("Invalid image bytes");
+      return { width: options.resizeWidth ?? 128, height: options.resizeHeight ?? 128, close() {} };
+    }
+  };
+  const originals = new Map(
+    Object.keys(globals).map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)])
+  );
+  for (const [key, value] of Object.entries(globals)) {
+    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+  }
+  const cache = new ShowPixiTextureCache({
+    maximumEntries,
+    maximumPixels,
+    maximumInFlight,
+    maximumUnreferenced,
+    maximumSourceBytes: 32 * 1_024 * 1_024,
+    generateMipmaps
+  });
+  const cards: InstanceType<typeof ShowPixiCard>[] = [];
+  const coordinator = new ShowPixiPerspectiveCoordinator();
+  t.after(() => {
+    for (const card of cards) card.destroy();
+    cache.destroy();
+    for (const [key, descriptor] of originals) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else delete (globalThis as Record<string, unknown>)[key];
+    }
+  });
+  return {
+    cache,
+    requests,
+    hold(id: string) {
+      const pending = Promise.withResolvers<void>();
+      holds.set(`https://textures.example/small/${id.slice(-2)}/${id}.webp`, pending.promise);
+      t.after(() => pending.resolve());
+      return pending.resolve;
+    },
+    setOffline(value: boolean, phase: "headers" | "body" = "headers") {
+      offline = value;
+      failurePhase = phase;
+    },
+    setStatus(id: string, status: number) {
+      statuses.set(`https://textures.example/small/${id.slice(-2)}/${id}.webp`, status);
+    },
+    setDecodeFailure(value: boolean) {
+      decodeFails = value;
+    },
+    async flush() {
+      for (let turn = 0; turn < 200; turn += 1) {
+        await new Promise((resolve) => setImmediate(resolve));
+        if (cache.stats().inFlight === 0 && cache.stats().queued === 0) return;
+      }
+      assert.fail(`纹理队列未收敛: ${JSON.stringify(cache.stats())}`);
+    },
+    card(
+      id: string,
+      onOpen: (image: { id: string }, key: string) => void = () => undefined,
+      baseUrl = "https://textures.example"
+    ) {
+      const card = new ShowPixiCard(cache, onOpen, {} as Renderer, coordinator);
+      cards.push(card);
+      card.assign(
+        id,
+        {...showImages(1)[0],id,width: 128,height: 128,base_url:baseUrl},
+        100,
+        100,
+        0.04
+      );
+      return card;
+    }
+  };
+}
 const unchangedTextureLods: ShowPixiTextureCache["fitResidentLods"] = (requests) =>
   requests.map(({ lod }) => lod);
 

@@ -64,6 +64,14 @@ export function ImageIdInputDialog({
   });
   const presentation = intentPresentation[intent];
   const issueCount = parsed ? parsed.invalid.length + parsed.missing.length : 0;
+  const hintId = `${inputId}-hint`;
+  const errorId = `${inputId}-error`;
+  const issuesId = `${inputId}-issues`;
+  const describedBy = [
+    hintId,
+    error ? errorId : "",
+    issueCount ? issuesId : ""
+  ].filter(Boolean).join(" ");
 
   useEffect(() => () => requestControllerRef.current?.abort(), []);
 
@@ -77,7 +85,7 @@ export function ImageIdInputDialog({
     const opened = await onResolved(items);
     if (opened) return true;
     setOpening(false);
-    setError("编辑弹窗打开失败，请重新加载页面后重试");
+    setError("未能打开编辑弹窗，请关闭后重试");
     return false;
   };
 
@@ -185,15 +193,15 @@ export function ImageIdInputDialog({
               </button>
             </div>
             <div className="import-source-panel">
-              <p className="hint import-source-hint" id={`${inputId}-hint`}>
-                填写完整的图片 ID（UUID），可用换行、空格或逗号分隔，最多 {imageIdInputMaxItems} 个。
+              <p className="hint import-source-hint" id={hintId}>
+                填写完整的图片 ID（UUID），可用换行、空格或逗号分隔，最多 {imageIdInputMaxItems} 项。
               </p>
               <div className="import-source-input-region">
                 <textarea
                   ref={inputRef}
                   id={inputId}
                   aria-label="图片 ID"
-                  aria-describedby={`${inputId}-hint`}
+                  aria-describedby={describedBy}
                   className="import-source-textarea"
                   aria-invalid={Boolean(error) || issueCount > 0 || undefined}
                   value={text}
@@ -203,9 +211,9 @@ export function ImageIdInputDialog({
                   rows={9}
                 />
               </div>
-              <FieldError message={error} announce />
+              <FieldError id={errorId} message={error} announce />
               {parsed && issueCount > 0 && (
-                <div className="import-issue-preview">
+                <div className="import-issue-preview" id={issuesId}>
                   <div className="import-issue-preview-summary">
                     <span>{issueCount} 项不计入</span>
                   </div>

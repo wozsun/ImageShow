@@ -19,7 +19,7 @@ import { imageAdminConfirmationCopy } from "../../../../packages/web/src/pages/a
 import { adminImageListItem } from "../../support/web-test-context.ts";
 import { inputText } from "../../support/dom-events.ts";
 
-test("[Web/后台访问] 概览渲染当前、历史与未知 Redis 占用且重建结束只刷新一次", async () => {
+test("[Web/后台] 概览渲染当前、历史与未知 Redis 占用且重建结束只刷新一次", async () => {
   const React = await import("react");
   const { createRoot } = await import("react-dom/client");
   const { renderToStaticMarkup } = await import("react-dom/server");
@@ -339,7 +339,7 @@ test("[Web/后台访问] 概览渲染当前、历史与未知 Redis 占用且重
     }
   }
 });
-test("[Web/后台访问] 图片详情根据链接显示原图并保持来源、标题和后台入口", async () => {
+test("[Web/后台] 图片详情根据链接显示原图并保持来源、标题和后台入口", async () => {
   const { window, document } = parseHTML(
     "<!doctype html><html><body><div id=root></div></body></html>"
   );
@@ -729,7 +729,7 @@ test("[Web/后台访问] 图片详情根据链接显示原图并保持来源、�
     }
   }
 });
-test("[Web/后台访问] 作者列表空闲时保存采用权威 DTO，新建前置且不追加列表读取", async () => {
+test("[Web/后台] 作者列表空闲时保存采用权威 DTO，新建前置且不追加列表读取", async () => {
   const { window, document } = parseHTML(
     '<!doctype html><html><body><div id="root"></div></body></html>'
   );
@@ -1024,7 +1024,7 @@ test("[Web/后台访问] 作者列表空闲时保存采用权威 DTO，新建前
     }
   }
 });
-test("[Web/后台访问] 图片回收站永久删除确认区分已选与全部范围", () => {
+test("[Web/后台] 图片回收站永久删除确认区分已选与全部范围", () => {
   const manyPurge = imageAdminConfirmationCopy({
     kind: "purge",
     request: { scope: "selected", ids: ["one", "two"] }
@@ -1041,7 +1041,7 @@ test("[Web/后台访问] 图片回收站永久删除确认区分已选与全部�
   assert.match(allPurge?.description ?? "", /之后才移入回收站/);
   assert.equal(allPurge?.label, "永久删除");
 });
-test("[Web/后台访问] 单图移入回收站按钮必须在同一按钮上点击两次才执行", async () => {
+test("[Web/后台] 单图移入回收站按钮必须在同一按钮上点击两次才执行", async () => {
   const { window, document } = parseHTML(
     "<!doctype html><html><body><div id=root></div></body></html>"
   );

@@ -86,7 +86,7 @@ export const defaultAdminImageSort: Readonly<AdminImageSort> = {
 
 // 管理端界面偏好以 PostgreSQL 为权威，并由浏览器本地存储提供首帧与离线兜底。
 // 将键和值域集中在 shared；新增偏好时，类型、服务端校验和前端投影会同步暴露缺口。
-export const adminColorSchemes = ["light", "dark", "system"] as const;
+const adminColorSchemes = ["light", "dark", "system"] as const;
 const vocabularyViewModes = ["list", "card"] as const;
 export const adminPreferenceValueOptions = {
   color_scheme: adminColorSchemes,

@@ -1,5 +1,5 @@
 import { checkDatabase, checkTrash } from "./database-check.ts";
-import { inspectRedisState } from "./redis-inspect.ts";
+import { inspectRedisState } from "./redis-inspection.ts";
 import { checkStorage } from "./storage-check.ts";
 import { captureAdminCheck } from "./status-errors.ts";
 

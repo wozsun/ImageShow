@@ -7,7 +7,6 @@ import {
 } from "@imageshow/shared/browser";
 import type { Hono } from "hono";
 import type { z } from "zod";
-import { listAuthorsWithMeta } from "../authors/query.ts";
 import {
   createAuthor,
   deleteAuthor,
@@ -32,14 +31,17 @@ import {
 import { parse } from "./validation/parse.ts";
 import { sortOrderUpdateInput } from "./validation/sort-order.ts";
 import { setVocabularySortOrder } from "../vocab/sort-order.ts";
-import type { EntityCacheKind } from "../vocab/vocab-cache.ts";
+import {
+  getAdminAuthorList,
+  getAdminTagList,
+  getAdminThemeList,
+  type EntityCacheKind
+} from "../vocab/vocab-cache.ts";
 import {
   createTag,
   deleteTag,
   setTagDisplayName
 } from "../tags/mutations.ts";
-import { listTagsWithCounts } from "../tags/query.ts";
-import { listThemesWithMeta } from "../themes/query.ts";
 import {
   createTheme,
   deleteTheme,
@@ -110,7 +112,7 @@ export function registerAdminVocabularyRoutes(app: Hono) {
     createInput: tagCreateInput,
     updateInput: tagDisplayUpdateInput,
     deletePermission: adminPermissions.tagDelete,
-    list: listTagsWithCounts,
+    list: getAdminTagList,
     create: async (input) => {
       await createTag(input.slug, input.display_name);
     },
@@ -124,7 +126,7 @@ export function registerAdminVocabularyRoutes(app: Hono) {
     createInput: themeCreateInput,
     updateInput: themeDisplayUpdateInput,
     deletePermission: adminPermissions.themeDelete,
-    list: listThemesWithMeta,
+    list: getAdminThemeList,
     create: async (input) => {
       await createTheme(input.slug, input.display_name);
     },
@@ -138,7 +140,7 @@ export function registerAdminVocabularyRoutes(app: Hono) {
     createInput: authorCreateInput,
     updateInput: authorMetaUpdateInput,
     deletePermission: adminPermissions.authorDelete,
-    list: listAuthorsWithMeta,
+    list: getAdminAuthorList,
     create: (input) => createAuthor(input.slug, input.display_name, input.link),
     update: (slug, input) => updateAuthorProfile(
       slug,

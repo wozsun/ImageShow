@@ -60,7 +60,7 @@ function imageHarness(t: TestContext) {
 }
 
 for (const thumbSrc of ["", "/thumb.webp"]) {
-  test(`[Web/图片详情] 完整图失败可显式重试且保留可用图层 / ${thumbSrc ? "有缩略图" : "无缩略图"}`, async (t) => {
+  test(`[Web/图片加载] 完整图失败可显式重试且保留可用图层 / ${thumbSrc ? "有缩略图" : "无缩略图"}`, async (t) => {
     const h = imageHarness(t);
     let parentClicks = 0;
     await h.render({
@@ -94,7 +94,7 @@ for (const thumbSrc of ["", "/thumb.webp"]) {
   });
 }
 
-test("[Web/图片详情] 换源、换图与关闭隔离旧解码结果并释放加载槽", async (t) => {
+test("[Web/图片加载] 换源、换图与关闭隔离旧解码结果并释放加载槽", async (t) => {
   const h = imageHarness(t);
   const oldDecode = Promise.withResolvers<void>();
   await h.render({ imageKey: "a", fullSrc: "/old.jpg" });

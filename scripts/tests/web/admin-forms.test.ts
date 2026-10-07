@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { parseHTML } from "linkedom";
 import {
+  type ImageUpdateResponseDto,
   type IngestionVocabularyDto,
   type RuntimeConfig
 } from "../../../packages/shared/src/browser.ts";
@@ -46,7 +47,6 @@ import {
 import { TagInput } from "../../../packages/web/src/components/form/TagInput.tsx";
 import {
   editableImage,
-  imageUpdateResponse,
   createConfigStreamHarness
 } from "../support/web-test-context.ts";
 import {
@@ -54,6 +54,25 @@ import {
   inputText
 } from "../support/dom-events.ts";
 import { installControlledClock } from "../support/controlled-clock.ts";
+
+function imageUpdateResponse(
+  updatedIds: string[],
+  failedIds: string[] = []
+): ImageUpdateResponseDto {
+  return {
+    updated: updatedIds.length,
+    failed: failedIds.length,
+    results: [
+      ...updatedIds.map((id) => ({ id, status: "updated" as const })),
+      ...failedIds.map((id) => ({
+        id,
+        status: "failed" as const,
+        code: "update_failed",
+        message: "failed"
+      }))
+    ]
+  };
+}
 
 test("[Web/后台表单] 存储维护预览按三档对象区分恢复候选、可清理与受阻项", () => {
   assert.deepEqual(

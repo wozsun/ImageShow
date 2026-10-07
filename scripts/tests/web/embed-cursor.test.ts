@@ -1,7 +1,7 @@
 import "../support/web-environment.ts";
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
-import { useEmbeddedCursorBridge } from "../../../packages/web/src/hooks/useEmbeddedCursorBridge.ts";
+import { useEmbeddedCursorBridge } from "../../../packages/web/src/components/layout/useEmbeddedCursorBridge.ts";
 import { createConfigStreamHarness } from "../support/web-test-context.ts";
 import { installProperties } from "../support/property-descriptors.ts";
 

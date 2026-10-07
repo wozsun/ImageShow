@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState
 } from "react";
@@ -56,6 +57,7 @@ import {
   useMediaQuery
 } from "../../../hooks/useMediaQuery.js";
 import { useWorkspaceToolbarCollapse } from "../../../hooks/useWorkspaceToolbarCollapse.js";
+import { usePageScrollLock } from "../../../hooks/usePageScrollLock.js";
 import { WorkspaceToolbarScrollbar } from "../../../components/layout/WorkspaceToolbarScrollbar.js";
 import { WorkspaceToolbar } from "../../../components/layout/WorkspaceToolbar.js";
 import { workspaceScrollContainer } from "../../../lib/ui/workspace-scroll.js";
@@ -114,6 +116,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
   const [idInput, setIdInput] = useState<ImageIdInputSession | null>(null);
   const [idInputPending, setIdInputPending] = useState(false);
   const idInputOpenerRef = useRef<HTMLButtonElement | null>(null);
+  const failedIdInputFocusRef = useRef<HTMLButtonElement | null>(null);
   const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
   const permissions = useAdminPermissions();
   const canPurgeImage = permissions.includes(adminPermissions.imageTrashPurge);
@@ -199,9 +202,18 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
     }
   });
   const editorPending = editorCapability.pending !== null;
-  // ID 弹窗模块加载期间页面尚未 inert：卡片编辑、批量编辑与 ID 入口经此让路，卡片详情与上传 / 导入
-  // 在各自的禁用条件中另行计入，避免弹窗叠加。
-  const editorConflictBusy = operationBusy || detailPending || idInputPending;
+  // ID 弹窗模块加载期间沿用上传 / 导入的做法锁住页面根节点：按钮外观不变，指针、键盘、焦点与滚动
+  // 一并隔离，弹窗挂载后由其自身的锁接替；加载失败时把焦点还给入口按钮。
+  usePageScrollLock(idInputPending);
+  useLayoutEffect(() => {
+    if (idInputPending) return;
+    const target = failedIdInputFocusRef.current;
+    failedIdInputFocusRef.current = null;
+    if (target?.isConnected
+      && !target.disabled
+      && !target.closest("[inert]")) target.focus();
+  }, [idInputPending]);
+  const editorConflictBusy = operationBusy || detailPending;
   const modalOpen = Boolean(
     detailCapability.item
     || editorCapability.session
@@ -286,7 +298,6 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
       sources: selectedItems
     });
   const openImageIdInput = (intent: ImageEditorIntent, opener: HTMLButtonElement) => {
-    // 模块加载期间计入页面忙碌，避免其间打开其他弹窗后 ID 弹窗叠加其上。
     setIdInputPending(true);
     void loadImageIdInputDialog().then(
       (module) => {
@@ -295,6 +306,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
         setIdInput({ intent, opener, Dialog: module.ImageIdInputDialog });
       },
       (error: unknown) => {
+        failedIdInputFocusRef.current = opener;
         reportAdminUiError("image_admin.id_input_load", error);
         showFeedback("按 ID 指定图片功能加载失败，请重新加载页面", "error");
       }
@@ -379,7 +391,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
             <IngestionLauncher
               settings={settings}
               showTriggers={view === "ready"}
-              disabled={operationBusy || detailPending || editorPending || idInputPending}
+              disabled={operationBusy || detailPending || editorPending}
               onDone={finishIngestionBatch}
               onLoadError={(error) => {
                 reportAdminUiError("image_admin.ingestion_load", error);
@@ -614,7 +626,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
               item={item}
               storageName={storageName}
               checked={selected.includes(item.id)}
-              detailDisabled={operationBusy || editorPending || idInputPending}
+              detailDisabled={operationBusy || editorPending}
               detailPending={detailCapability.pendingItemId === item.id}
               onPreloadDetail={detailCapability.preload}
               onCheck={(checked, extendRange) =>

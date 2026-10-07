@@ -90,7 +90,7 @@ function safeStack(value: unknown) {
   return frames;
 }
 
-export type SafeLogValue =
+type SafeLogValue =
   null | boolean | number | string | SafeLogValue[] | { [key: string]: SafeLogValue };
 
 /** Builds bounded plain data; only known Error fields use guarded accessor reads. */

@@ -1,6 +1,6 @@
 import { randomQueryLimits } from "./common.ts";
 
-export type TagClause = readonly [string, ...string[]];
+type TagClause = readonly [string, ...string[]];
 export type TagExpression = { anyOf: readonly [TagClause, ...TagClause[]] } | null;
 export type TagMatchMode = "any" | "all";
 export type TagFilterValue = string | string[];
@@ -10,7 +10,7 @@ export function tagFilterValues(value: TagFilterValue): string[] {
   return typeof value === "string" ? (value ? [value] : []) : value;
 }
 
-export const tagFilterLimits = Object.freeze({
+const tagFilterLimits = Object.freeze({
   terms: randomQueryLimits.maxSelectorsPerField,
   segments: randomQueryLimits.maxSelectorsPerField,
   termCharacters: randomQueryLimits.maxSelectorCharacters,

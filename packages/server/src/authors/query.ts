@@ -1,11 +1,9 @@
 import {
-  getAdminAuthorList,
   getAuthorVocab,
   type VocabularyReadAccess
 } from "../vocab/vocab-cache.ts";
 import { pool } from "../core/database/pools.ts";
 import { resolveVocabularySlugs, resolveTermSlugMap } from "../vocab/terms.ts";
-import type { AuthorDto } from "@imageshow/shared/browser";
 import { isWeiboUserId } from "./identity.ts";
 
 export function resolveAuthorTermMap(
@@ -20,10 +18,6 @@ export function resolveAuthorSlugs(
   access: VocabularyReadAccess = {}
 ): Promise<string[]> {
   return resolveVocabularySlugs(() => getAuthorVocab(access), terms);
-}
-
-export async function listAuthorsWithMeta(): Promise<AuthorDto[]> {
-  return getAdminAuthorList();
 }
 
 export async function resolveWeiboAuthorSlugs(

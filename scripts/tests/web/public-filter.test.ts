@@ -335,7 +335,7 @@ test("[Web/公开筛选] 弹窗可逐项清除损坏条件，所有错误解除�
   await h.render(null);
 });
 
-test("[Web/首页] 第 33 个主题或作者被拒绝，移除已有项后可以重新选择", async (t) => {
+test("[Web/公开筛选] 第 33 个主题或作者被拒绝，移除已有项后可以重新选择", async (t) => {
   const h = await createConfigStreamHarness(t);
   const options = Array.from({ length: 33 }, (_, i) => ({
     slug: `s${i}`,

@@ -24,12 +24,10 @@ export function installControlledClock(
   t: TestContext,
   window: Window,
   {
-    initialNow = 1_000,
     minimumControlledDelayMs = 500,
     includeGlobalTimers = false,
     includeDateNow = true
   }: {
-    initialNow?: number;
     minimumControlledDelayMs?: number;
     includeGlobalTimers?: boolean;
     includeDateNow?: boolean;
@@ -57,7 +55,7 @@ export function installControlledClock(
   const timers = new Map<number, ScheduledTimer>();
   const nativeTimers = new Set<unknown>();
   let nextId = 0;
-  let now = initialNow;
+  let now = 1_000;
 
   const schedule = (
     callback: TimerHandler,

@@ -13,7 +13,7 @@ import { createApiSuccessSnapshot } from "../../../packages/server/src/core/http
 import { createEncodedContentCache } from "../../../packages/server/src/core/http/encoded-content.ts";
 import { logger } from "../../../packages/server/src/core/logger.ts";
 
-test("[Server/内容HTTP] JSON 快照复用正文与验证器，发布变化后失效", async () => {
+test("[Server/内容 HTTP] JSON 快照复用正文与验证器，发布变化后失效", async () => {
   let projections = 0;
   const snapshot = createApiSuccessSnapshot((source: { title: string; private: number }) => {
     projections++;
@@ -37,7 +37,7 @@ test("[Server/内容HTTP] JSON 快照复用正文与验证器，发布变化后�
   assert.deepEqual(await response.json(), { ok: true, title: "新配置" });
 });
 
-test("[Server/内容HTTP] 原生编码正文、长度、条件响应与 HEAD 一致", async () => {
+test("[Server/内容 HTTP] 原生编码正文、长度、条件响应与 HEAD 一致", async () => {
   const identity = createContentRepresentation("<html>合成页面内容 😀</html>".repeat(100));
   const select = createEncodedContentCache();
   assert.equal(select(identity, "br, gzip"), identity);
@@ -106,7 +106,7 @@ test("[Server/内容HTTP] 原生编码正文、长度、条件响应与 HEAD 一
   assert.equal((await app.request("/", { headers: { "Accept-Encoding": "*;q=0" } })).status, 406);
 });
 
-test("[Server/内容HTTP] 编码并发有界、只处理最新等待内容且失败不重复占用资源", async (t) => {
+test("[Server/内容 HTTP] 编码并发有界、只处理最新等待内容且失败不重复占用资源", async (t) => {
   const calls: Array<{
     source: ContentRepresentation;
     encoding: string;
@@ -164,7 +164,7 @@ test("[Server/内容HTTP] 编码并发有界、只处理最新等待内容且失
   assert.equal(calls.length, 6);
 });
 
-test("[Server/内容HTTP] 不缓存变大的编码，同步编码失败保持原文可用", async (t) => {
+test("[Server/内容 HTTP] 不缓存变大的编码，同步编码失败保持原文可用", async (t) => {
   t.mock.method(logger, "warn", () => {});
   let calls = 0;
   const identity = createContentRepresentation("small");

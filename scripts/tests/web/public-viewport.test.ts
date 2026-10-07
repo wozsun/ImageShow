@@ -4,7 +4,7 @@ import test from "node:test";
 import { MemoryRouter, useLocation, useNavigate, type NavigateFunction } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SiteHead } from "../../../packages/web/src/components/layout/SiteHead.tsx";
-import { useEmbeddedSafeArea } from "../../../packages/web/src/hooks/useEmbeddedSafeArea.ts";
+import { useEmbeddedSafeArea } from "../../../packages/web/src/components/layout/useEmbeddedSafeArea.ts";
 import { useAnchoredMenu } from "../../../packages/web/src/hooks/useAnchoredMenu.ts";
 import { usePublicImageViewportControls } from "../../../packages/web/src/hooks/usePublicImageViewportControls.ts";
 import { computeAnchoredPosition } from "../../../packages/web/src/lib/ui/menu-position.ts";

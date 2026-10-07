@@ -60,7 +60,7 @@ const maximumClusters = 120;
 const initialFeeds = clusterRingCapacity + 2;
 const firstPageTiers = [60, 120, 180] as const;
 const maximumRetainedImages = 360;
-// 全部分类合计保留的图片数据按 6.7.0 的 12 × 360 分摊；每个分类至少放得下自己的首批。
+// 全部分类合计保留的图片数据按 12 个分类各 360 张分摊；每个分类至少放得下自己的首批。
 const maximumRetainedTotal = 12 * 360;
 const maximumConcurrentRequests = 3;
 const noClusters: readonly ShowCluster[] = [];

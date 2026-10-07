@@ -18,7 +18,7 @@ await runIntegrationScenario(async (runtime) => {
   const readyCacheMeta = await import("../../../../packages/server/src/images/ready-cache/meta.ts");
   const readyCacheAdminStatus =
     await import("../../../../packages/server/src/images/ready-cache/admin-status.ts");
-  const redisInspect = await import("../../../../packages/server/src/checks/redis-inspect.ts");
+  const redisInspection = await import("../../../../packages/server/src/checks/redis-inspection.ts");
   const vocabCache = await import("../../../../packages/server/src/vocab/vocab-cache.ts");
   const runtimeAvailability =
     await import("../../../../packages/server/src/core/runtime-availability.ts");
@@ -174,7 +174,7 @@ await runIntegrationScenario(async (runtime) => {
     )
   );
 
-  const redisDeepCheck = await redisInspect.inspectRedisState(neverAbortedSignal, {
+  const redisDeepCheck = await redisInspection.inspectRedisState(neverAbortedSignal, {
     deadlineMs: 5_000,
     maxKeys: 10_000,
     pipelineMaxCommands: 16

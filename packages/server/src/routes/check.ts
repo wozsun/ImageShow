@@ -5,7 +5,7 @@ import {
 } from "@imageshow/shared/browser";
 import { apiSuccess } from "../core/http/responses.ts";
 import { requireAdminPermission } from "../users/admin-authorization.ts";
-import { inspectRedisState } from "../checks/redis-inspect.ts";
+import { inspectRedisState } from "../checks/redis-inspection.ts";
 import { checkDatabase, checkTrash } from "../checks/database-check.ts";
 import { maintainStorageAndPurgeTasks } from "../checks/storage-maintenance.ts";
 import { checkStorage } from "../checks/storage-check.ts";

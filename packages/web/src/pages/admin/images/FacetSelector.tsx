@@ -1,5 +1,5 @@
 import { basicTagSelection, basicTagValue, TagFilterError } from "@imageshow/shared/browser";
-import { FacetSuggestionLabel } from "./FacetSuggestionLabel.js";
+import { FacetSuggestionLabel } from "../../../components/data-display/FacetSuggestionLabel.js";
 import {
   useCallback,
   useContext,
@@ -10,19 +10,19 @@ import {
   type KeyboardEvent
 } from "react";
 import { flushSync } from "react-dom";
-import { AnchoredPopup } from "../feedback/AnchoredPopup.js";
-import { DirectActivationButton } from "../feedback/DirectActivationButton.js";
-import { MenuItemButton } from "../feedback/MenuItemButton.js";
-import { AnchoredMenuDismissSignalContext, useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
-import { useFacetSearchMatcher } from "../../hooks/useFacetSearchMatcher.js";
-import { useImeSearchInput } from "../../hooks/useImeSearchInput.js";
+import { AnchoredPopup } from "../../../components/feedback/AnchoredPopup.js";
+import { DirectActivationButton } from "../../../components/feedback/DirectActivationButton.js";
+import { MenuItemButton } from "../../../components/feedback/MenuItemButton.js";
+import { AnchoredMenuDismissSignalContext, useAnchoredMenu } from "../../../hooks/useAnchoredMenu.js";
+import { useFacetSearchMatcher } from "../../../hooks/useFacetSearchMatcher.js";
+import { useImeSearchInput } from "../../../hooks/useImeSearchInput.js";
 import {
   facetSuggestions,
   normalizeFacetSearchQuery
-} from "../../lib/ui/facet-input.js";
-import { facetDisplayName } from "../../lib/ui/formatters.js";
-import type { AnchoredMenuSize } from "../../lib/ui/menu-position.js";
-import type { FacetOption } from "../../lib/types.js";
+} from "../../../lib/ui/facet-input.js";
+import { facetDisplayName } from "../../../lib/ui/formatters.js";
+import type { AnchoredMenuSize } from "../../../lib/ui/menu-position.js";
+import type { FacetOption } from "../../../lib/types.js";
 
 type FacetMode = "include" | "exclude" | "any" | "all";
 const modeLabels = { include: "包含", exclude: "排除", any: "任一", all: "全部" };

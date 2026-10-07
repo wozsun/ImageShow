@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { parseHTML } from "linkedom";
 
-test("[Web/后台访问] ready cache 检查面板区分当前数量与完整重建进度时间", async () => {
+test("[Web/后台] ready cache 检查面板区分当前数量与完整重建进度时间", async () => {
   const React = await import("react");
   const { renderToStaticMarkup } = await import("react-dom/server");
   const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
@@ -279,7 +279,7 @@ test("[Web/后台访问] ready cache 检查面板区分当前数量与完整重�
     }
   }
 });
-test("[Web/后台访问] 自动 Redis 占用检测在 Strict Mode 单飞并在重新进入时重测", async () => {
+test("[Web/后台] 自动 Redis 占用检测在 Strict Mode 单飞并在重新进入时重测", async () => {
   const React = await import("react");
   const { createRoot } = await import("react-dom/client");
   const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
@@ -418,7 +418,7 @@ test("[Web/后台访问] 自动 Redis 占用检测在 Strict Mode 单飞并在�
     }
   }
 });
-test("[Web/后台访问] 存储维护直接合并存储对象与持久彻底删除任务预览", async () => {
+test("[Web/后台] 存储维护直接合并存储对象与持久彻底删除任务预览", async () => {
   const React = await import("react");
   const { createRoot } = await import("react-dom/client");
   const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
@@ -679,7 +679,7 @@ test("[Web/后台访问] 存储维护直接合并存储对象与持久彻底删�
     }
   }
 });
-test("[Web/后台访问] 检查页保留完整 Redis 快照并串行化自动检测与全部检查", async () => {
+test("[Web/后台] 检查页保留完整 Redis 快照并串行化自动检测与全部检查", async () => {
   const React = await import("react");
   const { createRoot } = await import("react-dom/client");
   const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");

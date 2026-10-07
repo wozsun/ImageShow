@@ -7,7 +7,7 @@ import { PublicFilterSection, publicFilterIcons } from "./PublicFilterSection.js
 import { PublicFilterChips } from "./PublicFilterChips.js";
 import { Icon } from "../../icon/Icon.js";
 import { useGalleryStats } from "../../../lib/api/site-queries.js";
-import { usePublicFilterScroll } from "../../../hooks/usePublicFilterScroll.js";
+import { usePublicFilterScroll } from "./usePublicFilterScroll.js";
 import { useMediaQuery } from "../../../hooks/useMediaQuery.js";
 import { usePublicFilterStats } from "../../../hooks/usePublicFilterStats.js";
 import { useRefreshGlint, useRefreshGlintRun } from "../../../hooks/useRefreshGlint.js";

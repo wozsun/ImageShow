@@ -69,7 +69,7 @@
   .mobile-navigation {
     display: block;
   }
-  /* FacetSelector is shared by the public builders and image administration. */
+  /* FacetSelector 只由后台图片筛选使用；它基于公共表的 .select-control，窄屏宽度随之留在公共表。 */
   .facet-select-control {
     width: 100%;
     min-width: 0;

@@ -234,7 +234,7 @@ export type AdminEntityListResponseDto<Item extends AdminEntityDto = AdminEntity
   items: Item[];
 };
 
-export type ImageTrashItemResultDto = {
+type ImageTrashItemResultDto = {
   id: string;
   status: "trashed" | "ignored";
 };
@@ -246,7 +246,7 @@ export type ImageTrashResponseDto = {
   results: ImageTrashItemResultDto[];
 };
 
-export type ImageRestoreItemResultDto = {
+type ImageRestoreItemResultDto = {
   id: string;
   status: "restored" | "ignored";
 };

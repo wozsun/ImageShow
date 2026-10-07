@@ -16,7 +16,7 @@ import {
   readStorageBackendSnapshot,
   storageBackendUsage
 } from "./usage.ts";
-import { resolveStorageBackendDeletionState } from "./deletion.ts";
+import { resolveStorageBackendDeletionState } from "./deletion-policy.ts";
 import { withStorageLocationWriteAndAdvisoryLock } from "../maintenance-lock.ts";
 
 function isForeignKeyViolation(error: unknown) {

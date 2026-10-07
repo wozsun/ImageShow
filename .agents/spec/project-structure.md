@@ -40,7 +40,7 @@ packages/web ─────► packages/shared
 index / http-app / routes
           │
           ▼
-images / storage / random / jobs / checks / vocab / users
+images / storage / random / jobs / checks / vocab / authors / tags / themes / users
           │
           ▼
 core / config

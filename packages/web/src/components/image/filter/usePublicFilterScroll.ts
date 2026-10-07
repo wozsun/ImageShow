@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { reducedMotionPreferred } from "../lib/ui/reduced-motion.js";
-import type { PublicFilterSectionKey } from "../lib/gallery/public-filter-draft.js";
+import { reducedMotionPreferred } from "../../../lib/ui/reduced-motion.js";
+import type { PublicFilterSectionKey } from "../../../lib/gallery/public-filter-draft.js";
 
 export function usePublicFilterScroll(sectionKey: string, searching: boolean) {
   const scrollRef = useRef<HTMLDivElement | null>(null);

@@ -47,7 +47,7 @@ import {
 } from "../../support/dom-events.ts";
 import { installProperties } from "../../support/property-descriptors.ts";
 
-test("[Web/后台访问] 无会话上下文的公开详情保持访客身份并隔离管理员缓存", async (t) => {
+test("[Web/后台] 无会话上下文的公开详情保持访客身份并隔离管理员缓存", async (t) => {
   const { registerHooks } = await import("node:module");
   const hooks = registerHooks({
     load(url, context, next) {
@@ -136,7 +136,7 @@ test("[Web/后台访问] 无会话上下文的公开详情保持访客身份并�
   await h.render(null);
 });
 
-test("[Web/后台访问] 公开详情等待首次认证，按身份读取并隔离迟到结果", async (t) => {
+test("[Web/后台] 公开详情等待首次认证，按身份读取并隔离迟到结果", async (t) => {
   const { registerHooks } = await import("node:module");
   const hooks = registerHooks({
     load(url, context, next) {
@@ -268,7 +268,7 @@ test("[Web/后台访问] 公开详情等待首次认证，按身份读取并隔�
   await h.flush();
 });
 
-test("[Web/后台访问] 公开详情切图和切换视图隔离迟到响应并采用最新地址", async (t) => {
+test("[Web/后台] 公开详情切图和切换视图隔离迟到响应并采用最新地址", async (t) => {
   const { PublicImageDetail } = await import("../../../../packages/web/src/components/image/PublicImageDetail.tsx");
   const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
   const h = await createConfigStreamHarness(t, { honorAbort: false });
@@ -318,7 +318,7 @@ test("[Web/后台访问] 公开详情切图和切换视图隔离迟到响应并�
   await h.render(null);
 });
 
-test("[Web/后台访问] 图片管理保留连续选择、直接分页和管理员外观语义", () => {
+test("[Web/后台] 图片管理保留连续选择、直接分页和管理员外观语义", () => {
   const pageIds = ["a", "b", "c", "d", "e"];
   const controller = new ImageListSelectionController();
   let selected = controller.update({
@@ -444,7 +444,7 @@ test("[Web/后台访问] 图片管理保留连续选择、直接分页和管理�
   }
   assert.deepEqual(sequence, ["system", "light", "dark", "system"]);
 });
-test("[Web/后台访问] 后台颜色偏好在首个布局观察前接管 bootstrap 颜色域", async () => {
+test("[Web/后台] 后台颜色偏好在首个布局观察前接管 bootstrap 颜色域", async () => {
   const { window, document } = parseHTML(
     "<!doctype html><html data-ui-context=bootstrap data-color-scheme=dark><head>" +
       "<meta name=color-scheme content=dark><meta name=theme-color content=#070b15>" +
@@ -497,7 +497,7 @@ test("[Web/后台访问] 后台颜色偏好在首个布局观察前接管 bootst
   try {
     const { createRoot } = await import("react-dom/client");
     const { useAdminColorScheme } =
-      await import("../../../../packages/web/src/hooks/useAdminColorScheme.ts");
+      await import("../../../../packages/web/src/pages/admin/shell/useAdminColorScheme.ts");
     const layoutObservations: string[] = [];
 
     function Harness() {
@@ -535,7 +535,7 @@ test("[Web/后台访问] 后台颜色偏好在首个布局观察前接管 bootst
     }
   }
 });
-test("[Web/后台访问] 动画关闭捕获最新回调并在请求阶段冻结完成动作", async () => {
+test("[Web/后台] 动画关闭捕获最新回调并在请求阶段冻结完成动作", async () => {
   const { window, document } = parseHTML(
     "<!doctype html><html><body><div id=root></div></body></html>"
   );
@@ -797,11 +797,11 @@ test("[Web/后台访问] 动画关闭捕获最新回调并在请求阶段冻结�
     }
   }
 });
-test("[Web/后台访问] 标签切换超限时保持原模式与条件，减少选择后可恢复", async (t) => {
+test("[Web/后台] 标签切换超限时保持原模式与条件，减少选择后可恢复", async (t) => {
   const h = await createConfigStreamHarness(t);
   const { React } = h;
   const { FacetSelector } =
-    await import("../../../../packages/web/src/components/data-display/FacetSelector.tsx");
+    await import("../../../../packages/web/src/pages/admin/images/FacetSelector.tsx");
   const slugs = Array.from(
     { length: 31 },
     (_, index) => `tag-${String(index).padStart(2, "0")}${"x".repeat(26)}`
@@ -849,7 +849,7 @@ test("[Web/后台访问] 标签切换超限时保持原模式与条件，减少�
   assert.equal(h.document.querySelector('[role="alert"]'), null);
 });
 
-test("[Web/后台访问] 共享 FacetSelector 在原按钮位置内联搜索并保持 Portal 筛选流程", async () => {
+test("[Web/后台] 共享 FacetSelector 在原按钮位置内联搜索并保持 Portal 筛选流程", async () => {
   const { window, document } = parseHTML(
     "<!doctype html><html><body><div id=root></div></body></html>"
   );
@@ -1072,7 +1072,7 @@ test("[Web/后台访问] 共享 FacetSelector 在原按钮位置内联搜索并�
   try {
     const { createRoot } = await import("react-dom/client");
     const { FacetSelector } =
-      await import("../../../../packages/web/src/components/data-display/FacetSelector.tsx");
+      await import("../../../../packages/web/src/pages/admin/images/FacetSelector.tsx");
     const { AnchoredMenuDismissSignalContext } =
       await import("../../../../packages/web/src/hooks/useAnchoredMenu.ts");
     function Harness() {
@@ -1406,7 +1406,7 @@ test("[Web/后台访问] 共享 FacetSelector 在原按钮位置内联搜索并�
     }
   }
 });
-test("[Web/后台访问] 后台图片筛选在临界视口保持清空、无障碍名称与搜索交互", async () => {
+test("[Web/后台] 后台图片筛选在临界视口保持清空、无障碍名称与搜索交互", async () => {
   const React = await import("react");
   const { createRoot } = await import("react-dom/client");
   const { ImageAdminFilters } =

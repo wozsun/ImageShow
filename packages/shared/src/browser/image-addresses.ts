@@ -4,7 +4,7 @@ import type { BoundImageAddress } from "./image-variants.ts";
 // are never traversed. Binding happens at the HTTP boundary, before page merging.
 const imageSlots = ["items", "item", "recent", "results", "duplicates", "completed_item", "session", "details"] as const;
 type Node = Record<string, unknown>;
-export type ImageWireValue<T> = T extends { id: string; base_url: string }
+type ImageWireValue<T> = T extends { id: string; base_url: string }
   ? Omit<T, "base_url"> & { base_index?: number }
   : T extends readonly (infer Item)[] ? ImageWireValue<Item>[]
   : T extends object ? { [Key in keyof T]: ImageWireValue<T[Key]> } : T;

@@ -7,10 +7,10 @@ import type { PublicImageOrder, RandomImageSize } from "./images.ts";
 export const builtInSiteIconPath = "/assets/brand/favicon.svg";
 
 export const siteRoots = ["home", "show", "gallery"] as const;
-export type SiteRoot = (typeof siteRoots)[number];
+type SiteRoot = (typeof siteRoots)[number];
 
 export const homeBrowseTargets = ["gallery", "show"] as const;
-export type HomeBrowseTarget = (typeof homeBrowseTargets)[number];
+type HomeBrowseTarget = (typeof homeBrowseTargets)[number];
 
 export const randomDefaultMethods = ["proxy", "redirect"] as const;
 export type RandomDefaultMethod = (typeof randomDefaultMethods)[number];
@@ -31,7 +31,7 @@ export type ShowClusterGroup = (typeof showClusterGroups)[number];
 export const showDensities = ["relaxed", "balanced", "dense"] as const;
 export type ShowDensity = (typeof showDensities)[number];
 
-export type SiteHomeSettings = {
+type SiteHomeSettings = {
   enabled: boolean;
   browse_target: HomeBrowseTarget;
   background: string;
@@ -48,12 +48,12 @@ export type SiteShowSettings = {
   order: ShowOrder;
 };
 
-export type SiteGallerySettings = {
+type SiteGallerySettings = {
   enabled: boolean;
   order: GalleryOrder;
 };
 
-export type RuntimeSiteSettings = {
+type RuntimeSiteSettings = {
   domain: string;
   icon: string;
   title: string;
@@ -73,7 +73,7 @@ export type RuntimeSiteSettings = {
   footer: string;
 };
 
-export type PublicPagePath = "/home" | "/show" | "/gallery";
+type PublicPagePath = "/home" | "/show" | "/gallery";
 
 type PublicPageAvailability = {
   root: SiteRoot;
@@ -82,7 +82,7 @@ type PublicPageAvailability = {
   gallery: Pick<SiteGallerySettings, "enabled">;
 };
 
-export function publicPageEnabled(
+function publicPageEnabled(
   site: PublicPageAvailability,
   root: SiteRoot
 ) {
@@ -113,40 +113,40 @@ export function publicHomeBrowsePath(
   return null;
 }
 
-export type EmbedSettings = {
+type EmbedSettings = {
   enabled: boolean;
   allowed_origins: string[];
 };
 
-export type IngestionSettings = {
+type IngestionSettings = {
   max_file_size_mb: number;
   max_long_edge: number;
   list_page_size: number;
   commit_concurrency: number;
 };
 
-export type UploadSettings = {
+type UploadSettings = {
   max_items: number;
   browser_concurrency: number;
   raw_concurrency: number;
 };
 
-export type ImportSettings = {
+type ImportSettings = {
   keep_original_link: ImportSourceTypeDto[];
   auto_import: boolean;
   fetch_timeout_seconds: number;
   max_items: number;
 };
 
-export type WeiboSettings = {
+type WeiboSettings = {
   max_items: number;
   source_enabled: boolean;
   request_delay_seconds: [number, number];
 };
 
-export type NormalizeSettings = NormalizeProfile & { concurrency: number };
+type NormalizeSettings = NormalizeProfile & { concurrency: number };
 
-export type AdminPanelSettings = {
+type AdminPanelSettings = {
   login_background: string;
   image_page_size: number;
   recent_uploads: number;
@@ -192,19 +192,19 @@ export type PublicSiteSettings = Pick<
   show: SiteShowSettings;
 };
 
-export type AdminIngestionSettings = Pick<
+type AdminIngestionSettings = Pick<
   IngestionSettings,
   "max_file_size_mb" | "max_long_edge" | "list_page_size"
 >;
 
-export type AdminUploadSettings = Pick<UploadSettings, "max_items" | "browser_concurrency">;
+type AdminUploadSettings = Pick<UploadSettings, "max_items" | "browser_concurrency">;
 
-export type AdminImportSettings = Pick<
+type AdminImportSettings = Pick<
   ImportSettings,
   "keep_original_link" | "auto_import" | "max_items"
 >;
 
-export type AdminWeiboSettings = Pick<WeiboSettings, "max_items">;
+type AdminWeiboSettings = Pick<WeiboSettings, "max_items">;
 
 export type AdminSettings = {
   ingestion: AdminIngestionSettings;

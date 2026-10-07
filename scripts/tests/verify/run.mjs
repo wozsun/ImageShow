@@ -63,14 +63,14 @@ const phases = {
       "node",
       [
         "--test", "--test-isolation=none",
-        "scripts/tests/final-server.test.ts"
+        "scripts/tests/server.test.ts"
       ],
       { cooperativeShutdown: true }
     ],
     [
       "Web acceptance",
       "npm",
-      ["run", "test:final:web"]
+      ["run", "test:web"]
     ],
     [
       "isolated production image",

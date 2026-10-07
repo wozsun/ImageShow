@@ -67,7 +67,7 @@ function stalledResponse(init: RequestInit | undefined, phase: "headers" | "body
 }
 
 for (const phase of ["headers", "body"] as const) {
-  test(`[Web/后台保存] 写响应挂起后限时进入快照确认，保留冻结意图和新草稿 / ${phase}`, async (t) => {
+  test(`[Web/后台请求恢复] 写响应挂起后限时进入快照确认，保留冻结意图和新草稿 / ${phase}`, async (t) => {
     t.after(
       installProperties(window, {
         location: { pathname: "/admin/images", href: "http://imageshow.test/admin/images" }
@@ -179,7 +179,7 @@ for (const { confirmation, automatic } of [
   { confirmation: "restore", automatic: false },
   { confirmation: "save", automatic: true }
 ] as const) {
-  test(`[Web/后台保存] 未知写入迟于首次确认完成，人工确认交接最新列表和词表 / ${confirmation}${automatic ? " auto" : ""}`, async (t) => {
+  test(`[Web/后台请求恢复] 未知写入迟于首次确认完成，人工确认交接最新列表和词表 / ${confirmation}${automatic ? " auto" : ""}`, async (t) => {
     t.after(
       installProperties(window, {
         location: { pathname: "/admin/images", href: "http://imageshow.test/admin/images" }
@@ -345,7 +345,7 @@ for (const { confirmation, automatic } of [
 }
 
 for (const failure of ["503", "headers", "body"] as const) {
-  test(`[Web/后台只读重试] 已响应的保存快照失败只重试三次，人工确认不重复写入或失效 / ${failure}`, async (t) => {
+  test(`[Web/后台请求恢复] 已响应的保存快照失败只重试三次，人工确认不重复写入或失效 / ${failure}`, async (t) => {
     t.after(
       installProperties(window, {
         location: { pathname: "/admin/images", href: "http://imageshow.test/admin/images" }
@@ -450,7 +450,7 @@ for (const { name, options, data } of sharedReads) {
       ? client.fetchQuery(ingestionVocabularyQueryOptions)
       : client.fetchQuery(storageOptionsQueryOptions);
 
-  test(`[Web/后台只读重试] ${name}并发准备共享恢复请求及成功缓存`, async (t) => {
+  test(`[Web/后台请求恢复] ${name}并发准备共享恢复请求及成功缓存`, async (t) => {
     let requests = 0;
     const { client, clock } = createReadHarness(t, async () => {
       requests += 1;
@@ -474,7 +474,7 @@ for (const { name, options, data } of sharedReads) {
   // failure matrix once, after proving each consumer's recovery and caching.
   if (name !== "词表") continue;
 
-  test(`[Web/后台只读重试] ${name}持续失败最多四次且退避结束前不报错`, async (t) => {
+  test(`[Web/后台请求恢复] ${name}持续失败最多四次且退避结束前不报错`, async (t) => {
     const requestTimes: number[] = [];
     const { client, clock } = createReadHarness(t, async () => {
       requestTimes.push(clock.now());
@@ -505,7 +505,7 @@ for (const { name, options, data } of sharedReads) {
     assert.equal(requestTimes.length, 4);
   });
 
-  test(`[Web/后台只读重试] ${name}取消共享查询后不再发起重试`, async (t) => {
+  test(`[Web/后台请求恢复] ${name}取消共享查询后不再发起重试`, async (t) => {
     let requests = 0;
     let requestSignal: AbortSignal | undefined;
     const { client, clock } = createReadHarness(t, async (_input, init) => {
@@ -523,7 +523,7 @@ for (const { name, options, data } of sharedReads) {
   });
 
   for (const phase of ["headers", "body"] as const) {
-    test(`[Web/后台只读重试] ${name}挂起 ${phase} 超时后共享重试且释放计时器`, async (t) => {
+    test(`[Web/后台请求恢复] ${name}挂起 ${phase} 超时后共享重试且释放计时器`, async (t) => {
       let requests = 0;
       const { client, clock } = createReadHarness(t, async (_input, init) => {
         requests += 1;
@@ -542,7 +542,7 @@ for (const { name, options, data } of sharedReads) {
       assert.equal(clock.pendingCount(), 0);
     });
 
-    test(`[Web/后台只读重试] ${name}挂起 ${phase} 时取消立即退出且不重试`, async (t) => {
+    test(`[Web/后台请求恢复] ${name}挂起 ${phase} 时取消立即退出且不重试`, async (t) => {
       let requests = 0;
       let requestSignal: AbortSignal | null | undefined;
       const { client, clock } = createReadHarness(t, async (_input, init) => {
@@ -564,7 +564,7 @@ for (const { name, options, data } of sharedReads) {
 }
 
 for (const phase of ["headers", "body"] as const) {
-  test(`[Web/后台只读重试] 快照挂起 ${phase} 时外部取消立即结束本轮读取`, async (t) => {
+  test(`[Web/后台请求恢复] 快照挂起 ${phase} 时外部取消立即结束本轮读取`, async (t) => {
     let requests = 0;
     const { clock } = createReadHarness(t, async (_input, init) => {
       requests += 1;
@@ -583,7 +583,7 @@ for (const phase of ["headers", "body"] as const) {
   });
 }
 
-test("[Web/后台只读重试] 编辑快照冻结请求体并在第三次重试恢复", async (t) => {
+test("[Web/后台请求恢复] 编辑快照冻结请求体并在第三次重试恢复", async (t) => {
   const bodies: unknown[] = [];
   const requestTimes: number[] = [];
   const ids = [imageId];
@@ -615,7 +615,7 @@ test("[Web/后台只读重试] 编辑快照冻结请求体并在第三次重试�
   );
 });
 
-test("[Web/后台只读重试] 编辑快照持续失败在四次请求后结束", async (t) => {
+test("[Web/后台请求恢复] 编辑快照持续失败在四次请求后结束", async (t) => {
   let requests = 0;
   const { clock } = createReadHarness(t, async () => {
     requests += 1;
@@ -634,7 +634,7 @@ test("[Web/后台只读重试] 编辑快照持续失败在四次请求后结束"
   assert.equal(clock.pendingCount(), 0);
 });
 
-test("[Web/后台只读重试] 编辑快照取消退避或预先取消都不再发请求", async (t) => {
+test("[Web/后台请求恢复] 编辑快照取消退避或预先取消都不再发请求", async (t) => {
   let requests = 0;
   const { clock } = createReadHarness(t, async () => {
     requests += 1;
@@ -656,7 +656,7 @@ test("[Web/后台只读重试] 编辑快照取消退避或预先取消都不再�
   assert.equal(requests, 1);
 });
 
-test("[Web/后台只读重试] 编辑快照仅恢复网络与临时服务错误", async (t) => {
+test("[Web/后台请求恢复] 编辑快照仅恢复网络与临时服务错误", async (t) => {
   for (const status of [
     200, 400, 401, 403, 404, 408, 409, 422, 429, 500, 501, 502, 503, 504, 505
   ]) {

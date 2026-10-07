@@ -86,7 +86,7 @@ const cases: Array<[string | undefined, Encoding | 406]> = [
   ["br;q=1.1, *;q=0", 406]
 ];
 
-test("[Server/静态HTTP] 编码偏好与 GET / HEAD 选择同一可接受表示", async () => {
+test("[Server/静态 HTTP] 编码偏好与 GET / HEAD 选择同一可接受表示", async () => {
   for (const [accept, expected] of cases) {
     for (const method of ["GET", "HEAD"]) {
       const headers = new Headers();
@@ -119,7 +119,7 @@ test("[Server/静态HTTP] 编码偏好与 GET / HEAD 选择同一可接受表示
   }
 });
 
-test("[Server/静态HTTP] 缺失高权重副本按剩余偏好回退，缺失文件保持 404", async () => {
+test("[Server/静态 HTTP] 缺失高权重副本按剩余偏好回退，缺失文件保持 404", async () => {
   for (const [file, accept, expected] of [
     ["without-br.js", "br, zstd, gzip", "zstd"],
     ["without-br.js", "br;q=1, gzip;q=0.8, zstd;q=0.2", "gzip"],
@@ -145,7 +145,7 @@ test("[Server/静态HTTP] 缺失高权重副本按剩余偏好回退，缺失文
   }
 });
 
-test("[Server/静态HTTP] 静态 HTML 与目录索引保持 MIME 和编码协商", async () => {
+test("[Server/静态 HTTP] 静态 HTML 与目录索引保持 MIME 和编码协商", async () => {
   for (const path of ["/assets/help.html", "/assets/nested/"]) {
     const response = await app.request(path, { headers: { "Accept-Encoding": "zstd" } });
     assert.equal(response.status, 200);
@@ -155,7 +155,7 @@ test("[Server/静态HTTP] 静态 HTML 与目录索引保持 MIME 和编码协商
   }
 });
 
-test("[Server/静态HTTP] 各编码验证器与 304、单范围和 If-Range 一致", async () => {
+test("[Server/静态 HTTP] 各编码验证器与 304、单范围和 If-Range 一致", async () => {
   const etags = new Set<string>();
   for (const encoding of ["identity", "br", "zstd", "gzip"] as const) {
     const headers = { "Accept-Encoding": encoding };
