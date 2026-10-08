@@ -401,6 +401,7 @@ test("[Web/后台] 图片管理保留连续选择、直接分页和管理员外�
   assert.deepEqual([...navigationModules("image", [])].sort(), [
     "account",
     "check",
+    "groups",
     "images",
     "overview",
     "vocabulary"
@@ -408,6 +409,7 @@ test("[Web/后台] 图片管理保留连续选择、直接分页和管理员外�
   assert.deepEqual([...navigationModules("super", Object.values(adminPermissions))].sort(), [
     "account",
     "check",
+    "groups",
     "images",
     "logs",
     "overview",

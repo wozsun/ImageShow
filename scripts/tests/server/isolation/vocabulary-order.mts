@@ -418,6 +418,27 @@ await runIntegrationScenario(async (runtime) => {
     assert.ok(
       (await vocab.getIngestionVocabulary()).authors.some((item) => item.slug === "order-uncertain")
     );
+    for (const entity of entities) {
+      const before = await entity.list();
+      const createRequest = (body: unknown) => app.request(`/api/admin/${entity.field}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-role": "image", "x-csrf-token": "sort-csrf" },
+        body: JSON.stringify(body)
+      });
+      for (const [index, sort_order] of [undefined, 0, -8, sortOrderMax].entries()) {
+        const slug = `order-created-${index}`;
+        const response = await createRequest({ slug, display_name: "Created", link: entity.kind === "author" ? "" : undefined, sort_order });
+        assert.equal(response.status, 200);
+        const expectedOrder = sort_order ?? Math.min(sortOrderMax, Math.max(0, ...before.map((item) => item.sort_order)) + 1);
+        const item = (await entity.list()).find((item) => item.slug === slug)!;
+        assert.equal(item.sort_order, expectedOrder, entity.kind);
+        if (entity.kind === "author") assert.equal((await response.json()).item.sort_order, expectedOrder);
+      }
+      for (const sort_order of [0.5, sortOrderMax + 1, sortOrderMin - 1, "2", null]) {
+        assert.equal((await createRequest({ slug: "order-invalid", sort_order })).status, 400);
+      }
+      assert.deepEqual((await entity.list()).filter((item) => before.some((old) => old.slug === item.slug)), before);
+    }
     console.log(
       "vocabulary order: ordering, routes, all-image association counts and lost commit acknowledgements passed"
     );

@@ -1,6 +1,6 @@
-import type { DatabaseReader } from "./contract.ts";
+import type { DatabaseReader, DatabaseReadinessContract } from "./contract.ts";
 
-export async function assertRequiredSeedRows(database: DatabaseReader) {
+export async function assertRequiredSeedRows(database: DatabaseReader, contract: DatabaseReadinessContract) {
   const row = (
     await database.query<{
       revision_ready: boolean;
@@ -10,7 +10,7 @@ export async function assertRequiredSeedRows(database: DatabaseReader) {
       `SELECT (
               SELECT count(*)=1
                  AND bool_and(singleton=1 AND revision >= 0)
-                FROM ready_image_revision
+                FROM ${contract.revisionTable}
             ) AS revision_ready,
             EXISTS (
               SELECT 1 FROM storage_backend
@@ -25,7 +25,7 @@ export async function assertRequiredSeedRows(database: DatabaseReader) {
     )
   ).rows[0];
   const missing = [
-    !row?.revision_ready && "ready_image_revision singleton",
+    !row?.revision_ready && `${contract.revisionTable} singleton`,
     !row?.local_storage_ready && "storage_backend.local"
   ].filter((value): value is string => Boolean(value));
   if (missing.length) {

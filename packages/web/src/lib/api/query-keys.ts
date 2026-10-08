@@ -9,6 +9,8 @@ export const queryKeys = {
   overview: ["admin-overview"] as const,
   adminCheckStatus: ["admin-check-status"] as const,
   adminRedisInspection: ["admin-redis-inspection"] as const,
+  groupImages: ["admin-group-images"] as const,
+  groups: ["admin-groups"] as const,
   adminImages: ["admin-images"] as const,
   tags: ["tags"] as const,
   themes: ["themes"] as const,

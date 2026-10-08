@@ -603,7 +603,9 @@ await runIntegrationScenario(async (runtime) => {
   localAccess.driver.openRead = async function (...args) {
     if (args[0] === "large" && backendAbortKeys.has(args[1])) {
       backendAbortReadCount += 1;
-      markBackendAbortReadStarted();
+      if (backendAbortReadCount === Math.min(migrationConcurrency, backendAbortFixtures.length)) {
+        markBackendAbortReadStarted();
+      }
       await backendAbortReadGate;
     }
     return originalBackendAbortOpenRead.apply(this, args);
@@ -666,7 +668,7 @@ await runIntegrationScenario(async (runtime) => {
     let responseLost = false;
     const restore = interceptSqlQueries(database.pool, async (sql, _values, query) => {
       const result = await query();
-      if (sql.includes("FROM ready_image_revision")) armed = true;
+      if (sql.includes("FROM projection_revision")) armed = true;
       return result;
     });
     try {

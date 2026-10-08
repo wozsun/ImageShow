@@ -126,11 +126,11 @@ export function ImageMetadataEditorCard({
               {item.variants.large.byte_size ? formatBytes(item.variants.large.byte_size) : "大小未记录"} · {storageName}
             </span>
           </div>
-          {multipleItems && (
+          {(multipleItems || intent !== "edit") && (
             <button
               className="icon danger-button"
               type="button"
-              title={intent === "delete" ? "从批量删除中移除" : "从批量编辑中移除"}
+              title={intent === "edit" ? "从批量编辑中移除" : intent === "delete" ? "从批量删除中移除" : "从本次操作中移除"}
               disabled={busy}
               onClick={onRemove}
             >
@@ -147,7 +147,7 @@ export function ImageMetadataEditorCard({
         authors={authors}
         deviceOptions={editCardDeviceSelectOptions}
         brightnessOptions={cardBrightnessSelectOptions}
-        disabled={busy || intent === "delete"}
+        disabled={busy || intent !== "edit"}
         ariaPrefix={item.id}
         changed={changed}
       />

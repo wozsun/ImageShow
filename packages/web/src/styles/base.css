@@ -2,6 +2,9 @@
   color: var(--color-control-text-primary);
   font-family: Inter, ui-sans-serif, system-ui, "Segoe UI", sans-serif;
   --app-header-height: 64px;
+  --select-trigger-end-padding: 28px;
+  /* 与 .select-trigger::after 的 right 联动，保持展开前后的箭头中心对齐。 */
+  --facet-search-collapse-width: 32px;
   --public-nav-motion-duration: 300ms;
   --public-nav-motion-easing: cubic-bezier(0.2, 0.8, 0.2, 1);
   --public-motion-ease-cinematic: cubic-bezier(0.22, 1, 0.36, 1);
@@ -298,7 +301,7 @@ textarea:disabled {
   position: relative;
   width: 100%;
   min-height: 38px;
-  padding: 9px 38px 9px 10px;
+  padding: 9px var(--select-trigger-end-padding) 9px 10px;
   justify-content: flex-start;
   overflow: hidden;
   color: var(--color-control-text-primary);
@@ -315,7 +318,7 @@ textarea:disabled {
 .select-trigger::after {
   content: "";
   position: absolute;
-  right: 13px;
+  right: 12px;
   top: 50%;
   width: 7px;
   height: 7px;
@@ -332,7 +335,7 @@ textarea:disabled {
   width: 100%;
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 38px;
+  grid-template-columns: minmax(0, 1fr) var(--facet-search-collapse-width);
 }
 .facet-search-status {
   position: absolute;
@@ -357,7 +360,7 @@ textarea:disabled {
 }
 .facet-search-collapse {
   position: relative;
-  width: 38px;
+  width: var(--facet-search-collapse-width);
   min-height: 38px;
   padding: 0;
   border-left: 0;

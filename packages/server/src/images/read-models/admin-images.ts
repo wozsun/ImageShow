@@ -14,6 +14,7 @@ import {
   withAdvisoryLocks
 } from "../../core/database/advisory-locks.ts";
 import { ApiError } from "../../core/api-error.ts";
+import { imageGroupLockRequest } from "../groups/locks.ts";
 import { imageUpdateLockRequests } from "../image-update-lock.ts";
 import { resolveImageFilterPlan } from "../filter-plan.ts";
 import { readReadyImagePageWindow } from "../ready-cache/query.ts";
@@ -39,6 +40,8 @@ export type AdminImageListQuery = {
   theme?: string;
   tag?: string | string[];
   author?: string;
+  group?: string;
+  mark_group?: string;
   page: number;
   limit: number;
 } & Partial<AdminImageSort>;
@@ -46,6 +49,21 @@ export type AdminImageListQuery = {
 export async function listAdminImages(
   query: AdminImageListQuery
 ): Promise<AdminImageListResponseDto> {
+  const groupSlugs = [...new Set(
+    [query.group, query.mark_group].filter((slug): slug is string => Boolean(slug))
+  )].sort();
+  if (!groupSlugs.length) return readAdminImagePage(query);
+  // A lost write response can precede COMMIT. Establish the snapshot only after
+  // the group's active shared membership locks have settled.
+  return withAdvisoryLocks(groupSlugs.map((slug) => imageGroupLockRequest(slug)), async (signal) => {
+    signal.throwIfAborted();
+    const result = await readAdminImagePage(query);
+    signal.throwIfAborted();
+    return result;
+  });
+}
+
+async function readAdminImagePage(query: AdminImageListQuery): Promise<AdminImageListResponseDto> {
   const window = createPageWindow(query.page, query.limit);
   const sort: AdminImageSort = {
     sort_by: query.sort_by ?? defaultAdminImageSort.sort_by,
@@ -56,7 +74,7 @@ export async function listAdminImages(
     readyPlan = await resolveImageFilterPlan(query, { redisMode: "required" });
     // The ready index is ordered by image_time. Entry time uses PostgreSQL's
     // authoritative order instead of reordering only the cached page.
-    if (sort.sort_by === "image_time") {
+    if (sort.sort_by === "image_time" && !query.group && !query.mark_group) {
       const cached = await readReadyImagePageWindow(readyPlan, window, sort.order);
       if (cached.status === "redis_unavailable") throw cached.error;
       if (cached.status === "hit") {
@@ -80,6 +98,10 @@ export async function listAdminImages(
     ? buildResolvedReadyImageListFilters(readyPlan)
     : await buildImageListFilters(query, { redisMode: "required" });
 
+  if (query.group) {
+    params.push(query.group);
+    where.push(`EXISTS(SELECT 1 FROM image_group_member member WHERE member.image_id=metadata.id AND member.group_slug=$${params.length})`);
+  }
   const snapshot = await withReadOnlyRepeatableReadTransaction(async (client) => {
     const countResult = await client.query(
       `SELECT count(*)::text AS count FROM metadata WHERE ${where.join(" AND ")}`,
@@ -99,31 +121,45 @@ export async function listAdminImages(
             client,
             sort
           );
-    return { rows, total };
+    const members = query.mark_group && rows.length
+      ? (await client.query<{ image_id: string }>(
+          "SELECT image_id FROM image_group_member WHERE group_slug=$1 AND image_id=ANY($2::uuid[])",
+          [query.mark_group, rows.map((row) => row.id)]
+        )).rows : [];
+    return { rows, total, memberIds: new Set(members.map((member) => member.image_id)) };
   });
   return {
-    items: await adminImageListItemsWithTags(snapshot.rows),
+    items: (await adminImageListItemsWithTags(snapshot.rows)).map((item) =>
+      query.mark_group ? { ...item, in_group: snapshot.memberIds.has(item.id) } : item
+    ),
     total: snapshot.total
   };
 }
 
 export async function getAdminImageSnapshots(
   ids: string[],
-  signal: AbortSignal
+  signal: AbortSignal,
+  markGroup?: string
 ): Promise<ImageSnapshotResponseDto> {
   const canonicalIds = [...new Set(ids.map((id) => id.toLowerCase()))];
+  const locks = [
+    ...(markGroup ? [imageGroupLockRequest(markGroup)] : []),
+    ...imageUpdateLockRequests(canonicalIds)
+  ];
   const read = () =>
-    withAdvisoryLocks(imageUpdateLockRequests(canonicalIds), async () => {
+    withAdvisoryLocks(locks, async () => {
       signal.throwIfAborted();
       const result = await pool.query(
-        `SELECT ${editableImagePresentationColumnsWithTags}
+        `SELECT ${editableImagePresentationColumnsWithTags}${markGroup ? `,
+                EXISTS(SELECT 1 FROM image_group_member member
+                        WHERE member.image_id=metadata.id AND member.group_slug=$2) AS in_group` : ""}
            FROM metadata
           WHERE id = ANY($1::uuid[])
             AND status = 'ready'`,
-        [canonicalIds]
+        markGroup ? [canonicalIds, markGroup] : [canonicalIds]
       );
       signal.throwIfAborted();
-      // Metadata and tags come from one SQL statement, so this is an
+      // Metadata, tags and optional membership come from one SQL statement, so this is an
       // authoritative point-in-time projection even if another admin mutates
       // the image immediately before or after the snapshot.
       const projected = await editableImageSnapshotsWithTags(
@@ -131,10 +167,11 @@ export async function getAdminImageSnapshots(
       );
       signal.throwIfAborted();
       const itemsById = new Map(projected.map((item) => [item.id, item]));
+      const memberIds = new Set(result.rows.filter((row) => row.in_group).map((row) => row.id));
       return {
         items: canonicalIds.flatMap((id) => {
           const item = itemsById.get(id);
-          return item ? [item] : [];
+          return item ? [markGroup ? { ...item, in_group: memberIds.has(id) } : item] : [];
         })
       };
     });

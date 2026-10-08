@@ -4,6 +4,8 @@ import { join } from "node:path";
 import type { PoolClient } from "pg";
 import { errorMessage } from "../api-error.ts";
 import { assertDatabaseReadiness } from "./readiness.ts";
+import { logger } from "../logger.ts";
+import { upgradeDatabaseFrom679 } from "./upgrade-6.8.0.ts";
 import { pool } from "./pools.ts";
 import { withTransactionOnClient } from "./transactions.ts";
 
@@ -16,14 +18,14 @@ export async function initializeDatabaseSchema() {
   }
 }
 
-function databaseSchemaPath() {
+function databaseSchemaPath(asset = "schema.sql") {
   const candidates = [
-    join(import.meta.dirname, "..", "..", "schema.sql"),
-    join(import.meta.dirname, "..", "..", "..", "schema.sql")
+    join(import.meta.dirname, "..", "..", asset),
+    join(import.meta.dirname, "..", "..", "..", asset)
   ];
   const path = candidates.find((candidate) => existsSync(candidate));
   if (!path) {
-    throw new Error("PostgreSQL database asset is missing: schema.sql");
+    throw new Error(`PostgreSQL database asset is missing: ${asset}`);
   }
   return path;
 }
@@ -52,15 +54,20 @@ async function initializeDatabaseSchemaOnClient(client: PoolClient) {
   const schema = empty
     ? await readFile(databaseSchemaPath(), "utf8")
     : null;
+  let upgraded = false;
   await withTransactionOnClient(client, async (transaction) => {
     try {
       if (schema) await transaction.query(schema);
+      else upgraded = await upgradeDatabaseFrom679(transaction, () =>
+        readFile(databaseSchemaPath("schema-upgrade-6.8.0.sql"), "utf8")
+      );
       await assertCoreDatabaseReady(transaction);
     } catch (error) {
       if (!empty) throw databaseReadinessError(error);
       throw error;
     }
   });
+  if (upgraded) logger.info("database_upgrade_6_8_0_completed");
 }
 
 export async function pingDatabase() {

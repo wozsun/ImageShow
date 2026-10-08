@@ -28,7 +28,7 @@ await runIntegrationScenario(async (runtime) => {
       String(
         (
           await database.pool.query(
-            "SELECT revision::text FROM ready_image_revision WHERE singleton=1"
+            "SELECT revision::text FROM projection_revision WHERE singleton=1"
           )
         ).rows[0].revision
       )

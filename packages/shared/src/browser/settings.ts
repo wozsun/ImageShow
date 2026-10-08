@@ -1,7 +1,7 @@
 import type { NormalizeProfile } from "./image-variants.ts";
 import type { LogLevel } from "./log-levels.ts";
 import type { ImportSourceTypeDto } from "./ingestion.ts";
-import type { PublicImageOrder, RandomImageSize } from "./images.ts";
+import type { PublicImageOrder, RandomImageSize, RandomFallbackDimension } from "./images.ts";
 
 // Shipped with the Web build; used when site.icon is empty.
 export const builtInSiteIconPath = "/assets/brand/favicon.svg";
@@ -66,6 +66,7 @@ type RuntimeSiteSettings = {
   gallery: SiteGallerySettings;
   random_method: RandomDefaultMethod;
   random_size: RandomImageSize;
+  random_fallback_order: RandomFallbackDimension[];
   assets_base_url: string;
   robots_enabled: boolean;
   icp: string;

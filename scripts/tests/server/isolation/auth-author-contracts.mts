@@ -445,7 +445,7 @@ await runIntegrationScenario(async (runtime) => {
   assert.deepEqual(await preferenceStore.readAdminPreferences("preference-peer"), {});
   for (const image_thumbnail_fit of ["cover", "contain"] as const) {
     for (const view of ["card", "list"] as const) {
-      const patch = { image_thumbnail_fit, theme_view_mode: view, tag_view_mode: view === "card" ? "list" : "card", author_view_mode: view };
+      const patch = { image_thumbnail_fit, theme_view_mode: view, tag_view_mode: view === "card" ? "list" : "card", author_view_mode: view, group_view_mode: view };
       const response = await preferenceRequest(patch);
       assert.equal(response.status, 200);
       assert.deepEqual((await response.json()).preferences, {

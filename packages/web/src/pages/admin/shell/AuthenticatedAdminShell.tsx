@@ -44,6 +44,12 @@ const ImageAdmin = lazy(() =>
     default: module.ImageAdmin
   }))
 );
+const GroupDetail = lazy(() =>
+  adminRouteModuleLoaders.groupDetail().then((module) => ({ default: module.GroupDetail }))
+);
+const GroupAdmin = lazy(() =>
+  adminRouteModuleLoaders.groups().then((module) => ({ default: module.GroupAdmin }))
+);
 const VocabularyAdmin = lazy(() =>
   adminRouteModuleLoaders.vocabulary().then((module) => ({
     default: module.VocabularyAdmin
@@ -200,6 +206,8 @@ function AuthenticatedAdminLayout({
               <Route index element={overviewPage} />
               <Route path="overview" element={overviewPage} />
               <Route path="images" element={<ImageAdmin />} />
+              <Route path="groups/:slug" element={<GroupDetail />} />
+            <Route path="groups" element={<GroupAdmin />} />
               <Route path="tags" element={<VocabularyAdmin key="tags" kind="tags" />} />
               <Route path="themes" element={<VocabularyAdmin key="themes" kind="themes" />} />
               <Route path="authors" element={<VocabularyAdmin key="authors" kind="authors" />} />

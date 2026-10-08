@@ -1,6 +1,6 @@
-import { databaseReadiness, type DatabaseReader } from "./contract.ts";
+import type { DatabaseReader, DatabaseReadinessContract } from "./contract.ts";
 
-export async function assertRuntimeDatabaseAccess(database: DatabaseReader) {
+export async function assertRuntimeDatabaseAccess(database: DatabaseReader, contract: DatabaseReadinessContract) {
   const session = (
     await database.query<{
       transaction_read_only: string;
@@ -20,7 +20,7 @@ export async function assertRuntimeDatabaseAccess(database: DatabaseReader) {
     );
   }
 
-  const required = Object.entries(databaseReadiness).flatMap(([table, readiness]) =>
+  const required = Object.entries(contract.tables).flatMap(([table, readiness]) =>
     readiness.privileges.map((privilege) => ({
       table,
       privilege

@@ -1,7 +1,7 @@
 import { normalizeSchema } from "./normalize-schema.ts";
 import { z } from "zod";
 import { appConfig } from "@imageshow/shared";
-import { type RuntimeConfig } from "@imageshow/shared/browser";
+import { randomFallbackDimensions, type RuntimeConfig } from "@imageshow/shared/browser";
 import {
   altchaCost,
   altchaCounter,
@@ -54,6 +54,8 @@ import {
 } from "./field-schemas.ts";
 import { publicBaseUrlSchema, publicUrlUsesSiteHost } from "../core/url-validation.ts";
 
+const fallbackOrderMessage = "须包含 device、brightness、author、tag、theme 各一次";
+
 const runtimeConfigSchema = z.strictObject({
   site: z.strictObject({
     domain: siteDomain,
@@ -87,6 +89,11 @@ const runtimeConfigSchema = z.strictObject({
     }),
     random_method: randomDefaultMethod,
     random_size: randomImageSize,
+    random_fallback_order: z.array(z.enum(randomFallbackDimensions, { error: fallbackOrderMessage }), { error: fallbackOrderMessage })
+      .length(randomFallbackDimensions.length, { error: fallbackOrderMessage })
+      .refine((order) => new Set(order).size === randomFallbackDimensions.length, {
+        message: fallbackOrderMessage
+      }),
     assets_base_url: publicBaseUrlSchema,
     robots_enabled: z.boolean(),
     icp: siteFooterText,

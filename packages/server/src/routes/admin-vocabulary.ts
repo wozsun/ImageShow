@@ -114,7 +114,7 @@ export function registerAdminVocabularyRoutes(app: Hono) {
     deletePermission: adminPermissions.tagDelete,
     list: getAdminTagList,
     create: async (input) => {
-      await createTag(input.slug, input.display_name);
+      await createTag(input.slug, input.display_name, input.sort_order);
     },
     update: async (slug, input) => setTagDisplayName(slug, input.display_name),
     remove: deleteTag
@@ -128,7 +128,7 @@ export function registerAdminVocabularyRoutes(app: Hono) {
     deletePermission: adminPermissions.themeDelete,
     list: getAdminThemeList,
     create: async (input) => {
-      await createTheme(input.slug, input.display_name);
+      await createTheme(input.slug, input.display_name, input.sort_order);
     },
     update: async (slug, input) => updateThemeDisplayName(slug, input.display_name),
     remove: deleteTheme
@@ -141,7 +141,7 @@ export function registerAdminVocabularyRoutes(app: Hono) {
     updateInput: authorMetaUpdateInput,
     deletePermission: adminPermissions.authorDelete,
     list: getAdminAuthorList,
-    create: (input) => createAuthor(input.slug, input.display_name, input.link),
+    create: (input) => createAuthor(input.slug, input.display_name, input.link, input.sort_order),
     update: (slug, input) => updateAuthorProfile(
       slug,
       input.display_name,

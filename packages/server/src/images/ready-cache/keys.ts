@@ -50,13 +50,14 @@ export const READY_IMAGE_FIXED_ATTRIBUTE_SUFFIXES = Object.freeze(
 export const READY_IMAGE_NAMED_ATTRIBUTE_KINDS = [
   "theme",
   "tag",
+  "group",
   "author"
 ] as const;
 
 export type ReadyImageAttributeIndexSpec =
   | { kind: "axis"; device: Device; brightness: Brightness }
   | { kind: "device"; value: Device }
-  | { kind: "theme" | "tag" | "author"; value: string };
+  | { kind: "theme" | "tag" | "group" | "author"; value: string };
 
 export function readyImageAttributeIndexKey(spec: ReadyImageAttributeIndexSpec) {
   if (spec.kind === "axis") {

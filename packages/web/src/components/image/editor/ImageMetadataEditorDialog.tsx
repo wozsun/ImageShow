@@ -19,6 +19,7 @@ import { WorkflowCollapsePanel } from "../../layout/WorkflowCollapsePanel.js";
 import { ImagePreviewModal } from "../ImagePreviewModal.js";
 import { AdminPagination } from "../../navigation/AdminPagination.js";
 import { OverlayScrollbar } from "../../layout/OverlayScrollbar.js";
+import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
 import { useAdminPermissions } from "../../../hooks/useAuthSession.js";
 import { createPageLifetimeModuleLoader } from "../../../lib/page-lifetime-module-loader.js";
 import { facetDisplayName } from "../../../lib/ui/formatters.js";
@@ -85,6 +86,7 @@ export function ImageMetadataEditorDialog({
   onTrashCommitted,
   publicImageMembershipHandled = false,
   onSaved,
+  onMembershipChange,
   onStorageMigrationSucceeded,
   returnFocusRef
 }: {
@@ -96,9 +98,10 @@ export function ImageMetadataEditorDialog({
   allTags: FacetOptionDto[];
   authors: FacetOptionDto[];
   onClose: () => void;
-  onTrashCommitted: (imageIds: string[]) => void | Promise<void>;
+  onTrashCommitted?: (imageIds: string[]) => void | Promise<void>;
   publicImageMembershipHandled?: boolean;
-  onSaved: ImageEditorSavedHandler;
+  onSaved?: ImageEditorSavedHandler;
+  onMembershipChange?: (ids: string[]) => Promise<{ complete: boolean; message: string }>;
   onStorageMigrationSucceeded?: (
     message: string,
     storageLabel: string
@@ -107,9 +110,14 @@ export function ImageMetadataEditorDialog({
 }) {
   const singleItem = items.length === 1;
   const multipleItems = items.length > 1;
-  // 删除用途只核对图片后移入回收站：属性字段只读，不提供保存、复原与迁移存储。
+  const readOnly = intent !== "edit";
+  const membership = intent === "group-add" || intent === "group-remove";
+  const membershipLabel = intent === "group-add" ? "加入分组" : "移出分组";
+  const membershipAction = useAsyncActionStatus({ minimumPendingMs: 0, resultDurationMs: null });
+  const [membershipResult, setMembershipResult] = useState<string | null>(null);
+  const membershipSubmittedRef = useRef(false);
   const deleting = intent === "delete";
-  const title = deleting
+  const title = membership ? membershipLabel : deleting
     ? singleItem ? "删除图片" : "批量删除图片"
     : singleItem ? "编辑图片" : "批量编辑图片";
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -123,17 +131,17 @@ export function ImageMetadataEditorDialog({
   const [session, setSession] = useState(() => createImageMetadataSession(items));
   const trashAction = useImageEditorTrashAction({
     setSession,
-    onTrashCommitted,
+    onTrashCommitted: (ids) => onTrashCommitted?.(ids),
     publicImageMembershipHandled
   });
   const operations = useImageMetadataOperations({
     initialIds: sessionItemIds,
-    onSaved
+    onSaved: (commit) => onSaved?.(commit)
   });
   const { pendingReconciliation, reconcilePendingSave, save, saveStatus, lastSaveReport } =
     operations;
   const saving = saveStatus.pending;
-  const busy = saving || trashAction.pending;
+  const busy = saving || trashAction.pending || membershipAction.pending;
   const [preview, setPreview] = useState<{
     src: string;
     thumbSrc: string;
@@ -271,6 +279,16 @@ export function ImageMetadataEditorDialog({
     if (allTrashed) requestClose();
     return allTrashed;
   };
+  const changeMembership = async (requestClose: () => void) => {
+    if (!onMembershipChange || membershipSubmittedRef.current || busy || !activeItems.length) return;
+    membershipSubmittedRef.current = true;
+    await membershipAction.run(async () => {
+      const result = await onMembershipChange(activeItems.map((item) => item.id));
+      if (result.complete) requestClose();
+      else setMembershipResult(result.message);
+      return result.complete;
+    });
+  };
   const prepareAttributeClear: PrepareImageAttributeClear = (field) => {
     if (busy) return null;
     const ids = new Set(session.activeIds);
@@ -305,11 +323,11 @@ export function ImageMetadataEditorDialog({
       {({ requestClose }) => (
         <>
           <form
-            className={`image-editor-modal image-workflow-window${singleItem ? " is-single" : ""}${deleting ? " is-delete" : ""}`}
+            className={`image-editor-modal image-workflow-window${singleItem ? " is-single" : ""}${readOnly ? " is-delete" : ""}`}
             tabIndex={-1}
             onSubmit={async (event) => {
               event.preventDefault();
-              if (busy) return;
+              if (busy || readOnly) return;
               await saveAll();
             }}
           >
@@ -319,7 +337,7 @@ export function ImageMetadataEditorDialog({
                 <p title={singleItem ? modalSubtitle : undefined}>{modalSubtitle}</p>
               </div>
               <div className="image-editor-header-actions">
-                {!deleting && (
+                {!readOnly && (
                   <button
                     ref={restoreTriggerRef}
                     className="image-editor-restore-button"
@@ -347,7 +365,7 @@ export function ImageMetadataEditorDialog({
                 </button>
               </div>
             </header>
-            {multipleItems && !deleting && (
+            {multipleItems && !readOnly && (
               <WorkflowCollapsePanel
                 className="image-editor-common-panel"
                 contentClassName="image-editor-common workflow-defaults"
@@ -410,6 +428,7 @@ export function ImageMetadataEditorDialog({
               </WorkflowCollapsePanel>
             )}
             <div className="modal-scroll-list image-workflow-list image-editor-list" ref={listRef}>
+              {membershipResult && <p className="image-editor-trash-error" role="alert">{membershipResult}</p>}
               {trashAction.errorMessage && (
                 <p className="image-editor-trash-error" role="alert">
                   {trashAction.errorMessage}
@@ -430,7 +449,10 @@ export function ImageMetadataEditorDialog({
                   authors={authors}
                   storageName={resolveStorageName(item)}
                   onPatch={(patch) => patchDraft(item.id, patch)}
-                  onRemove={() => remove(item.id)}
+                  onRemove={() => {
+                    if (activeItems.length === 1) requestClose();
+                    else remove(item.id);
+                  }}
                   onPreview={(opener) => {
                     previewReturnFocusRef.current = opener;
                     setPreview({
@@ -444,14 +466,14 @@ export function ImageMetadataEditorDialog({
               ))}
               {!activeItems.length && (
                 <p className="image-editor-empty-state">
-                  {deleting ? "图片删除列表为空" : "图片编辑列表为空"}
+                  {membership ? "待操作图片列表为空" : deleting ? "图片删除列表为空" : "图片编辑列表为空"}
                 </p>
               )}
             </div>
             <footer
               className={`image-workflow-footer${paginationAvailable ? " has-pagination" : ""}`}
             >
-              {!deleting && (canMigrateStorage || trashAvailable) && (
+              {!readOnly && (canMigrateStorage || trashAvailable) && (
                 <div className="image-editor-resource-actions image-workflow-leading-actions">
                   {canMigrateStorage && (
                     <button
@@ -500,7 +522,7 @@ export function ImageMetadataEditorDialog({
               {paginationAvailable && (
                 <AdminPagination
                   className="image-workflow-pagination"
-                  ariaLabel={deleting ? "批量删除分页" : "批量编辑分页"}
+                  ariaLabel={membership ? "待操作图片分页" : deleting ? "批量删除分页" : "批量编辑分页"}
                   page={page}
                   totalPages={totalPages}
                   disabled={busy}
@@ -511,7 +533,21 @@ export function ImageMetadataEditorDialog({
                 <button type="button" disabled={busy} onClick={() => requestClose()}>
                   取消
                 </button>
-                {deleting ? (
+                {membership ? (
+                  <AsyncActionButton
+                    type="button"
+                    className={`${intent === "group-add" ? "button" : "danger-button"} workflow-submit-button image-editor-membership-button`}
+                    status={membershipAction.status}
+                    disabled={busy || !activeItems.length || membershipSubmittedRef.current}
+                    presentation={{
+                      idle: { icon: intent === "group-add" ? "add-line" : "subtract-line", label: membershipLabel },
+                      pending: { icon: "refresh-line", label: "处理中" },
+                      success: { icon: "check-line", label: "已完成" },
+                      error: { icon: "close-line", label: "未完成" }
+                    }}
+                    onClick={() => void changeMembership(requestClose)}
+                  />
+                ) : deleting ? (
                   <TwoStepConfirmButton
                     className="danger-button workflow-submit-button image-editor-delete-button"
                     showLabel
@@ -549,7 +585,7 @@ export function ImageMetadataEditorDialog({
                 currentStorageSlugs={activeItems.map((item) => item.storage_slug)}
                 returnFocusRef={migrateTriggerRef}
                 onClose={() => setMigrating(false)}
-                onSaved={onSaved}
+                onSaved={() => onSaved?.()}
                 onSucceeded={(message, storageLabel) => {
                   setMigrating(false);
                   onStorageMigrationSucceeded?.(message, storageLabel);

@@ -1,6 +1,7 @@
 import type { ImageVariantRecord } from "../variants/record.ts";
 import { unsetSelector } from "@imageshow/shared/browser";
 import {
+  imageGroupMembershipLimit,
   brightnesses,
   devices,
   slugMaxLength,
@@ -39,6 +40,7 @@ export type ReadyImageSourceRow = ImageVariantRecord & {
   storage_slug: string;
   author: string | null;
   tags: string[];
+  groups: string[];
   sort_score: number | string;
   title: string;
   description: string;
@@ -56,6 +58,7 @@ export type ReadyImageCacheItem = ImageVariantRecord & {
   storage_slug: string;
   author: string | null;
   tags: string[];
+  groups: string[];
   width: number;
   height: number;
   sort_score: number;
@@ -114,6 +117,7 @@ export function readyImageCacheItemFromRow(row: ReadyImageSourceRow): ReadyImage
     storage_slug: String(row.storage_slug ?? ""),
     author: row.author === null ? null : String(row.author),
     tags,
+    groups: [...new Set(row.groups.map(String))].sort(),
     width: finiteNonNegative(row.s_width),
     height: finiteNonNegative(row.s_height),
     l_width: finiteNonNegative(row.l_width),
@@ -141,6 +145,12 @@ export function readyImageCacheItemFromRow(row: ReadyImageSourceRow): ReadyImage
 }
 
 function validateReadyImageCacheItem(item: ReadyImageCacheItem) {
+  if (item.groups.length > imageGroupMembershipLimit
+    || item.groups.some((slug, index) => slug.length > slugMaxLength
+      || !slugPattern.test(slug)
+      || (index > 0 && slug <= item.groups[index - 1]!))) {
+    throw new Error("Ready-image cache row contains invalid groups");
+  }
   if (
     item.tags.length > 50 ||
     item.tags.some((tag) => tag.length > slugMaxLength || !slugPattern.test(tag))
@@ -164,7 +174,7 @@ function validateReadyImageCacheItem(item: ReadyImageCacheItem) {
   for (const field of ["l_md5","m_md5","s_md5"] as const) if (!/^[a-f0-9]{32}$/.test(item[field])) throw new Error("Invalid variant MD5");
 }
 
-const cacheFields = ["id","device","brightness","theme","storage_slug","author","tags","sort_score","title","description","source","original","created_at","updated_at","l_width","l_height","l_byte_size","m_width","m_height","m_byte_size","s_width","s_height","s_byte_size","l_md5","m_md5","s_md5"] as const;
+const cacheFields = ["id","device","brightness","theme","storage_slug","author","tags","groups","sort_score","title","description","source","original","created_at","updated_at","l_width","l_height","l_byte_size","m_width","m_height","m_byte_size","s_width","s_height","s_byte_size","l_md5","m_md5","s_md5"] as const;
 
 export function parseReadyImageCacheItem(raw: string | null): ReadyImageCacheItem | null {
   if (!raw) return null;
@@ -173,7 +183,7 @@ export function parseReadyImageCacheItem(raw: string | null): ReadyImageCacheIte
     if (Buffer.byteLength(raw, "utf8") > READY_IMAGE_CACHE_MAX_ITEM_BYTES || !Array.isArray(value) || value.length !== cacheFields.length) return null;
     for (const [index, field] of cacheFields.entries()) {
       const entry: unknown = value[index];
-      if (field === "tags") {
+      if (field === "tags" || field === "groups") {
         if (!Array.isArray(entry) || entry.some((tag) => typeof tag !== "string")) return null;
       } else if (field === "theme" || field === "author") {
         if (entry !== null && typeof entry !== "string") return null;
@@ -225,6 +235,7 @@ export function readyImageStatFields(item: ReadyImageCacheItem) {
     `axis:${item.device}:${item.brightness}`,
     `theme:${item.theme ?? unsetSelector}`,
     ...item.tags.map((tag) => `tag:${tag}`),
+    ...item.groups.map((group) => `group:${group}`),
     `author:${item.author ?? unsetSelector}`
   ];
 }

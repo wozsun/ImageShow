@@ -84,6 +84,7 @@ export const runtimeConfigEnvironmentBindings = [
   { path: "site.gallery.order", environmentVariable: "SITE_GALLERY_ORDER", valueKind: "string" },
   { path: "site.random_method", environmentVariable: "SITE_RANDOM_METHOD", valueKind: "string" },
   { path: "site.random_size", environmentVariable: "SITE_RANDOM_SIZE", valueKind: "string" },
+  { path: "site.random_fallback_order", environmentVariable: "SITE_RANDOM_FALLBACK_ORDER", valueKind: "json-array" },
   {
     path: "site.assets_base_url",
     environmentVariable: "SITE_ASSETS_BASE_URL",

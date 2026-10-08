@@ -31,6 +31,7 @@ import { errorMessage, formatBytes, formatDate } from "../../lib/ui/formatters.j
 import { preloadIntentProps } from "../../lib/ui/preload-intent.js";
 import { storageBackendLabel } from "../../lib/ui/select-options.js";
 import { useImageEditorCapability } from "./editor/useImageEditorCapability.js";
+import { CopyButton } from "../actions/CopyButton.js";
 import { Icon } from "../icon/Icon.js";
 // 公开详情可在已确认的管理员会话中独立加载本模块；这里只带入管理详情自身样式，
 // 完整的管理表单色契约继续等到用户明确打开编辑器时再加载。
@@ -413,7 +414,10 @@ export function ImageAdminDetails({
       {expanded && (
         <div className="image-detail-admin-panel">
           <dl>
-            <dt>UUID</dt>
+            <dt className="image-detail-admin-uuid-label">
+              UUID
+              <CopyButton value={imageId} ariaLabel="复制图片 ID" />
+            </dt>
             <dd className="image-detail-admin-uuid">{imageId}</dd>
             <dt>存储</dt>
             <dd title={variantSizeTitle}>

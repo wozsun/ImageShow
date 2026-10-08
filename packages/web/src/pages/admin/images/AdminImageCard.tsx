@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { imageVariantUrl, type AdminImageListItemDto } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { TwoStepConfirmButton } from "../../../components/actions/TwoStepConfirmButton.js";
@@ -9,13 +10,13 @@ import {
 } from "../../../lib/ui/formatters.js";
 import { preloadIntentProps } from "../../../lib/ui/preload-intent.js";
 
-type AdminImageCardProps = {
+type ImageCardCommonProps = {
   item: AdminImageListItemDto;
   storageName: (item: { storage_slug: string }) => string;
   checked: boolean;
+  metadata?: ReactNode;
   busy: boolean;
   actionsDisabled: boolean;
-  canPurge: boolean;
   onCheck: (checked: boolean, extendRange: boolean) => void;
   onSelectRange: () => void;
   rangeSelectionHelpId: string;
@@ -23,6 +24,10 @@ type AdminImageCardProps = {
   detailPending: boolean;
   onPreloadDetail: () => void;
   onDetail: (opener: HTMLElement) => void;
+};
+
+type ImageCardStandardActions = {
+  canPurge: boolean;
   editDisabled: boolean;
   editPending: boolean;
   onPreloadEdit: () => void;
@@ -32,28 +37,26 @@ type AdminImageCardProps = {
   onRestore: () => void;
 };
 
-export function AdminImageCard({
-  item,
-  storageName,
-  checked,
-  busy,
-  actionsDisabled,
-  canPurge,
-  onCheck,
-  onSelectRange,
-  rangeSelectionHelpId,
-  detailDisabled,
-  detailPending,
-  onPreloadDetail,
-  onDetail,
-  editDisabled,
-  editPending,
-  onPreloadEdit,
-  onEdit,
-  onPurge,
-  onTrash,
-  onRestore
-}: AdminImageCardProps) {
+type AdminImageCardProps = ImageCardCommonProps & (
+  | { actions: ReactNode }
+  | (ImageCardStandardActions & { actions?: never })
+);
+
+export function AdminImageCard(props: AdminImageCardProps) {
+  const {
+    item,
+    storageName,
+    checked,
+    busy,
+    actionsDisabled,
+    onCheck,
+    onSelectRange,
+    rangeSelectionHelpId,
+    detailDisabled,
+    detailPending,
+    onPreloadDetail,
+    onDetail
+  } = props;
   const title = imageDisplayTitle(item);
   const classification = formatImageClassification(item);
   const storage = item.status === "ready" ? storageName(item) : "";
@@ -109,7 +112,7 @@ export function AdminImageCard({
         onClick={(event) => {
           if (event.shiftKey) {
             event.preventDefault();
-            onSelectRange();
+            if (!selectionDisabled) onSelectRange();
             return;
           }
           onDetail(event.currentTarget);
@@ -117,7 +120,7 @@ export function AdminImageCard({
         onKeyDown={(event) => {
           if (event.shiftKey && event.key === "Enter") {
             event.preventDefault();
-            onSelectRange();
+            if (!selectionDisabled) onSelectRange();
           }
         }}
       >
@@ -127,10 +130,23 @@ export function AdminImageCard({
         <span className="admin-image-card-main">
           <strong title={title}>{title}</strong>
           <span title={classification}>{classification}</span>
-          <AdminImageCardMetadata storage={storage} deletedAt={trashStatus} />
+          {props.metadata ?? <AdminImageCardMetadata storage={storage} deletedAt={trashStatus} />}
         </span>
       </button>
       <div className="admin-image-card-actions">
+        {"actions" in props ? props.actions : <StandardImageCardActions {...props} />}
+      </div>
+    </article>
+  );
+}
+
+function StandardImageCardActions({
+  item, busy, actionsDisabled, detailPending, canPurge,
+  editDisabled, editPending, onPreloadEdit, onEdit, onPurge, onTrash, onRestore
+}: ImageCardCommonProps & ImageCardStandardActions) {
+  const title = imageDisplayTitle(item);
+  return (
+    <>
         {item.status === "ready" ? (
           <>
             <button
@@ -193,8 +209,7 @@ export function AdminImageCard({
             )}
           </>
         )}
-      </div>
-    </article>
+    </>
   );
 }
 

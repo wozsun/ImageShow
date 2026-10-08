@@ -15,6 +15,8 @@ import { recordAdminImageListValidation } from "../../../lib/api/admin-image-lis
 import type { ImageAdminFilterValues } from "./ImageAdminFilters.js";
 import type { ImageAdminView } from "./useImageAdminOperations.js";
 
+export type ImageAdminGroupScope = { slug: string; mode: "members" | "picker" };
+
 const adminImageListStaleTimeMs = 90_000;
 
 type CachedAdminImageListResponse = AdminImageListResponseDto & {
@@ -65,10 +67,12 @@ function normalizedScope(
   view: ImageAdminView,
   filters: ImageAdminFilterValues,
   pageSize: number,
-  sort: Readonly<AdminImageSort>
+  sort: Readonly<AdminImageSort>,
+  group?: ImageAdminGroupScope
 ) {
   return {
     view,
+    ...(group ? { group } : {}),
     device: filters.device || "",
     brightness: filters.brightness || "",
     theme: filters.theme || "",
@@ -84,9 +88,10 @@ export function imageAdminPaginationScopeKey(
   view: ImageAdminView,
   filters: ImageAdminFilterValues,
   pageSize: number,
-  sort: Readonly<AdminImageSort> = defaultAdminImageSort
+  sort: Readonly<AdminImageSort> = defaultAdminImageSort,
+  group?: ImageAdminGroupScope
 ) {
-  return JSON.stringify(normalizedScope(view, filters, pageSize, sort));
+  return JSON.stringify(normalizedScope(view, filters, pageSize, sort, group));
 }
 
 export function effectiveImageAdminPage(
@@ -120,7 +125,8 @@ export function adminImageListQuery(
   scopeKey: string,
   page: number,
   pageSize: number,
-  sort: Readonly<AdminImageSort> = defaultAdminImageSort
+  sort: Readonly<AdminImageSort> = defaultAdminImageSort,
+  group?: ImageAdminGroupScope
 ) {
   const params = new URLSearchParams({
     status: view === "deleted" ? "deleted" : "ready",
@@ -129,6 +135,7 @@ export function adminImageListQuery(
     page: String(page),
     limit: String(pageSize)
   });
+  if (group) params.set(group.mode === "members" ? "group" : "mark_group", group.slug);
   if (filters.theme) params.set("theme", filters.theme);
   if (filters.device) params.set("device", filters.device);
   if (filters.brightness) params.set("brightness", filters.brightness);
@@ -137,7 +144,7 @@ export function adminImageListQuery(
   if (filters.author) params.set("author", filters.author);
 
   const queryKey = [
-    ...queryKeys.adminImages,
+    ...(group ? [...queryKeys.groupImages, group.slug, group.mode] : queryKeys.adminImages),
     scopeKey,
     page,
     pageSize

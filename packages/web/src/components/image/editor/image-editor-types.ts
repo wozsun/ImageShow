@@ -4,8 +4,8 @@ export type ImageEditorSource = Pick<AdminImageListItemDto, "id"> &
   Partial<EditableImageSnapshotDto> &
   Partial<Pick<AdminImageListItemDto, "deleted_at" | "status">>;
 
-/** 编辑弹窗的用途：编辑属性，或只核对图片后移入回收站。 */
-export type ImageEditorIntent = "edit" | "delete";
+/** 编辑弹窗的用途：编辑属性，或只读核对后删除图片、修改分组成员。 */
+export type ImageEditorIntent = "edit" | "delete" | "group-add" | "group-remove";
 
 export type ImageEditorTarget = {
   sources: ImageEditorSource[];

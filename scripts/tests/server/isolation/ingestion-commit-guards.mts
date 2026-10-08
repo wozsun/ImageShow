@@ -623,7 +623,7 @@ await runIntegrationScenario(async (runtime) => {
     BigInt(
       (
         await database.pool.query<{ revision: string }>(
-          "SELECT revision::text AS revision FROM ready_image_revision WHERE singleton=1"
+          "SELECT revision::text AS revision FROM projection_revision WHERE singleton=1"
         )
       ).rows[0]!.revision
     );

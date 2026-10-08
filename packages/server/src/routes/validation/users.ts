@@ -29,7 +29,8 @@ const adminPreferenceInputFields = {
   image_thumbnail_fit: z.enum(adminPreferenceValueOptions.image_thumbnail_fit).optional(),
   theme_view_mode: z.enum(adminPreferenceValueOptions.theme_view_mode).optional(),
   tag_view_mode: z.enum(adminPreferenceValueOptions.tag_view_mode).optional(),
-  author_view_mode: z.enum(adminPreferenceValueOptions.author_view_mode).optional()
+  author_view_mode: z.enum(adminPreferenceValueOptions.author_view_mode).optional(),
+  group_view_mode: z.enum(adminPreferenceValueOptions.group_view_mode).optional()
 } satisfies Record<keyof typeof adminPreferenceValueOptions, z.ZodType>;
 
 export const adminPreferencesInput = z

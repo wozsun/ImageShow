@@ -147,6 +147,13 @@ test("[Server/筛选] 查询签名统一等价写法并保留全部和分支边�
   assert.notEqual(plan(["all:a,b"]).signature, plan(["a,b"]).signature);
   assert.notEqual(plan(["a", "all:a,b"]).signature, plan(["a"]).signature);
   assert.equal(imageFilterPlanWithout(plan(["all:a,b", "c"]), "tag").signature, plan([]).signature);
+  const scoped = createImageFilterPlan({
+    devices: ["pc"], tag: { anyOf: [["a"]] },
+    range: { groups: ["group-a"], ids: ["0123456789ab"] }
+  });
+  for (const dimension of ["device", "brightness", "theme", "tag", "author"] as const) {
+    assert.deepEqual(imageFilterPlanWithout(scoped, dimension).range, scoped.range);
+  }
 });
 
 test("[Server/筛选] 随机查询接受混合条件、忽略未知名称并限制总词项", async () => {
@@ -177,16 +184,59 @@ test("[Server/筛选] 随机查询接受混合条件、忽略未知名称并限�
   assert.ok(!(knownNormalized instanceof Response));
   assert.equal(unknownBranch.signature, knownNormalized.signature);
   const unmatchable = normalizeRandomQuery(parsed, { ...maps, tag: new Map(), author: new Map() });
-  assert.ok(unmatchable instanceof Response);
-  assert.equal(unmatchable.status, 404);
-  assert.deepEqual((await unmatchable.json()).details, {
-    ignored: { tag: ["a", "b", "c"], author: ["owner"] }
-  });
+  assert.equal(unmatchable.unmatchable, true);
+  assert.deepEqual(unmatchable.ignored, { theme: [], tag: ["a", "b", "c"], author: ["owner"], group: [] });
+  for (const value of ["none,theme", "none,all", "null", "bogus"]) {
+    const invalid = parse(`fallback=${value}`);
+    assert.ok(invalid instanceof Response);
+    assert.equal(invalid.status, 400);
+  }
+  for (const value of ["", "none", " , "]) {
+    const query = parse(`fallback=${value}`);
+    assert.ok(!(query instanceof Response));
+    assert.deepEqual(query.fallback, []);
+  }
+  const first = parse("fallback=theme,device&fallback=theme");
+  const second = parse("fallback=device,theme");
+  assert.ok(!(first instanceof Response) && !(second instanceof Response));
+  assert.deepEqual(first.fallback, ["device", "theme"]);
+  assert.equal(normalizeRandomQuery(first, maps).signature, normalizeRandomQuery(second, maps).signature);
+  const all = parse("fallback=all");
+  assert.ok(!(all instanceof Response));
+  assert.equal(all.fallback.length, 5);
   const repeated = Array.from({ length: 32 }, (_, i) => `t${i}`).join(",");
   assert.ok(!(parse(`tag=${repeated}&theme=${repeated}`) instanceof Response));
   const excessive = parse(`tag=${repeated}&theme=${repeated}&author=a`);
   assert.ok(excessive instanceof Response);
   assert.equal(excessive.status, 400);
+});
+
+test("[Server/筛选] 分组范围规范化、未知名称和设备默认值保持统一契约", () => {
+  const parse = (search: string) => parseRandomQuery(new URL(`https://img.example/random?${search}`), "redirect");
+  const maps = { tag: new Map(), theme: new Map(), author: new Map(), groups: new Set(["a", "b"]) };
+  const query = parse("group=B,a&group=a,missing");
+  assert.ok(!(query instanceof Response));
+  assert.equal(query.device, "auto");
+  assert.deepEqual(query.groups, ["a", "b", "missing"]);
+  const normalized = normalizeRandomQuery(query, maps);
+  assert.deepEqual(normalized.groups, ["a", "b"]);
+  assert.deepEqual(normalized.ignored.group, ["missing"]);
+  const known = parse("group=a,b");
+  assert.ok(!(known instanceof Response));
+  assert.equal(normalized.signature, normalizeRandomQuery(known, maps).signature);
+  const unknown = parse("group=missing");
+  assert.ok(!(unknown instanceof Response));
+  assert.equal(normalizeRandomQuery(unknown, maps).unmatchable, true);
+  for (const search of ["", "id=0123456789ab", "group=a", "group=a&device=", "group=a&device=auto"]) {
+    const parsed = parse(search);
+    assert.ok(!(parsed instanceof Response));
+    assert.equal(parsed.device, "auto");
+  }
+  for (const value of ["", "!a", "中文", "a".repeat(33), Array(33).fill("a").join(",")]) {
+    const invalid = parse(`group=${encodeURIComponent(value)}`);
+    assert.ok(invalid instanceof Response);
+    assert.equal(invalid.status, 400);
+  }
 });
 
 test("[Server/筛选] 可读链接保留逻辑标点并往返编码特殊字符", () => {

@@ -278,6 +278,8 @@ const loginChallenge = chunkForFacade("src/pages/admin/account/LoginChallenge.ts
 const authenticatedShell = chunkForFacade("src/pages/admin/shell/AuthenticatedAdminShell.tsx");
 const imageAdmin = chunkForFacade("src/pages/admin/images/ImageAdmin.tsx");
 const overview = chunkForFacade("src/pages/admin/Overview.tsx");
+const groupDetail = chunkForFacade("src/pages/admin/groups/GroupDetail.tsx");
+const groupAdmin = chunkForFacade("src/pages/admin/groups/GroupAdmin.tsx");
 const vocabularyAdmin = chunkForFacade("src/pages/admin/VocabularyAdmin.tsx");
 const accountSettings = chunkForFacade("src/pages/admin/account/AccountSettings.tsx");
 const settingsPage = chunkForFacade("src/pages/admin/settings/SettingsPage.tsx");
@@ -474,6 +476,8 @@ const smallStyleCounts = {
 const imageRoleScenarioRoutes = {
   overview,
   images: imageAdmin,
+  groups: groupAdmin,
+  groupDetail,
   vocabulary: vocabularyAdmin,
   account: accountSettings,
   check: checkPage
@@ -631,6 +635,8 @@ assertInitialModuleRoots(
 const imageRoleRoutes = [
   overview,
   imageAdmin,
+  groupAdmin,
+  groupDetail,
   vocabularyAdmin,
   accountSettings,
   checkPage

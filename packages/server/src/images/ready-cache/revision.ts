@@ -24,7 +24,7 @@ function parseRevision(value: unknown): ReadyImageRevision {
 }
 
 function revisionSnapshot(row: Record<string, unknown> | undefined) {
-  if (!row) throw new Error("ready_image_revision singleton is missing");
+  if (!row) throw new Error("projection_revision singleton is missing");
   const updatedAt =
     row.updated_at instanceof Date
       ? row.updated_at.toISOString()
@@ -44,7 +44,7 @@ export async function getReadyImageRevision(
   const row = (
     await client.query(
       `SELECT revision, updated_at
-       FROM ready_image_revision
+       FROM projection_revision
       WHERE singleton=1`
     )
   ).rows[0] as Record<string, unknown> | undefined;
@@ -63,16 +63,16 @@ export async function bumpReadyImageRevision(
     await client.query(
       `WITH marker AS (
        SELECT set_config(
-         'imageshow.ready_image_revision_bumped',
+         'imageshow.projection_revision_bumped',
          '1',
          true
        )
        WHERE current_setting(
-         'imageshow.ready_image_revision_bumped',
+         'imageshow.projection_revision_bumped',
          true
        ) IS DISTINCT FROM '1'
      ), updated AS (
-       UPDATE ready_image_revision
+       UPDATE projection_revision
           SET revision=revision+1,
               updated_at=clock_timestamp()
         WHERE singleton=1
@@ -82,7 +82,7 @@ export async function bumpReadyImageRevision(
      SELECT revision, updated_at FROM updated
      UNION ALL
      SELECT revision, updated_at
-       FROM ready_image_revision
+       FROM projection_revision
       WHERE singleton=1
         AND NOT EXISTS (SELECT 1 FROM updated)
      LIMIT 1`

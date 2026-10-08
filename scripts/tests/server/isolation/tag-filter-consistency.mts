@@ -82,7 +82,7 @@ await runIntegrationScenario(async (runtime) => {
           query: (async (text: string, values?: unknown[]) => {
             statements.push(text);
             const result = await client.query(text, values);
-            if (text.includes("FROM ready_image_revision") && afterRevision) await afterRevision();
+            if (text.includes("FROM projection_revision") && afterRevision) await afterRevision();
             return result;
           }) as typeof client.query
         },
@@ -309,7 +309,7 @@ await runIntegrationScenario(async (runtime) => {
           try {
             await writer.query("UPDATE metadata SET status=$1 WHERE id=$2", [status, rows[0]!.id]);
             await writer.query(
-              "UPDATE ready_image_revision SET revision=revision+1, updated_at=clock_timestamp() WHERE singleton=1"
+              "UPDATE projection_revision SET revision=revision+1, updated_at=clock_timestamp() WHERE singleton=1"
             );
             await writer.query("COMMIT");
           } catch (error) {

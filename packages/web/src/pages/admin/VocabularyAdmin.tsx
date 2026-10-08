@@ -1,6 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   adminPermissions,
+  isSortOrder,
+  sortOrderMin,
+  sortOrderMax,
   isNamedSlug,
   unsetSelector,
   type AuthorDto,
@@ -164,6 +167,8 @@ function VocabularyAdminContent({
   };
   const [slug, setSlug] = useState("");
   const [display, setDisplay] = useState("");
+  const [sortOrder, setSortOrder] = useState("");
+  const sortOrderInvalid = sortOrder !== "" && !isSortOrder(Number(sortOrder));
 
   const [link, setLink] = useState("");
   const [mutation, setMutation] = useState<VocabularyMutation>("");
@@ -255,7 +260,7 @@ function VocabularyAdminContent({
   const create = async (event: FormEvent) => {
     event.preventDefault();
     const value = slug.trim().toLowerCase();
-    if (!value || operationBusy || slugInvalid) return;
+    if (!value || operationBusy || slugInvalid || sortOrderInvalid) return;
     if (order.some((item) => item.slug === value)) {
       setCreateError(`该${copy.noun}已存在`);
       return;
@@ -271,11 +276,12 @@ function VocabularyAdminContent({
           `${adminApiBasePath}/${kind}`,
           {
             method: "POST",
-            body: JSON.stringify(body)
+            body: JSON.stringify({ ...body, sort_order: sortOrder === "" ? undefined : Number(sortOrder) })
           }
         );
         setSlug("");
         setDisplay("");
+        setSortOrder("");
         setLink("");
         if (isAuthor && "item" in response) {
           await acceptAuthorItem(response.item);
@@ -319,7 +325,7 @@ function VocabularyAdminContent({
       <div className="vocabulary-toolbar" data-kind={kind}>
         <WorkspaceHeader
           title={`${copy.noun}管理`}
-          description={`第 ${page} / ${totalPages} 页 · 共 ${order.length} 个${copy.noun}${isPending ? " · 加载中" : ""}`}
+          description={`共 ${order.length} 个${copy.noun}${isPending ? " · 加载中" : ""}`}
           feedbackTarget={feedbackTarget}
           titleAccessory={
             <button
@@ -371,10 +377,14 @@ function VocabularyAdminContent({
                 maxLength={2048}
               />
             )}
+            <input className="vocabulary-create-sort" type="number" step={1}
+              min={sortOrderMin} max={sortOrderMax} value={sortOrder}
+              placeholder="排序（可选）" aria-label={`${copy.noun}排序（可选）`} aria-invalid={sortOrderInvalid}
+              disabled={externalBusy} onChange={(event) => setSortOrder(event.target.value)} />
             <button
               className="button vocabulary-create-button"
               type="submit"
-              disabled={operationBusy || !slug.trim() || slugInvalid}
+              disabled={operationBusy || !slug.trim() || slugInvalid || sortOrderInvalid}
             >
               <AdminIcon name="add-line" />
               <StableButtonLabel

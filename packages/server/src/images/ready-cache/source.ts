@@ -26,6 +26,11 @@ export const readyImageSourceColumns = `m.id::text AS id,
       FROM image_tag it
      WHERE it.image_id=m.id
   ), '{}'::text[]) AS tags,
+  COALESCE((
+    SELECT array_agg(member.group_slug ORDER BY member.group_slug)
+      FROM image_group_member member
+     WHERE member.image_id=m.id
+  ), '{}'::text[]) AS groups,
   m.l_width,
   m.l_height,
   m.l_byte_size,

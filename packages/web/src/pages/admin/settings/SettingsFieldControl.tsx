@@ -148,11 +148,13 @@ export function SettingsFieldControl({
         <input
           aria-label={field.label}
           aria-invalid={invalid || undefined}
-          value={String(value)}
+          value={field.kind === "csv" ? (value as string[]).join(",") : String(value)}
           maxLength={field.maxLength}
           placeholder={field.placeholder}
           disabled={disabled}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={(event) => onChange(field.kind === "csv"
+            ? event.target.value.split(",").map((part) => part.trim())
+            : event.target.value)}
         />
       )}
       {errorText}

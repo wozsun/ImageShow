@@ -13,6 +13,7 @@ export const adminPermissions = {
   imageStorageMigrate: "image.storage.migrate",
   imageTrashPurge: "image.trash.purge",
   tagDelete: "tag.delete",
+  groupDelete: "group.delete",
   themeDelete: "theme.delete",
   authorDelete: "author.delete",
   storageMaintenanceMigrate: "storage.maintenance.migrate",

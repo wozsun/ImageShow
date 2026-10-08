@@ -192,7 +192,8 @@ export const adminPreferenceValueOptions = {
   image_thumbnail_fit: ["cover", "contain"],
   theme_view_mode: vocabularyViewModes,
   tag_view_mode: vocabularyViewModes,
-  author_view_mode: vocabularyViewModes
+  author_view_mode: vocabularyViewModes,
+  group_view_mode: vocabularyViewModes
 } as const;
 
 export const adminPreferencesMaxBytes = 4 * 1024;
@@ -216,7 +217,8 @@ export const defaultAdminPreferences: Readonly<AdminPreferenceValues> = Object.f
   image_thumbnail_fit: "cover",
   theme_view_mode: "card",
   tag_view_mode: "card",
-  author_view_mode: "card"
+  author_view_mode: "card",
+  group_view_mode: "card"
 });
 
 export type AdminPreferences = Partial<AdminPreferenceValues>;

@@ -116,6 +116,7 @@ export async function verifyStaticCompression() {
       );
     }
     await writeFile(resolve(directory, "packages/server/schema.sql"), "SELECT 1;\n");
+    await writeFile(resolve(directory, "packages/server/schema-upgrade-6.8.0.sql"), "SELECT 1;\n");
     const template = "<html><title>dynamic template</title></html>";
     await writeFile(resolve(input, "index.html"), template);
     for (const file of ["assets/app.js", "assets/help.html", "assets/nested/index.html"])

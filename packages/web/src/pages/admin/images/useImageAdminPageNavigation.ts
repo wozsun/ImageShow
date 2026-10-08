@@ -14,6 +14,7 @@ import {
   imageAdminTotalPages,
   resetImageAdminPage,
   resolveImageAdminScopeTotal,
+  type ImageAdminGroupScope,
   type ImageAdminPageState
 } from "./image-admin-list-query.js";
 
@@ -22,14 +23,18 @@ export function useImageAdminPageNavigation({
   view,
   filters,
   pageSize,
-  sort = defaultAdminImageSort
+  sort = defaultAdminImageSort,
+  group,
+  enabled = true
 }: {
   view: ImageAdminView;
   filters: ImageAdminFilterValues;
   pageSize: number;
   sort?: Readonly<AdminImageSort>;
+  group?: ImageAdminGroupScope;
+  enabled?: boolean;
 }) {
-  const scopeKey = imageAdminPaginationScopeKey(view, filters, pageSize, sort);
+  const scopeKey = imageAdminPaginationScopeKey(view, filters, pageSize, sort, group);
   const [state, setState] = useState<ImageAdminPageState>({
     scopeKey,
     page: 1,
@@ -44,8 +49,10 @@ export function useImageAdminPageNavigation({
       scopeKey,
       pageNumber,
       pageSize,
-      sort
-    )
+      sort,
+      group
+    ),
+    enabled
   });
   // Total belongs to the normalized scope, not to one numeric page. Keep the
   // newest successful scope snapshot while the target page has no data yet.

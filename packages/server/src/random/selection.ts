@@ -1,5 +1,5 @@
 import { hash } from "node:crypto";
-import type { RandomImageSize, RandomMethod } from "@imageshow/shared/browser";
+import { randomFallbackDimensions, type RandomFallbackDimension, type RandomImageSize, type RandomMethod } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
 import { resolveAuthorTermMap } from "../vocab/authors/query.ts";
@@ -16,13 +16,14 @@ import {
   ignoredSelectorDetails,
   normalizeRandomQuery,
   parseRandomQuery,
+  type ParsedRandomQuery,
   type RandomSelectorGroup
 } from "./query.ts";
 import {
   resolveCandidateAxes,
   type SelectedReadyImage
 } from "./selection-model.ts";
-import { pickTargetedImages } from "./targeted-selection.ts";
+import { readImageGroupSlugs } from "../images/groups/slug-cache.ts";
 import { sampleReadyImagesFromPostgres } from "./postgres-selection.ts";
 import type { PublicDatabaseReadAccess } from "../core/database/public-fallback.ts";
 
@@ -30,6 +31,7 @@ export type RandomImageSelection = {
   mode: RandomMethod;
   size: RandomImageSize;
   items: SelectedReadyImage[];
+  fallback: RandomFallbackDimension[];
 };
 
 export async function selectRandomImages(
@@ -40,7 +42,7 @@ export async function selectRandomImages(
   database: PublicDatabaseReadAccess
 ): Promise<RandomImageSelection | Response> {
   signal.throwIfAborted();
-  const { random_method, random_size } = getRuntimeConfig().site;
+  const { random_method, random_size, random_fallback_order } = getRuntimeConfig().site;
   const parsed = parseRandomQuery(
     url,
     random_method,
@@ -48,110 +50,85 @@ export async function selectRandomImages(
   );
   if (parsed instanceof Response) return parsed;
 
-  const [themeMap, tagMap, authorMap] = await Promise.all([
+  const [themeMap, tagMap, authorMap, groupSlugs] = await Promise.all([
     resolveSelectorMap(parsed.theme, (terms) => (
       resolveThemeTermMap(terms, database)
     )),
     resolveTagTermMap(parsed.tag?.anyOf.flat() ?? [], database),
     resolveSelectorMap(parsed.author, (terms) => (
       resolveAuthorTermMap(terms, database)
-    ))
+    )),
+    parsed.groups.length ? readImageGroupSlugs(database) : new Set<string>()
   ]);
   signal.throwIfAborted();
-  const query = normalizeRandomQuery(parsed, {
-    theme: themeMap,
-    tag: tagMap,
-    author: authorMap
-  });
-  if (query instanceof Response) return query;
-  const targeted = query.ids.length > 0;
-  const axes = resolveCandidateAxes(
-    query.device,
-    query.brightness,
-    userAgent
+  const maps = { theme: themeMap, tag: tagMap, author: authorMap, groups: groupSlugs };
+  const original = normalizeRandomQuery(parsed, maps);
+  let recent: Set<string> | undefined;
+  const relaxed: RandomFallbackDimension[] = [];
+  let current = parsed;
+  const pending = random_fallback_order.filter((dimension) => parsed.fallback.includes(dimension));
+
+  while (true) {
+    signal.throwIfAborted();
+    const query = normalizeRandomQuery(current, maps);
+    let items: SelectedReadyImage[] = [];
+    if (!query.unmatchable) {
+      recent ??= parsed.seed === null
+        ? await recentlyServedIds(clientId, original.signature)
+        : new Set<string>();
+      const axes = resolveCandidateAxes(query.device, query.brightness, userAgent);
+      const plan = createImageFilterPlan({
+        devices: axes.deviceCandidates,
+        brightnesses: axes.brightnessCandidates,
+        theme: query.theme,
+        tag: query.tag,
+        author: query.author,
+        ...(query.scoped ? { range: { groups: query.groups, ids: query.ids } } : {})
+      });
+      // The seed depends on the effective plan and the set of relaxed dimensions,
+      // not the order in which the caller wrote fallback or the requested limit.
+      const relaxedSet = randomFallbackDimensions.filter((dimension) => relaxed.includes(dimension));
+      const seed = query.seed !== null && relaxedSet.length
+        ? JSON.stringify([query.seed, relaxedSet])
+        : query.seed;
+      const seededStart = seed === null ? undefined : Number.parseInt(
+        hash("sha256", JSON.stringify(["random", seed, plan.signature]), "hex").slice(0, 12),
+        16
+      );
+      const cached = await sampleReadyImages(plan, query.limit, recent, signal, seededStart);
+      items = cached.cached ? cached.value : await sampleReadyImagesFromPostgres(
+        plan, query.limit, recent, database.reader, signal, seededStart
+      );
+    }
+    if (items.length) {
+      if (parsed.seed === null) {
+        await rememberServedIds(clientId, original.signature, items.map((item) => item.id));
+      }
+      return { mode: parsed.mode, size: parsed.size, items, fallback: relaxed };
+    }
+
+    let next: ParsedRandomQuery | null = null;
+    while (pending.length && next === null) {
+      const dimension = pending.shift()!;
+      next = relaxRandomDimension(current, dimension, userAgent);
+      if (next) relaxed.push(dimension);
+    }
+    if (!next) break;
+    current = next;
+  }
+
+  const axes = resolveCandidateAxes(parsed.device, parsed.brightness, userAgent);
+  const hasFilters = axes.device !== "auto" || axes.brightness ||
+    hasSelectors(parsed.theme) || parsed.tag !== null || hasSelectors(parsed.author);
+  return apiErrorResponse(
+    {
+      status: 404,
+      message: hasFilters
+        ? "Not Found: No available images for the selected filters"
+        : "Not Found: No available images"
+    },
+    ignoredSelectorDetails(original.ignored)
   );
-  const plan = createImageFilterPlan({
-    devices: axes.deviceCandidates,
-    brightnesses: axes.brightnessCandidates,
-    theme: query.theme,
-    tag: query.tag,
-    author: query.author
-  });
-  const seededStart =
-    query.seed === null || targeted
-      ? undefined
-      : Number.parseInt(
-          hash("sha256", JSON.stringify(["random", query.seed, plan.signature]), "hex").slice(
-            0,
-            12
-          ),
-          16
-        );
-  const recent =
-    query.seed === null
-      ? await recentlyServedIds(clientId, query.signature)
-      : new Set<string>();
-  signal.throwIfAborted();
-  let items: SelectedReadyImage[];
-  if (targeted) {
-    const picked = await pickTargetedImages(
-      {
-        ids: query.ids,
-        plan,
-        limit: query.limit,
-        seed: query.seed,
-        recent
-      },
-      signal,
-      database
-    );
-    if (picked instanceof Response) return picked;
-    items = picked;
-  } else {
-    const cached = await sampleReadyImages(
-      plan,
-      query.limit,
-      recent,
-      signal,
-      seededStart
-    );
-    items = cached.cached
-      ? cached.value
-      : await sampleReadyImagesFromPostgres(
-          plan,
-          query.limit,
-          recent,
-          database.reader,
-          signal,
-          seededStart
-        );
-  }
-  if (!items.length) {
-    const hasFilters = Boolean(
-      axes.device !== "auto" ||
-      axes.brightness ||
-      hasSelectors(query.theme) ||
-      query.tag !== null ||
-      hasSelectors(query.author)
-    );
-    return apiErrorResponse(
-      {
-        status: 404,
-        message: hasFilters
-          ? "Not Found: No available images for the selected filters"
-          : "Not Found: No available images"
-      },
-      ignoredSelectorDetails(query.ignored)
-    );
-  }
-  if (query.seed === null) {
-    await rememberServedIds(
-      clientId,
-      query.signature,
-      items.map((item) => item.id)
-    );
-  }
-  return { mode: query.mode, size: query.size, items };
 }
 
 async function resolveSelectorMap(
@@ -160,4 +137,29 @@ async function resolveSelectorMap(
 ): Promise<Map<string, string>> {
   const terms = [...selectors.include, ...selectors.exclude];
   return terms.length ? resolve(terms) : new Map();
+}
+
+/** Returns null when this dimension places no positive restriction on the request. */
+function relaxRandomDimension(
+  query: ParsedRandomQuery,
+  dimension: RandomFallbackDimension,
+  userAgent: string
+): ParsedRandomQuery | null {
+  switch (dimension) {
+    case "device":
+      return resolveCandidateAxes(query.device, query.brightness, userAgent).deviceCandidates.length === 1
+        ? { ...query, device: "all" }
+        : null;
+    case "brightness":
+      return query.brightness ? { ...query, brightness: null } : null;
+    case "tag":
+      return query.tag ? { ...query, tag: null } : null;
+    case "author":
+    case "theme":
+      // Keep the original exclusions: normalization may have folded them into
+      // the include set, but relaxing includes must never remove exclusions.
+      return query[dimension].include.length
+        ? { ...query, [dimension]: { include: [], exclude: query[dimension].exclude } }
+        : null;
+  }
 }

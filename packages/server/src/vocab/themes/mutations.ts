@@ -19,14 +19,15 @@ import { bumpReadyImageRevision } from "../../images/ready-cache/revision.ts";
 async function insertTheme(
   client: Pick<PoolClient, "query">,
   slug: string,
-  displayName = ""
+  displayName = "",
+  sortOrder?: number
 ) {
   const result = await client.query(
     `INSERT INTO theme(slug, display_name, sort_order)
-     VALUES($1, $2, ${nextSortOrderSql("theme")})
+     VALUES($1, $2, COALESCE($3::integer, ${nextSortOrderSql("theme")}))
      ON CONFLICT (slug) DO NOTHING
      RETURNING slug`,
-    [slug, displayName]
+    [slug, displayName, sortOrder ?? null]
   );
   return Boolean(result.rowCount);
 }
@@ -44,13 +45,13 @@ export async function ensureThemeWithMutationLockHeld(
   return insertTheme(client, slug);
 }
 
-export async function createTheme(slug: string, displayName: string) {
+export async function createTheme(slug: string, displayName: string, sortOrder?: number) {
   assertVocabularySlug("theme", slug);
 
   await withVocabularyMutationLock("theme", slug, (signal) =>
     withVocabularyMutationSync("theme", async () => {
       signal.throwIfAborted();
-      const inserted = await insertTheme(pool, slug, displayName);
+      const inserted = await insertTheme(pool, slug, displayName, sortOrder);
       signal.throwIfAborted();
       assertVocabularyCreated("theme", slug, inserted ? 1 : 0);
     })

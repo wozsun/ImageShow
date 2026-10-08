@@ -73,6 +73,7 @@ async function respondRandom(c: Context, url: URL) {
     const body = JSON.stringify(
       apiSuccess({
         count: items.length,
+        fallback: selection.fallback,
         items
       } satisfies RandomImageJsonResponseDto)
     );

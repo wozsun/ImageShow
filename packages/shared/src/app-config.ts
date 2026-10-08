@@ -2,7 +2,7 @@ import { defaultNormalizeProfile } from "./browser/image-variants.ts";
 import { adminImagePageLimit } from "./browser/admin.ts";
 import { altchaSolveTimeoutMs } from "./browser/auth.ts";
 import { brightnesses, devices } from "./browser/image-classification.ts";
-import { imageDescriptionMaxLength, imageTitleMaxLength } from "./browser/images.ts";
+import { imageDescriptionMaxLength, imageTitleMaxLength, type RandomFallbackDimension } from "./browser/images.ts";
 import { ingestionBatchHardLimit, ingestionQueueSnapshotMaxItems, type ImportSourceTypeDto } from "./browser/ingestion.ts";
 import { randomQueryLimits } from "./browser/random-limits.ts";
 import { slugMaxLength } from "./browser/vocabulary.ts";
@@ -93,7 +93,6 @@ export const appConfig = {
     retryAfterSeconds: 1,
     minimumRandomCandidates: 32,
     maximumRandomCandidates: 512,
-    maximumTargetedCandidates: 256,
     maximumVocabularyRows: 10_000,
     maximumStorageBackendRows: 256
   },
@@ -167,6 +166,7 @@ export const appConfig = {
       },
       random_method: "redirect",
       random_size: "medium",
+      random_fallback_order: ["device", "brightness", "author", "tag", "theme"] as RandomFallbackDimension[],
       assets_base_url: "",
       robots_enabled: false,
       icp: "",

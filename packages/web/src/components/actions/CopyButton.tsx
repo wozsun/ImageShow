@@ -5,10 +5,12 @@ import { Icon } from "../icon/Icon.js";
 
 export function CopyButton({
   value,
-  ariaLabel = "复制内容"
+  ariaLabel = "复制内容",
+  variant = "icon"
 }: {
   value: string;
   ariaLabel?: string;
+  variant?: "icon" | "text";
 }) {
   const [status, setStatus] = useState<"idle" | "copied" | "failed">("idle");
   const resetTimer = useRef<number | undefined>(undefined);
@@ -42,7 +44,9 @@ export function CopyButton({
       }
       onClick={() => void handleCopy()}
     >
-      <Icon name={copied ? "check-line" : failed ? "close-line" : "file-copy-line"} />
+      {variant === "text" && !copied ? "复制" : (
+        <Icon name={copied ? "check-line" : failed ? "close-line" : "file-copy-line"} />
+      )}
     </button>
   );
 }

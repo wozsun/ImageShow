@@ -25,6 +25,7 @@ import type { PublicImageListQuery } from "../../images/read-models/public-image
 import {
   addDuplicateValueIssues,
   requestUrlInput,
+  requestSlugInput,
   safePositiveIntegerInput,
   uuidInput
 } from "./primitives.ts";
@@ -123,7 +124,8 @@ export const imageActionInput = z.strictObject({
 });
 
 export const imageSnapshotInput = z.strictObject({
-  ids: uniqueImageIdsInput
+  ids: uniqueImageIdsInput,
+  mark_group: requestSlugInput.optional()
 });
 
 export const imagePurgeInput = z.discriminatedUnion("scope", [
@@ -232,6 +234,8 @@ export const listQuery = z.strictObject({
 }) satisfies z.ZodType<PublicImageListQuery>;
 
 export const adminImageListQuery = z.strictObject({
+  group: requestSlugInput.optional(),
+  mark_group: requestSlugInput.optional(),
   ...imageListFilterFields,
   status: z.enum(["ready", "deleted"]).default("ready"),
   sort_by: z.enum(adminImageSortFields).default(defaultAdminImageSort.sort_by),

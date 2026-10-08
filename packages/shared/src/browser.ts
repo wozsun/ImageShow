@@ -14,6 +14,7 @@ export * from "./browser/random-limits.ts";
 export * from "./browser/sort-order.ts";
 export * from "./browser/settings.ts";
 export * from "./browser/images.ts";
+export * from "./browser/groups.ts";
 export * from "./browser/tag-filter.ts";
 export * from "./browser/storage.ts";
 export * from "./browser/ingestion.ts";

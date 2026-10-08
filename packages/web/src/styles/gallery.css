@@ -160,7 +160,6 @@ body:has(.gallery-page) {
 .gallery-toolbar .select-trigger {
   height: 40px;
   padding-left: 14px;
-  padding-right: 30px;
 }
 .gallery-toolbar .select-trigger:hover {
   border-color: var(--color-dark-control-border-hover);

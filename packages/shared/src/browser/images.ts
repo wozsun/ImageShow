@@ -102,6 +102,9 @@ export type PublicImageDetailResponseDto<View extends PublicImageView = "show"> 
 export const randomImageSizes = imageVariants;
 export type RandomImageSize = (typeof randomImageSizes)[number];
 
+export const randomFallbackDimensions = ["device", "brightness", "author", "tag", "theme"] as const;
+export type RandomFallbackDimension = (typeof randomFallbackDimensions)[number];
+
 export type RandomImageJsonItemDto = {
   id: string;
   title: string;
@@ -119,6 +122,7 @@ export type RandomImageJsonItemDto = {
 
 export type RandomImageJsonResponseDto = {
   count: number;
+  fallback: RandomFallbackDimension[];
   items: RandomImageJsonItemDto[];
 };
 
@@ -126,6 +130,7 @@ export type AdminImageListItemDto = ImageDetailItemDto & ShowImageCardDto & {
   variants: ImageVariantsDto;
   status: "ready" | "deleted";
   purge_pending: boolean;
+  in_group?: boolean;
   storage_slug: string;
   original: string;
   deleted_at: string | null;
@@ -183,7 +188,7 @@ export type ImageUpdateResponseDto = {
 };
 
 export type ImageSnapshotResponseDto = {
-  items: EditableImageSnapshotDto[];
+  items: (EditableImageSnapshotDto & { in_group?: boolean })[];
 };
 
 export type ImageDraftDto = {

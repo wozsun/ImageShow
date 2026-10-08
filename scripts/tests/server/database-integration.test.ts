@@ -1,7 +1,7 @@
 import "../support/server-environment.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { rm } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import {
   join,
   resolve,
@@ -25,7 +25,17 @@ import {
 import { Client } from "pg";
 
 const isolationRoot = resolve(import.meta.dirname, "isolation");
-const storageIngestionScenarios = [
+const storageIngestionScenarios: readonly {
+  id: string;
+  name: string;
+  script: string;
+  timeoutMs?: number;
+}[] = [
+  {
+    id: "image-group-lifecycle",
+    name: "分组成员、并发上限、权限、回收站保留与投影事务",
+    script: join(isolationRoot, "image-group-lifecycle.mts")
+  },
   {
     id: "public-request-access",
     name: "随机请求分档额度、来源豁免与图片 Referer 访问边界",
@@ -44,7 +54,9 @@ const storageIngestionScenarios = [
   {
     id: "device-index",
     name: "设备派生索引复用、续期、变更失效与有界回源",
-    script: join(isolationRoot, "device-index.mts")
+    script: join(isolationRoot, "device-index.mts"),
+    // Filling the registry requires sequential background builds over Docker I/O.
+    timeoutMs: 180_000
   },
   {
     id: "ready-cache-recovery",
@@ -231,12 +243,13 @@ const storageIngestionScenarios = [
     name: "PostgreSQL ready 真相重建为 Redis 读模型并保持分页一致",
     script: join(isolationRoot, "ready-cache-read-model.mts")
   }
-] as const;
+];
 
 const selectedDatabaseScenario = process.env.IMAGESHOW_DATABASE_SCENARIO;
 const selectedStorageIngestionScenario = process.env.IMAGESHOW_STORAGE_INGESTION_SCENARIO;
 const databaseScenarioIds = new Set([
   "schema-baseline",
+  "upgrade-6.7.9",
   "storage-ingestion",
   "cold-redis",
   "readiness"
@@ -914,10 +927,11 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
       600_000,
       async (storageContext) => {
         for (const scenario of storageIngestionScenarios) {
+          const timeoutMs = scenario.timeoutMs ?? 120_000;
           await storageContext.test(
             scenario.name,
             {
-              timeout: 150_000,
+              timeout: timeoutMs + 30_000,
               skip: Boolean(
                 selectedStorageIngestionScenario
                   && selectedStorageIngestionScenario !== scenario.id
@@ -950,7 +964,7 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
                     "127.0.0.1",
                     String(redisPort)
                   ],
-                  120_000
+                  timeoutMs
                 );
               } catch (error) {
                 errors.push(error);
@@ -1040,6 +1054,71 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
           coldRedisPostgresBefore,
           "隔离 Redis FLUSHDB 冷启动不得改写 PostgreSQL 正式图片"
         );
+      }
+    );
+
+    await runDatabaseScenario(
+      "upgrade-6.7.9",
+      "6.7.9 单事务升级、数据保留、重复启动及不完整旧库拒绝 DDL（6.8.1 删除）",
+      180_000,
+      async () => {
+        const fixture = await readFile(resolve(workspace, "scripts/tests/verify/fixtures/schema-6.7.9.sql"), "utf8");
+        const old = databaseName("upgrade679");
+        await createDatabase(old);
+        await withClient(old, async (client) => {
+          await client.query(fixture);
+          await client.query(`INSERT INTO tag(slug,display_name) VALUES('preserved','原始数据');
+            UPDATE ready_image_revision SET revision=37;
+            CREATE TABLE upgrade_ddl_events (transaction_id bigint NOT NULL);
+            CREATE FUNCTION capture_upgrade_ddl() RETURNS event_trigger LANGUAGE plpgsql AS $$
+              BEGIN INSERT INTO upgrade_ddl_events VALUES(txid_current()); END $$;
+            CREATE EVENT TRIGGER capture_upgrade ON ddl_command_end EXECUTE FUNCTION capture_upgrade_ddl();`);
+        });
+        await withClient(old, (client) => client.query(
+          `INSERT INTO metadata(id,created_by,storage_slug,device,brightness,
+             l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5)
+           VALUES($1,'upgrade-fixture','local','pc','dark',1,1,1,$2,1,1,1,$2,1,1,1,$2)`,
+          [randomUUID(), "a".repeat(32)]
+        ));
+        const originalData = (await dataDump(old)).replaceAll("ready_image_revision", "projection_revision");
+        await initialize(old);
+        await withClient(old, async (client) => {
+          assert.equal((await client.query("SELECT count(DISTINCT transaction_id)::int AS n FROM upgrade_ddl_events")).rows[0].n, 1);
+          assert.equal((await client.query("SELECT revision::text FROM projection_revision")).rows[0].revision, "37");
+          assert.equal((await client.query("SELECT to_regclass('ready_image_revision') AS old")).rows[0].old, null);
+          const sortColumn = (await client.query("SELECT data_type,is_nullable,column_default FROM information_schema.columns WHERE table_schema='public' AND table_name='image_group' AND column_name='sort_order'")).rows[0];
+          assert.deepEqual(sortColumn, { data_type: "integer", is_nullable: "NO", column_default: "0" });
+          await client.query("DROP EVENT TRIGGER capture_upgrade; DROP FUNCTION capture_upgrade_ddl(); TRUNCATE upgrade_ddl_events;");
+        });
+        // New empty tables have no INSERT statements; compare every original row.
+        const inserts = (dump: string) => dump.split("\n").filter((line) => line.startsWith("INSERT INTO "));
+        assert.deepEqual(inserts(await dataDump(old)), inserts(originalData));
+        const beforeRepeat = await Promise.all([schemaDump(old), dataDump(old)]);
+        const repeated = await initialize(old);
+        assert.doesNotMatch(processResultText(repeated), /database_upgrade_6_8_0_completed/);
+        assert.deepEqual(await Promise.all([schemaDump(old), dataDump(old)]), beforeRepeat);
+        for (const [label, change] of [
+          ["partial", "CREATE TABLE image_group(slug text PRIMARY KEY)"],
+          ["renamed", "ALTER TABLE ready_image_revision RENAME TO projection_revision"],
+          ["column", "ALTER TABLE metadata DROP COLUMN title"],
+          ["constraint", "ALTER TABLE image_tag DROP CONSTRAINT image_tag_pkey"]
+        ]) {
+          const invalid = databaseName(`upgrade_${label}`);
+          await createDatabase(invalid);
+          await withClient(invalid, async (client) => {
+            await client.query(fixture);
+            await client.query(change!);
+            await client.query(`CREATE FUNCTION forbid_upgrade_ddl() RETURNS event_trigger LANGUAGE plpgsql AS $$
+              BEGIN RAISE EXCEPTION 'DDL should not run'; END $$;
+              CREATE EVENT TRIGGER forbid_upgrade ON ddl_command_start EXECUTE FUNCTION forbid_upgrade_ddl();`);
+          });
+          const before = await Promise.all([schemaDump(invalid), dataDump(invalid)]);
+          const rejected = await initialize(invalid, true);
+          assert.notEqual(rejected.code, 0);
+          assert.match(processResultText(rejected), /non-empty but is not ready/);
+          assert.doesNotMatch(processResultText(rejected), /DDL should not run/);
+          assert.deepEqual(await Promise.all([schemaDump(invalid), dataDump(invalid)]), before);
+        }
       }
     );
 
@@ -1428,7 +1507,7 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
         await createCurrentDatabase(invalidSeed);
         await withClient(invalidSeed, async (client) => {
           await client.query(`
-        DELETE FROM ready_image_revision;
+        DELETE FROM projection_revision;
         DELETE FROM storage_backend WHERE slug='local';
       `);
         });
@@ -1436,7 +1515,7 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
         assert.notEqual(invalidSeedResult.code, 0);
         const invalidSeedText = processResultText(invalidSeedResult);
         assert.match(invalidSeedText, /required seed rows/i);
-        assert.match(invalidSeedText, /ready_image_revision singleton/i);
+        assert.match(invalidSeedText, /projection_revision singleton/i);
         assert.match(invalidSeedText, /storage_backend\.local/i);
 
         const rollback = databaseName("rollback");

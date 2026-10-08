@@ -14,7 +14,7 @@ const readWritePrivileges = ["SELECT", "INSERT", "UPDATE", "DELETE"] as const;
 // This is deliberately limited to columns referenced by current runtime SQL.
 // schema.sql defines the complete current structure for clean installs.
 // Existing databases must satisfy this contract before the application starts.
-export const databaseReadiness = {
+const databaseReadiness = {
   storage_backend: {
     columns: {
       slug: "text",
@@ -90,7 +90,15 @@ export const databaseReadiness = {
     },
     privileges: ["SELECT", "INSERT", "DELETE"]
   },
-  ready_image_revision: {
+  image_group: {
+    columns: { slug: "text", display_name: "text", sort_order: "int4", created_at: "timestamptz", updated_at: "timestamptz" },
+    privileges: readWritePrivileges
+  },
+  image_group_member: {
+    columns: { group_slug: "text", image_id: "uuid" },
+    privileges: ["SELECT", "INSERT", "DELETE"]
+  },
+  projection_revision: {
     columns: {
       singleton: "int2",
       revision: "int8",
@@ -127,7 +135,6 @@ export const databaseReadiness = {
   }
 } as const satisfies Record<string, TableReadiness>;
 
-export const requiredTableNames = Object.keys(databaseReadiness);
 
 export type RequiredPrimaryKey = {
   table: string;
@@ -152,19 +159,21 @@ export type RequiredForeignKey = {
   onDelete: "r" | "c" | "n";
 };
 
-export const requiredPrimaryKeys = [
+const requiredPrimaryKeys = [
   { table: "storage_backend", columns: ["slug"] },
   { table: "theme", columns: ["slug"] },
   { table: "tag", columns: ["slug"] },
   { table: "author", columns: ["slug"] },
   { table: "metadata", columns: ["id"] },
   { table: "image_tag", columns: ["image_id", "tag_slug"] },
-  { table: "ready_image_revision", columns: ["singleton"] },
+  { table: "projection_revision", columns: ["singleton"] },
+  { table: "image_group", columns: ["slug"] },
+  { table: "image_group_member", columns: ["group_slug", "image_id"] },
   { table: "background_job", columns: ["id"] },
   { table: "admin_account", columns: ["username"] }
 ] as const satisfies readonly RequiredPrimaryKey[];
 
-export const requiredUniqueIndexes = [
+const requiredUniqueIndexes = [
   {
     table: "author",
     columns: ["identity_provider", "identity_id"],
@@ -192,7 +201,9 @@ export const requiredUniqueIndexes = [
   }
 ] as const satisfies readonly RequiredUniqueIndex[];
 
-export const requiredForeignKeys = [
+const requiredForeignKeys = [
+  { table: "image_group_member", columns: ["group_slug"], referencedTable: "image_group", referencedColumns: ["slug"], onDelete: "c" },
+  { table: "image_group_member", columns: ["image_id"], referencedTable: "metadata", referencedColumns: ["id"], onDelete: "c" },
   {
     table: "metadata",
     columns: ["storage_slug"],
@@ -229,3 +240,20 @@ export const requiredForeignKeys = [
     onDelete: "c"
   }
 ] as const satisfies readonly RequiredForeignKey[];
+
+/** The previous contract is used only by the one-time 6.8.0 pre-DDL check. */
+export type DatabaseReadinessContract = {
+  tables: Readonly<Record<string, TableReadiness>>;
+  primaryKeys: readonly RequiredPrimaryKey[];
+  uniqueIndexes: readonly RequiredUniqueIndex[];
+  foreignKeys: readonly RequiredForeignKey[];
+  revisionTable: "projection_revision" | "ready_image_revision";
+};
+
+export const currentDatabaseReadiness: DatabaseReadinessContract = {
+  tables: databaseReadiness,
+  primaryKeys: requiredPrimaryKeys,
+  uniqueIndexes: requiredUniqueIndexes,
+  foreignKeys: requiredForeignKeys,
+  revisionTable: "projection_revision"
+};

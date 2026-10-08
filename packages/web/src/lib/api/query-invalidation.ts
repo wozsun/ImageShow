@@ -31,6 +31,8 @@ const imageDataQueryKeys = [
   queryKeys.publicImageDetail,
   queryKeys.galleryFacets,
   queryKeys.galleryStats,
+  queryKeys.groups,
+  queryKeys.groupImages,
   queryKeys.adminImages,
   queryKeys.adminImageInfo,
   queryKeys.overview,
@@ -49,6 +51,8 @@ export function clearAdminCacheAfterLogin(client: QueryClient) {
     queryKeys.runtimeConfig,
     queryKeys.overview,
     queryKeys.adminCheckStatus,
+    queryKeys.groups,
+    queryKeys.groupImages,
     queryKeys.adminImages,
     queryKeys.adminImageInfo,
     queryKeys.publicImageDetail,
@@ -163,6 +167,7 @@ export function invalidateImageDataAfterMetadataSave(
   });
   return Promise.all([
     invalidate(client, [
+      queryKeys.groupImages,
       queryKeys.adminImages,
       queryKeys.overview,
       ...(changesMembership ? [queryKeys.galleryStats] : []),
@@ -253,6 +258,7 @@ export function invalidateImageDataAfterIngestion(
   return Promise.all([
     invalidate(client, [
       queryKeys.publicImages,
+      queryKeys.groupImages,
       queryKeys.galleryFacets,
       queryKeys.galleryStats,
       queryKeys.overview,
@@ -300,6 +306,7 @@ export function invalidateStorageData(client: QueryClient) {
     queryKeys.overview,
     queryKeys.publicImages,
     queryKeys.publicImageDetail,
+    queryKeys.groupImages,
     queryKeys.adminImages,
     queryKeys.adminImageInfo
   ]);

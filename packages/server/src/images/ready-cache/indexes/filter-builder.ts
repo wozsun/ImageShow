@@ -1,3 +1,7 @@
+import { execRedisPipeline } from "../../../core/redis/pipeline.ts";
+import { chunkSortedSetEntries } from "../sync/redis-batch.ts";
+import { READY_IMAGE_DERIVED_CACHE_POLICY } from "../derived/policy.ts";
+import { readReadyImageIdEntries } from "./request-range.ts";
 import { randomUUIDv7 } from "node:crypto";
 import { brightnesses } from "@imageshow/shared/browser";
 import { readyImageFilterOperations } from "../derived/filter-operations.ts";
@@ -43,7 +47,7 @@ function selectorComponents(
   };
 }
 
-function filterComponents(plan: ImageFilterPlan) {
+function filterComponents(plan: ImageFilterPlan, idsKey?: string) {
   const positive: string[][] = [];
   if (!imageFilterPlanHasAllAxes(plan)) {
     const device = plan.axes[0]?.device;
@@ -58,6 +62,12 @@ function filterComponents(plan: ImageFilterPlan) {
         ? [readyImageAttributeIndexKey({ kind: "device", value: device })]
         : plan.axes.map((axis) => readyImageAttributeIndexKey({ kind: "axis", ...axis }))
     );
+  }
+  if (plan.range) {
+    positive.push([
+      ...plan.range.groups.map((value) => readyImageAttributeIndexKey({ kind: "group", value })),
+      ...(idsKey ? [idsKey] : [])
+    ]);
   }
   const theme = selectorComponents(plan.theme, (value) =>
     readyImageAttributeIndexKey({ kind: "theme", value })
@@ -80,6 +90,7 @@ function filterComponents(plan: ImageFilterPlan) {
 }
 
 export function resolveDirectReadyImageFilterKey(plan: ImageFilterPlan) {
+  if (plan.range?.ids.length || (plan.range && !plan.range.groups.length)) return null;
   const { positive, tagClauses, exclusions } = filterComponents(plan);
   if (exclusions.some((keys) => keys.length)) return null;
   const components = [...positive, ...(tagClauses.length ? [tagClauses.flat()] : [])];
@@ -94,6 +105,7 @@ export async function buildReadyImageFilterIndex(
   signal: AbortSignal
 ): Promise<ReadyImageFilterIndex | null> {
   signal.throwIfAborted();
+  if (plan.range && !plan.range.groups.length && !plan.range.ids.length) return null;
   const startingStatus = getReadyImageCacheCoordinatorStatus();
   const startingMeta = startingStatus.meta;
   const startingConnection = getRedisConnectionState();
@@ -125,7 +137,8 @@ export async function buildReadyImageFilterIndex(
       temporaryKeys.splice(temporaryKeys.indexOf(key), 1);
     }
   };
-  const { positive, tagClauses, exclusions } = filterComponents(plan);
+  const idsKey = plan.range?.ids.length ? temporaryKey() : undefined;
+  const { positive, tagClauses, exclusions } = filterComponents(plan, idsKey);
   const shapeAdmission = assessReadyImageFilterWork({
     itemCount: 1,
     positive: positive.map((keys) => keys.map(() => 1)),
@@ -142,10 +155,10 @@ export async function buildReadyImageFilterIndex(
     return null;
   }
   const sourceKeys = [
-    ...positive.flat(),
+    ...positive.flat().filter((key) => key !== idsKey),
     ...tagClauses.flat(),
     ...exclusions.flat(),
-    ...(positive.length || tagClauses.length ? [] : [READY_IMAGE_ALL_INDEX_KEY])
+    ...(idsKey || (!positive.length && !tagClauses.length) ? [READY_IMAGE_ALL_INDEX_KEY] : [])
   ];
   const attributeKeys = sourceKeys.filter((key) => key !== READY_IMAGE_ALL_INDEX_KEY);
   if (
@@ -163,11 +176,18 @@ export async function buildReadyImageFilterIndex(
   );
   const sourceStates = sourceLease.acquired ? sourceLease.value : null;
   if (!sourceStates) return null;
+  const idLease = idsKey ? await withReadyImageCacheRead(() =>
+    readReadyImageIdEntries(plan.range!.ids, startingMeta.itemCount)
+  ) : null;
+  const idEntries = idLease?.acquired ? idLease.value : null;
+  if (idsKey && !idEntries) return null;
+  const operationStates = new Map(sourceStates);
+  if (idsKey && idEntries) operationStates.set(idsKey, { count: idEntries.length, instanceToken: token });
   const admission = assessReadyImageFilterWork({
     itemCount: startingMeta.itemCount,
-    positive: positive.map((keys) => keys.map((key) => sourceStates.get(key)?.count ?? 0)),
-    tagClauses: tagClauses.map((keys) => keys.map((key) => sourceStates.get(key)?.count ?? 0)),
-    exclusions: exclusions.map((keys) => keys.map((key) => sourceStates.get(key)?.count ?? 0))
+    positive: positive.map((keys) => keys.map((key) => operationStates.get(key)?.count ?? 0)),
+    tagClauses: tagClauses.map((keys) => keys.map((key) => operationStates.get(key)?.count ?? 0)),
+    exclusions: exclusions.map((keys) => keys.map((key) => operationStates.get(key)?.count ?? 0))
   });
   if (!admission.admitted) {
     logger.debug("ready_image_filter_work_rejected", {
@@ -180,11 +200,20 @@ export async function buildReadyImageFilterIndex(
   const releaseBuildSlot = tryAcquireReadyImageFilterBuildSlot(admission.estimate);
   if (!releaseBuildSlot) return null;
   try {
+    if (idsKey && idEntries) {
+      for (const entries of chunkSortedSetEntries(idsKey, idEntries)) {
+        signal.throwIfAborted();
+        const transaction = redis.multi();
+        transaction.zadd(idsKey, ...entries.flat());
+        transaction.expire(idsKey, READY_IMAGE_DERIVED_CACHE_POLICY.temporaryTtlSeconds);
+        await execRedisPipeline(transaction);
+      }
+    }
     const sources = (groups: string[][]) =>
       groups.map((keys) =>
         keys.map((key) => ({
           key,
-          count: sourceStates.get(key)!.count
+          count: operationStates.get(key)!.count
         }))
       );
     const execution = readyImageFilterOperations(
@@ -240,6 +269,41 @@ export async function buildReadyImageFilterIndex(
         revision
       );
       return attribute ? { kind: "attribute", ...attribute } : null;
+    }
+    if (idsKey) {
+      signal.throwIfAborted();
+      const metaKey = temporaryKey();
+      const retained = await withReadyImageCacheRead(async () => {
+        const status = getReadyImageCacheCoordinatorStatus();
+        const connection = getRedisConnectionState();
+        if (!status.readable || status.meta !== startingMeta
+          || status.meta.appliedRevision !== revision || !connection.ready
+          || connection.epoch !== startingConnection.epoch) return false;
+        const currentSources = await readReadyImageSourceIndexStates(sourceKeys, revision);
+        if (!currentSources || [...sourceStates].some(([key, state]) =>
+          currentSources.get(key)?.count !== state.count
+          || currentSources.get(key)?.instanceToken !== state.instanceToken
+        )) return false;
+        if (await redis.zcard(current.key) !== current.count) return false;
+        const transaction = redis.multi();
+        transaction.hset(metaKey, {
+          applied_revision: revision,
+          count: String(current.count),
+          built_at: new Date().toISOString(),
+          instance_token: token
+        });
+        transaction.expire(metaKey, READY_IMAGE_DERIVED_CACHE_POLICY.temporaryTtlSeconds);
+        await execRedisPipeline(transaction);
+        return true;
+      });
+      if (!retained.acquired || !retained.value) return null;
+      // Transfer these two keys to the request; all intermediate keys remain ours.
+      temporaryKeys.splice(temporaryKeys.indexOf(current.key), 1);
+      temporaryKeys.splice(temporaryKeys.indexOf(metaKey), 1);
+      return {
+        kind: "filter", key: current.key, metaKey, revision, count: current.count,
+        instanceToken: token, temporaryToken: token
+      };
     }
     return await publishReadyImageFilterIndex({
       signature: plan.signature,

@@ -46,12 +46,14 @@ function attributeSourceQuery(
 ) {
   const commonColumns = `m.id::text AS id,
     (extract(epoch FROM m.image_time) * 1000000)::bigint::text AS sort_score`;
-  if (spec.kind === "tag") {
+  if (spec.kind === "tag" || spec.kind === "group") {
+    const table = spec.kind === "tag" ? "image_tag" : "image_group_member";
+    const slugColumn = spec.kind === "tag" ? "tag_slug" : "group_slug";
     return {
       text: `SELECT ${commonColumns}
-               FROM image_tag it
+               FROM ${table} it
                JOIN metadata m ON m.id=it.image_id
-              WHERE it.tag_slug=$1
+              WHERE it.${slugColumn}=$1
                 AND m.status='ready'
                 AND ($2::uuid IS NULL OR it.image_id > $2::uuid)
               ORDER BY it.image_id
@@ -153,7 +155,7 @@ async function buildAttributeIndexSource(
       }
       const last = rows.at(-1)!;
       const nextCursor =
-        spec.kind === "tag"
+        (spec.kind === "tag" || spec.kind === "group")
           ? { id: last.id }
           : {
               id: last.id,

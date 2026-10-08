@@ -15,6 +15,7 @@ import {
   apiSuccess,
   privateCacheableApiSuccess
 } from "../core/http/responses.ts";
+import { runWithAdvisoryLockAcquisitionSignal } from "../core/database/advisory-locks.ts";
 import { readJsonBody } from "../core/http/json-body.ts";
 import { logger } from "../core/logger.ts";
 import {
@@ -69,14 +70,18 @@ export function registerAdminImageRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/images`, async (c) => {
     c.header(adminImageListReadStartedAtHeader, String(Date.now()));
     const q = parse(adminImageListQuery, imageListQueryValues(new URL(c.req.url).searchParams));
-    return privateCacheableApiSuccess(c, await listAdminImages(q));
+    return privateCacheableApiSuccess(c, await runWithAdvisoryLockAcquisitionSignal(
+      c.req.raw.signal,
+      () => listAdminImages(q)
+    ));
   });
 
   app.post(`${adminApiBasePath}/images/snapshot`, async (c) => {
     const input = parse(imageSnapshotInput, await readJsonBody(c));
     const response: ImageSnapshotResponseDto = await getAdminImageSnapshots(
       input.ids,
-      c.req.raw.signal
+      c.req.raw.signal,
+      input.mark_group
     );
     return c.json(apiSuccess(response));
   });

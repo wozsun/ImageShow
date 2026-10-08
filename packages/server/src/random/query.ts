@@ -6,6 +6,10 @@ import {
   type TagExpression,
   randomMethods as randomMethodValues,
   randomImageSizes,
+  slugMaxLength,
+  slugPattern,
+  randomFallbackDimensions,
+  type RandomFallbackDimension,
   type RandomImageSize,
   type RandomDefaultMethod,
   type RandomMethod
@@ -28,6 +32,9 @@ export type ParsedRandomQuery = {
   size: RandomImageSize;
   limit: number;
   ids: string[];
+  groups: string[];
+  scoped: boolean;
+  fallback: RandomFallbackDimension[];
   seed: string | null;
   device: RandomRequestDevice;
   brightness: RandomBrightness | null;
@@ -37,14 +44,16 @@ export type ParsedRandomQuery = {
 };
 
 /** Submitted names that match no vocabulary entry and therefore no image. */
-type RandomIgnoredSelectors = Record<"theme" | "tag" | "author", string[]>;
+type RandomIgnoredSelectors = Record<"theme" | "tag" | "author" | "group", string[]>;
 
 export type NormalizedRandomQuery = ParsedRandomQuery & {
   ignored: RandomIgnoredSelectors;
   signature: string;
+  unmatchable: boolean;
 };
 
 export type RandomSelectorMaps = {
+  groups?: ReadonlySet<string>;
   theme: ReadonlyMap<string, string>;
   tag: ReadonlyMap<string, string>;
   author: ReadonlyMap<string, string>;
@@ -60,6 +69,8 @@ const randomAllowedQueryValues = [
   "tag",
   "author",
   "id",
+  "group",
+  "fallback",
   "seed",
   "mode",
   "size",
@@ -294,6 +305,19 @@ function parseTargetedIds(query: URLSearchParams): string[] | Response {
   return [...new Set(ids)].sort();
 }
 
+function parseGroups(query: URLSearchParams): string[] | Response {
+  const submitted = query.getAll("group").flatMap((value) => value.split(","))
+    .map((value) => value.trim().toLowerCase()).filter(Boolean);
+  if (!submitted.length || submitted.length > appConfig.randomQuery.maxSelectorsPerField
+    || submitted.some((slug) => slug.length > slugMaxLength || !slugPattern.test(slug))) {
+    return apiErrorResponse(
+      { status: 400, message: "Bad Request: Invalid group" },
+      { field: "group", maxSelectors: appConfig.randomQuery.maxSelectorsPerField, hint: "Use group slugs" }
+    );
+  }
+  return [...new Set(submitted)].sort();
+}
+
 function parseSeed(query: URLSearchParams): string | null | Response {
   const seed = singleQueryValue(query, "seed");
   if (seed === null) return null;
@@ -314,6 +338,21 @@ function parseSeed(query: URLSearchParams): string | null | Response {
   return seed;
 }
 
+function parseFallback(query: URLSearchParams): RandomFallbackDimension[] | Response {
+  const terms = new Set(query.getAll("fallback")
+    .flatMap((value) => value.split(","))
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean));
+  const allowed = new Set<string>([...randomFallbackDimensions, "all", "none"]);
+  if ([...terms].some((term) => !allowed.has(term)) || (terms.has("none") && terms.size > 1)) {
+    return apiErrorResponse(
+      { status: 400, message: "Bad Request: Invalid fallback" },
+      { field: "fallback", allowedValues: [...allowed], hint: "Use none alone" }
+    );
+  }
+  return randomFallbackDimensions.filter((dimension) => terms.has("all") || terms.has(dimension));
+}
+
 export function parseRandomQuery(
   url: URL,
   defaultMode: RandomDefaultMethod,
@@ -332,7 +371,7 @@ export function parseRandomQuery(
   const queryError = invalidQueryParameters(query);
   if (queryError) return queryError;
 
-  // Blank values of optional parameters mean "not provided"; blank seed and id stay invalid.
+  // Blank values of optional parameters mean "not provided"; seed, id and group stay invalid.
   const explicitMode = singleQueryValue(query, "mode")?.trim().toLowerCase() || null;
   if (explicitMode && !randomMethods.has(explicitMode)) {
     return apiErrorResponse(
@@ -351,6 +390,8 @@ export function parseRandomQuery(
   if (limit instanceof Response) return limit;
   const seed = parseSeed(query);
   if (seed instanceof Response) return seed;
+  const fallback = parseFallback(query);
+  if (fallback instanceof Response) return fallback;
   const submittedBrightness = singleQueryValue(query, "brightness")?.trim().toLowerCase();
   // brightness=all is the explicit spelling of "not specified".
   const brightness = submittedBrightness === "all" ? null : submittedBrightness || null;
@@ -360,6 +401,7 @@ export function parseRandomQuery(
       { field: "brightness" }
     );
   }
+  const scoped = query.has("id") || query.has("group");
   const device = singleQueryValue(query, "device")?.trim().toLowerCase() || "auto";
   if (!randomRequestDevices.has(device)) {
     return apiErrorResponse(
@@ -394,11 +436,16 @@ export function parseRandomQuery(
     ids = targetedIds;
   }
 
+  const groups = query.has("group") ? parseGroups(query) : [];
+  if (groups instanceof Response) return groups;
   return {
     mode: (explicitMode ?? defaultMode) as RandomMethod,
     size: size as RandomImageSize,
     limit,
     ids,
+    groups,
+    scoped,
+    fallback,
     seed,
     device: device as RandomRequestDevice,
     brightness: brightness as RandomBrightness | null,
@@ -466,45 +513,58 @@ export function ignoredSelectorDetails(ignored: RandomIgnoredSelectors) {
 /**
  * Unknown names match no image: they drop out of include lists and tag
  * clauses before planning, so they never reach index keys, dedupe or seed
- * signatures. A filter left with nothing that can match returns 404 at once.
+ * signatures. An impossible filter is recorded so selection can try an explicitly
+ * requested fallback without querying an index for an unknown name.
  */
 export function normalizeRandomQuery(
   query: ParsedRandomQuery,
   maps: RandomSelectorMaps
-): NormalizedRandomQuery | Response {
-  const ignored: RandomIgnoredSelectors = { theme: [], tag: [], author: [] };
+): NormalizedRandomQuery {
+  const ignored: RandomIgnoredSelectors = { theme: [], tag: [], author: [], group: [] };
   const theme = knownSelectorGroup(query.theme, maps.theme, ignored.theme);
   const tag = knownTagExpression(query.tag, maps.tag, ignored.tag);
   const author = knownSelectorGroup(query.author, maps.author, ignored.author);
+  const groups = query.groups.filter((slug) => {
+    if (maps.groups?.has(slug)) return true;
+    ignored.group.push(slug);
+    return false;
+  });
   const unmatchable =
+    (query.scoped && !query.ids.length && !groups.length) ||
     (query.theme.include.length > 0 && theme.include.length === 0) ||
     (query.tag !== null && tag === null) ||
     (query.author.include.length > 0 && author.include.length === 0);
-  if (unmatchable) {
-    return apiErrorResponse(
-      { status: 404, message: "Not Found: No available images for the selected filters" },
-      ignoredSelectorDetails(ignored)
-    );
-  }
 
   const normalized = {
     ...query,
     theme,
     tag,
     author,
+    groups,
     ignored
   };
   return {
     ...normalized,
+    unmatchable,
     // Compact keys are the existing Redis dedupe-key serialization, not DTO fields.
-    // Untargeted requests keep their previous keys; ids only append a scope.
+    // Unscoped requests keep their previous keys; only known groups enter signatures.
     signature: JSON.stringify({
       "d": normalized.device === "auto" ? "" : normalized.device,
       "b": normalized.brightness ?? "",
       "t": normalized.theme,
       tag: normalized.tag,
       "a": normalized.author,
-      ...(normalized.ids.length ? { "i": normalized.ids } : {})
+      ...(normalized.ids.length ? { "i": normalized.ids } : {}),
+      ...(normalized.groups.length ? { "g": normalized.groups } : {}),
+      ...(normalized.fallback.length ? {
+        "f": normalized.fallback,
+        "ex": Object.fromEntries((["theme", "author"] as const)
+          .filter((field) => query.fallback.includes(field) && query[field].include.length)
+          .map((field) => [field, knownSelectorGroup(
+            { include: [], exclude: query[field].exclude }, maps[field], []
+          ).exclude]))
+      } : {}),
+      ...(unmatchable ? { "empty": true } : {})
     })
   };
 }

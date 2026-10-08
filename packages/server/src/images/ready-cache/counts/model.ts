@@ -216,7 +216,7 @@ function assertGlobalStats(stats: Map<string, number>, expectedTotal: number) {
     const prefix = field.slice(0, separator);
     const slug = field.slice(separator + 1);
     return (
-      (prefix === "theme" || prefix === "tag" || prefix === "author") &&
+      (prefix === "theme" || prefix === "tag" || prefix === "author" || prefix === "group") &&
       slug.length <= slugMaxLength &&
       slugPattern.test(slug)
     );

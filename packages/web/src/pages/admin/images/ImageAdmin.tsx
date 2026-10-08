@@ -31,6 +31,7 @@ import { AdminSettingsBoundary } from "../../../components/feedback/AdminSetting
 import { useIngestionVocabulary } from "../../../lib/api/ingestion-vocabulary.js";
 import { useStorageNameResolver } from "../../../lib/api/storage-options.js";
 import { createPageLifetimeModuleLoader } from "../../../lib/page-lifetime-module-loader.js";
+import { ImageListViewControls } from "../../../components/image/ImageListViewControls.js";
 import { AdminImageCard } from "./AdminImageCard.js";
 import {
   emptyImageAdminFilters,
@@ -331,14 +332,6 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
     selectedItems.every((item, index) => editorCapability.pending?.itemIds[index] === item.id)
   );
   const confirmCopy = imageAdminConfirmationCopy(confirmAction);
-  const sortFieldLabel = sort.sort_by === "image_time" ? "图片" : "入库";
-  const nextSortFieldLabel = sort.sort_by === "image_time" ? "入库" : "图片";
-  const sortOrderLabel = sort.order === "latest" ? "最新" : "最旧";
-  const nextSortOrderLabel = sort.order === "latest" ? "最旧" : "最新";
-  const thumbnailFitLabel = thumbnailFit === "cover" ? "填充" : "完整";
-  const thumbnailFitHelp = thumbnailFit === "cover"
-    ? "缩略图填充显示；点击完整显示，保留比例且不裁切"
-    : "缩略图完整显示；点击填充显示，铺满图片框";
   const pageStatusSuffix = isFetching
     ? " · 加载中"
     : hasCurrentPageData
@@ -377,7 +370,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
           {mobileLayout && viewSwitch}
           <p role="status">
             {operationText ||
-              `第 ${pageNumber} / ${totalPages} 页 · 共 ${total} 项${pageStatusSuffix}`}
+              `共 ${total} 项${pageStatusSuffix}`}
           </p>
           <ActionFeedbackRegion
             className="image-admin-feedback-region"
@@ -433,57 +426,13 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
                 </span>
               </div>
               <div className="image-list-toolbar-actions">
-                <div className="image-list-view-controls" role="group" aria-label="图片列表排序与缩略图显示">
-                  <button
-                    type="button"
-                    className="state-toggle-button"
-                    data-shifted={sort.sort_by === "created_at"}
-                    disabled={interfaceBusy}
-                    aria-label={`按${sortFieldLabel}时间排序；点击切换为${nextSortFieldLabel}时间`}
-                    title={`按${sortFieldLabel}时间排序；点击切换为${nextSortFieldLabel}时间`}
-                    onClick={() =>
-                      changeSort({
-                        ...sort,
-                        sort_by: sort.sort_by === "image_time" ? "created_at" : "image_time"
-                      })
-                    }
-                  >
-                    <span className="state-toggle-label">{sortFieldLabel}</span>
-                    <span className="state-toggle-thumb" aria-hidden="true" />
-                  </button>
-                  <span className="image-list-view-divider" aria-hidden="true" />
-                  <button
-                    type="button"
-                    className="state-toggle-button"
-                    data-shifted={sort.order === "oldest"}
-                    disabled={interfaceBusy}
-                    aria-label={`${sortOrderLabel}优先；点击切换为${nextSortOrderLabel}优先`}
-                    title={`${sortOrderLabel}优先；点击切换为${nextSortOrderLabel}优先`}
-                    onClick={() =>
-                      changeSort({
-                        ...sort,
-                        order: sort.order === "latest" ? "oldest" : "latest"
-                      })
-                    }
-                  >
-                    <span className="state-toggle-label">{sortOrderLabel}</span>
-                    <span className="state-toggle-thumb" aria-hidden="true" />
-                  </button>
-                  <span className="image-list-view-divider" aria-hidden="true" />
-                  <button
-                    type="button"
-                    className="state-toggle-button"
-                    data-shifted={thumbnailFit === "contain"}
-                    disabled={interfaceBusy}
-                    aria-label={thumbnailFitHelp}
-                    aria-pressed={thumbnailFit === "contain"}
-                    title={thumbnailFitHelp}
-                    onClick={() => setThumbnailFit(thumbnailFit === "cover" ? "contain" : "cover")}
-                  >
-                    <span className="state-toggle-label">{thumbnailFitLabel}</span>
-                    <span className="state-toggle-thumb" aria-hidden="true" />
-                  </button>
-                </div>
+                <ImageListViewControls
+                  sort={sort}
+                  thumbnailFit={thumbnailFit}
+                  disabled={interfaceBusy}
+                  onSortChange={changeSort}
+                  onThumbnailFitChange={setThumbnailFit}
+                />
                 <div className="image-list-batch-actions">
                   {view !== "deleted" && (
                     <button

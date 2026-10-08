@@ -5,7 +5,6 @@ import {
   parseGalleryTagFilter,
   resolveTagExpression,
   TagFilterError,
-  unsetSelector,
   type TagExpression,
   type Brightness,
   type Device
@@ -27,6 +26,7 @@ export type ImageFilterPlan = {
   theme: ImageSelectorGroup;
   tag: TagExpression;
   author: ImageSelectorGroup;
+  range?: { groups: string[]; ids: string[] };
   signature: string;
 };
 
@@ -101,6 +101,7 @@ export function createImageFilterPlan(input: {
   theme?: Partial<ImageSelectorGroup>;
   tag?: TagExpression;
   author?: Partial<ImageSelectorGroup>;
+  range?: { groups: readonly string[]; ids: readonly string[] };
 }): ImageFilterPlan {
   const selectedDevices = [...new Set(input.devices ?? devices)].sort();
   const selectedBrightnesses = [
@@ -112,44 +113,12 @@ export function createImageFilterPlan(input: {
   const theme = normalizedGroup(input.theme, "theme");
   const tag = input.tag ? normalizeTagExpression(input.tag.anyOf) : null;
   const author = normalizedGroup(input.author, "author");
-  const signature = JSON.stringify({ axes, theme, tag, author });
-  return { axes, theme, tag, author, signature };
-}
-
-function matchesSelectorGroup(value: string | null, group: ImageSelectorGroup) {
-  const excluded = group.exclude.length > 0;
-  const terms = excluded ? group.exclude : group.include;
-  if (!terms.length) return true;
-  const matched = terms.includes(value ?? unsetSelector);
-  return excluded ? !matched : matched;
-}
-
-/**
- * In-memory form of buildImageFilterSql for a bounded candidate list, so a
- * plan has one meaning whether it runs in PostgreSQL, Redis or here.
- */
-export function imageMatchesFilterPlan(
-  image: {
-    device: Device;
-    brightness: Brightness;
-    theme: string | null;
-    author: string | null;
-    tags: readonly string[];
-  },
-  plan: ImageFilterPlan
-) {
-  if (!plan.axes.some((axis) => (
-    axis.device === image.device && axis.brightness === image.brightness
-  ))) {
-    return false;
-  }
-  if (!matchesSelectorGroup(image.theme, plan.theme)
-    || !matchesSelectorGroup(image.author, plan.author)) {
-    return false;
-  }
-  if (!plan.tag) return true;
-  const tags = new Set(image.tags);
-  return plan.tag.anyOf.some((clause) => clause.every((tag) => tags.has(tag)));
+  const range = input.range ? {
+    groups: [...new Set(input.range.groups)].sort(),
+    ids: [...new Set(input.range.ids)].sort()
+  } : undefined;
+  const fields = { axes, theme, tag, author, ...(range ? { range } : {}) };
+  return { ...fields, signature: JSON.stringify(fields) };
 }
 
 async function resolveSelector(
@@ -227,7 +196,8 @@ export function imageFilterPlanWithout(
       : planBrightnesses,
     theme: dimension === "theme" ? undefined : plan.theme,
     tag: dimension === "tag" ? undefined : plan.tag,
-    author: dimension === "author" ? undefined : plan.author
+    author: dimension === "author" ? undefined : plan.author,
+    range: plan.range
   });
 }
 

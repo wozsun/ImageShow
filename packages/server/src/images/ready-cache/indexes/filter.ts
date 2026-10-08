@@ -27,6 +27,7 @@ import {
   resolveDirectReadyImageFilterKey
 } from "./filter-builder.ts";
 import {
+  releaseReadyImageRequestIndex,
   readReadyImageFilterIndex,
   validatePublishedReadyImageFilterIndex,
   type ReadyImageFilterIndex as FilterIndex
@@ -105,7 +106,7 @@ async function resolveReadyImageFilterIndexWithMode(
       if (required) scheduleReadyImageFilterIndexBuild(plan);
       return null;
     }
-    const cached = required
+    const cached = plan.range?.ids.length ? null : required
       ? await runRequiredRedisCommand(() => readReadyImageFilterIndex(plan.signature, revision))
       : await readReadyImageFilterIndex(plan.signature, revision);
     if (currentRevision() !== revision) continue;
@@ -114,12 +115,17 @@ async function resolveReadyImageFilterIndexWithMode(
       scheduleReadyImageFilterIndexBuild(plan);
       return null;
     }
-    const built = await coalesce(
-      `ready-image-filter:${plan.signature}`,
-      (sharedSignal) => buildReadyImageFilterIndex(plan, revision, sharedSignal),
-      options.signal
-    );
-    if (currentRevision() !== revision) continue;
+    const built = plan.range?.ids.length
+      ? await buildReadyImageFilterIndex(plan, revision, options.signal)
+      : await coalesce(
+          `ready-image-filter:${plan.signature}`,
+          (sharedSignal) => buildReadyImageFilterIndex(plan, revision, sharedSignal),
+          options.signal
+        );
+    if (currentRevision() !== revision) {
+      await releaseReadyImageRequestIndex(built);
+      continue;
+    }
     if (built) return built;
   }
   return null;
@@ -142,7 +148,7 @@ export async function resolveReadyImageFilterIndex(
       "derived_filter_build_failed",
       error
     );
-    await discardReadyImageDerivedResult(
+    if (!plan.range?.ids.length) await discardReadyImageDerivedResult(
       readyImageFilterKey(plan.signature),
       "filter"
     ).catch(

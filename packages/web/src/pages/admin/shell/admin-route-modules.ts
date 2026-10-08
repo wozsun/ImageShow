@@ -5,6 +5,8 @@ import { createPageLifetimeModuleLoader } from "../../../lib/page-lifetime-modul
 export const adminRouteModuleLoaders = {
   overview: createPageLifetimeModuleLoader(() => import("../Overview.js")),
   images: createPageLifetimeModuleLoader(() => import("../images/ImageAdmin.js")),
+  groupDetail: createPageLifetimeModuleLoader(() => import("../groups/GroupDetail.js")),
+  groups: createPageLifetimeModuleLoader(() => import("../groups/GroupAdmin.js")),
   vocabulary: createPageLifetimeModuleLoader(() => import("../VocabularyAdmin.js")),
   account: createPageLifetimeModuleLoader(() => import("../account/AccountSettings.js")),
   settings: createPageLifetimeModuleLoader(() => import("../settings/SettingsPage.js")),

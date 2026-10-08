@@ -1,0 +1,7 @@
+.group-admin-item {
+  cursor: pointer;
+}
+.group-admin-item:focus-visible {
+  outline: 2px solid var(--color-native-focus-outline);
+  outline-offset: -2px;
+}

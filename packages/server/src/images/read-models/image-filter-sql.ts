@@ -126,5 +126,19 @@ export function buildImageFilterSql(
     where.push(`(${predicates.join(" OR ")})`);
   }
 
+  if (input.plan.range) {
+    const { groups, ids } = input.plan.range;
+    const range: string[] = [];
+    if (groups.length) {
+      range.push(`EXISTS(SELECT 1 FROM image_group_member member
+        WHERE member.image_id=${prefix}id AND member.group_slug=ANY(${bind(groups)}::text[]))`);
+    }
+    const fullIds = ids.filter((id) => id.length > 12);
+    const suffixes = ids.filter((id) => id.length === 12);
+    if (fullIds.length) range.push(`${prefix}id=ANY(${bind(fullIds)}::uuid[])`);
+    if (suffixes.length) range.push(`right(${prefix}id::text,12)=ANY(${bind(suffixes)}::text[])`);
+    where.push(range.length ? `(${range.join(" OR ")})` : "FALSE");
+  }
+
   return { params, where };
 }

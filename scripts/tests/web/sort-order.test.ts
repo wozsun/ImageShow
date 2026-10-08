@@ -4,6 +4,7 @@ import test, { type TestContext } from "node:test";
 import { registerHooks } from "node:module";
 import { createConfigStreamHarness } from "../support/web-test-context.ts";
 import { dispatchDomEvent, inputText } from "../support/dom-events.ts";
+import { installProperties } from "../support/property-descriptors.ts";
 import { queryKeys } from "../../../packages/web/src/lib/api/query-keys.ts";
 import { appConfig } from "../../../packages/shared/src/app-config.ts";
 import {
@@ -17,6 +18,9 @@ type Kind = "tags" | "themes" | "authors" | "storage";
 async function sortingPage(t: TestContext, kind: Kind) {
   const h = await createConfigStreamHarness(t);
   h.window.scrollTo = () => {};
+  t.after(installProperties(globalThis, {
+    getComputedStyle: () => ({ overflowY: "auto", getPropertyValue: () => "", animationName: "none", animationDuration: "0s" })
+  }));
   const css = registerHooks({
     load(url, context, next) {
       return url.endsWith(".css")
@@ -197,6 +201,27 @@ for (const kind of ["tags", "themes", "authors", "storage"] as const) {
       false,
       "排序只失效相关投影"
     );
+    if (kind !== "storage") {
+      const form = h.document.querySelector<HTMLFormElement>(".admin-create-form")!;
+      const slugInput = form.querySelector<HTMLInputElement>(".entity-create-slug")!;
+      const orderInput = form.querySelector<HTMLInputElement>(".vocabulary-create-sort")!;
+      for (const value of ["", "0", "-8"]) {
+        await h.React.act(async () => {
+          inputText(h.window, slugInput, `created-${value || "default"}`);
+          inputText(h.window, orderInput, value);
+        });
+        const index: number = h.pending.length;
+        await h.emit(form, "submit");
+        assert.equal(h.pending[index].path, h.path);
+        const body = JSON.parse(String(h.pending[index].body));
+        assert.equal(body.sort_order, value === "" ? undefined : Number(value));
+        assert.equal(Object.hasOwn(body, "sort_order"), value !== "");
+        await h.respond(index, { ok: true });
+        await h.respond(index + 1, h.response());
+        assert.equal(orderInput.value, "");
+        await h.React.act(async () => { await new Promise((resolve) => setTimeout(resolve, 850)); });
+      }
+    }
   });
 }
 

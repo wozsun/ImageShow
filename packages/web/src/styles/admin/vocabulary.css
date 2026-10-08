@@ -14,6 +14,11 @@
 .vocabulary-create-button {
   white-space: nowrap;
 }
+.vocabulary-create-toolbar > .admin-create-form > .vocabulary-create-sort {
+  flex: 0 0 130px;
+  width: 130px;
+  min-width: 0;
+}
 .vocabulary-view-switch {
   width: 64px;
   height: 36px;
@@ -262,14 +267,14 @@
     flex: 0 0 auto;
   }
 
-  /* 三个字段先一起收缩，再将链接与新建操作整组移到第二行。 */
-  @container vocabulary-toolbar (max-width: 640px) {
+  /* 空间不足时，作者链接、排序与新建操作一起移到第二行。 */
+  @container vocabulary-toolbar (max-width: 780px) {
     .vocabulary-toolbar[data-kind="authors"] .admin-create-form {
       display: grid;
-      grid-template-columns: minmax(0, 170px) minmax(0, 1fr) max-content;
+      grid-template-columns: minmax(0, 170px) minmax(0, 1fr) 130px max-content;
       grid-template-areas:
-        "slug display display"
-        "link link create";
+        "slug display display display"
+        "link link sort create";
     }
     .vocabulary-toolbar[data-kind="authors"] .entity-slug-field {
       grid-area: slug;
@@ -279,6 +284,9 @@
     }
     .vocabulary-toolbar[data-kind="authors"] .vocabulary-create-link {
       grid-area: link;
+    }
+    .vocabulary-toolbar[data-kind="authors"] .vocabulary-create-sort {
+      grid-area: sort;
     }
     .vocabulary-toolbar[data-kind="authors"] .admin-create-form > input {
       width: 100%;
@@ -292,6 +300,21 @@
 }
 
 @media (max-width: 760px) {
+  .vocabulary-create-toolbar > .admin-create-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .vocabulary-create-toolbar .entity-slug-field,
+  .vocabulary-create-toolbar .vocabulary-create-display,
+  .vocabulary-create-toolbar .vocabulary-create-link {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+  }
+  .vocabulary-create-toolbar > .admin-create-form > .vocabulary-create-sort {
+    width: 100%;
+    min-height: 44px;
+  }
   .vocabulary-view-switch {
     width: 54px;
   }

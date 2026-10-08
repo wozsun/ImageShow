@@ -15,6 +15,7 @@ import { READY_IMAGE_DERIVED_CACHE_POLICY } from "../derived/policy.ts";
 import { readReadyImageDerivedIndexSnapshot } from "../derived/index-snapshot.ts";
 import { withReadyImageCacheWriteFence } from "../sync/fence.ts";
 import {
+  readyImageFilterTemporaryKeyBelongsTo,
   readyImageFilterKey,
   readyImageFilterMetaKey
 } from "../keys.ts";
@@ -25,6 +26,7 @@ import {
 } from "./attribute.ts";
 
 type ReadyImageResolvedIndex = {
+  temporaryToken?: string;
   key: string;
   revision: string;
 };
@@ -232,11 +234,21 @@ export async function validatePublishedReadyImageFilterIndex(
         }
       })
     );
-    if (!valid) await discardReadyImageDerivedResult(index.key, "filter");
+    if (!valid && !index.temporaryToken) await discardReadyImageDerivedResult(index.key, "filter");
     return valid;
   } catch (error) {
-    await discardReadyImageDerivedResult(index.key, "filter")
+    if (!index.temporaryToken) await discardReadyImageDerivedResult(index.key, "filter")
       .catch(() => undefined);
     throw error;
   }
+}
+
+/** Request-owned range indexes never enter the derived registry. */
+export async function releaseReadyImageRequestIndex(index: ReadyImageFilterIndex | null) {
+  if (!index?.temporaryToken) return;
+  const keys = [index.key, index.metaKey].filter((key): key is string => key !== null);
+  if (keys.some((key) => !readyImageFilterTemporaryKeyBelongsTo(key, index.temporaryToken!))) {
+    throw new Error("Cannot release a foreign request index");
+  }
+  await redis.unlink(...keys).catch(() => undefined);
 }

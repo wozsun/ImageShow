@@ -76,6 +76,14 @@ test("[Server/配置] 来源白名单匹配完整 Referer 并保留协议、端�
 
 test("[Server/配置] 随机请求频次默认补齐并校验可配置的两档额度", () => {
   const defaults = runtimeConfigDefaults();
+  const order = ["theme", "tag", "author", "brightness", "device"];
+  assert.deepEqual(runtimeConfigFromEnvironment({ SITE_RANDOM_FALLBACK_ORDER: JSON.stringify(order) })
+    .site.random_fallback_order, order);
+  for (const invalid of [[], [...order, "device"], ["device", ...order.slice(1)], [...order.slice(1), "null"]]) {
+    const message = /须包含 device、brightness、author、tag、theme 各一次/;
+    assert.throws(() => parseRuntimeConfig({ ...defaults, site: { ...defaults.site, random_fallback_order: invalid } }), message);
+    assert.throws(() => runtimeConfigFromEnvironment({ SITE_RANDOM_FALLBACK_ORDER: JSON.stringify(invalid) }), message);
+  }
   assert.equal(defaults.security.random_window_seconds, 60);
   assert.equal(defaults.security.random_max_requests, 60);
   assert.equal(defaults.security.random_limit_max_requests, 10);

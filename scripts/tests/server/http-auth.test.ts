@@ -560,6 +560,7 @@ test("[Server/HTTP 与鉴权] Redis ready 投影、管理员权限和密码验�
     storage_slug: "local",
     author: "alice",
     tags: ["stage", "concert", "stage"],
+    groups: ["featured"],
     l_width: 1920, l_height: 1080, l_byte_size: 2048, l_md5: "0123456789abcdef0123456789abcdef",
     m_width: 1920, m_height: 1080, m_byte_size: 2048, m_md5: "0123456789abcdef0123456789abcdef",
     s_width: 1920, s_height: 1080, s_byte_size: 2048, s_md5: "0123456789abcdef0123456789abcdef",
@@ -581,6 +582,7 @@ test("[Server/HTTP 与鉴权] Redis ready 投影、管理员权限和密码验�
     "theme:null",
     "tag:concert",
     "tag:stage",
+    "group:featured",
     "author:alice"
   ]);
   assert.equal(parseReadyImageCacheItem("not-json"), null);

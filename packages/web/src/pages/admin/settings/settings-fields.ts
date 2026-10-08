@@ -110,7 +110,8 @@ type FieldControl<T> = [T] extends [boolean] ? { kind: "toggle"; heading?: "card
   : [T] extends [string] ? { kind: "text" | "textarea"; maxLength?: number; placeholder?: string }
     | { kind: "select"; options: Readonly<Record<T & string, string>> }
   : [T] extends [[number, number]] ? { kind: "range"; min: number; max: number }
-  : [T] extends [string[]] ? { kind: "lines"; placeholder?: string }
+  : [T] extends [string[]] ? { kind: "csv"; placeholder?: string; maxLength?: number }
+    | { kind: "lines"; placeholder?: string }
     | { kind: "choices"; options: Readonly<Record<T extends string[] ? T[number] : never, string>> }
   : never;
 
@@ -332,6 +333,13 @@ const settingsFields = {
     label: "随机图默认尺寸",
     kind: "select",
     options: { large: "大图", medium: "中图", small: "小图" }
+  },
+  "site.random_fallback_order": {
+    group: "random",
+    kind: "csv",
+    label: "零匹配回退顺序",
+    hint: "用逗号分隔 device、brightness、author、tag、theme，各写一次。仅对请求 fallback 指定的维度生效。",
+    wide: true
   },
   "embed.enabled": {
     group: "embed",

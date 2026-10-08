@@ -888,6 +888,7 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
     EventTarget: window.EventTarget,
     MutationObserver: window.MutationObserver,
     localStorage,
+    getComputedStyle: () => ({ overflowY: "auto", getPropertyValue: () => "", animationName: "none", animationDuration: "0s" }),
     requestAnimationFrame,
     cancelAnimationFrame,
     React,
@@ -1156,10 +1157,11 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
             )
           );
         });
+        const showsPage = (current: number, total: number) =>
+          container.querySelector<HTMLInputElement>('[aria-label="图片列表分页当前页"]')?.value === String(current)
+          && Boolean(container.querySelector(".admin-pagination-status")?.textContent?.includes(`/ ${total} 页`));
         await waitFor(
-          () => listRequests.length === 1 && /第 1 \/ 2 页/.test(
-            container.textContent ?? ""
-          ),
+          () => listRequests.length === 1 && showsPage(1, 2),
           `${mode} scenario initial page did not load`
         );
         await click(buttonWithText("下一页"));
@@ -1176,7 +1178,7 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
         assert.ok(pageStatus);
         assert.equal(
           pageStatus.textContent,
-          "第 2 / 2 页 · 共 2 项",
+          "共 2 项",
           "失败且无页数据时不得伪造本页 0 项"
         );
         await click(buttonWithText("重试"));
@@ -1186,7 +1188,7 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
         );
         assert.equal(
           pageStatus.textContent,
-          "第 2 / 2 页 · 共 2 项 · 加载中",
+          "共 2 项 · 加载中",
           "加载期间只应显示稳定分页元数据和加载状态"
         );
         const finishPageTwo = resolvePageTwo as ((response: Response) => void) | null;
@@ -1200,7 +1202,7 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
           )
         );
         await waitFor(
-          () => pageStatus.textContent === "第 2 / 2 页 · 共 2 项 · 本页 1 项",
+          () => pageStatus.textContent === "共 2 项 · 本页 1 项",
           `${mode} scenario page 2 did not load`
         );
 
@@ -1228,7 +1230,7 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
             listRequestsBeforeDialog,
             "关闭确认弹窗不得重取当前数字页"
           );
-          assert.match(container.textContent ?? "", /第 2 \/ 2 页/);
+          assert.ok(showsPage(2, 2));
         }
 
         if (mode === "restore") {
@@ -1400,7 +1402,7 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
         await waitFor(
           () =>
             mutationRequests === 1 &&
-            /第 1 \/ 1 页/.test(container.textContent ?? "") &&
+            showsPage(1, 1) &&
             listRequests.at(-1) === 1,
           `${mode} scenario did not clamp to the new last page`
         );
@@ -1801,6 +1803,18 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
           const deleteButton = () =>
             document.querySelector<HTMLButtonElement>(".image-editor-delete-button");
           assert.equal(deleteButton()?.getAttribute("aria-label"), "删除 1 张");
+          const exclude = document.querySelector<HTMLButtonElement>('.image-editor-row [title="从批量删除中移除"]');
+          assert.ok(exclude);
+          await click(exclude);
+          await waitFor(() => !document.querySelector("[data-dialog-frame]"), "excluding the last image must cancel the delete preview");
+          assert.equal(trashBodies.length, 2, "排除最后一张待删除图片按取消处理，不得提交删除请求");
+          await click(entry);
+          await waitFor(() => Boolean(document.querySelector('textarea[aria-label="图片 ID"]')), "ID input did not reopen");
+          await React.act(async () => {
+            inputText(window as unknown as Window, document.querySelector<HTMLTextAreaElement>('textarea[aria-label="图片 ID"]')!, offPageImageId);
+          });
+          await click(buttonWithText("解析"));
+          await waitFor(() => Boolean(deleteButton()), "delete preview did not reopen");
           await click(deleteButton()!);
           assert.equal(trashBodies.length, 2);
           assert.equal(deleteButton()?.getAttribute("aria-label"), "确认删除");

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
   brightnesses as imageBrightnesses,
   devices as imageDevices,
@@ -82,7 +82,8 @@ export function ImageAdminFilters({
   mobileLayout,
   disabled,
   onChange,
-  onClear
+  onClear,
+  leadingControls
 }: {
   value: ImageAdminFilterValues;
   vocabulary?: IngestionVocabularyDto;
@@ -90,6 +91,7 @@ export function ImageAdminFilters({
   disabled: boolean;
   onChange: (key: keyof ImageAdminFilterValues, value: string) => void;
   onClear: () => void;
+  leadingControls?: (doubleRow: boolean) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const clearFiltersRef = useRef<HTMLButtonElement | null>(null);
@@ -197,82 +199,85 @@ export function ImageAdminFilters({
   const filterGroups = imageAdminFilterDomGroups(doubleRowLayout);
 
   return (
-    <div
-      ref={filterBarRef}
-      className={`image-list-filter-bar${open ? " filters-open" : ""}${disclosure.motionEnabled ? " filters-motion-enabled" : ""}`}
-    >
-      <div className="image-list-filter-actions">
-        <button
-          ref={disclosure.triggerRef}
-          type="button"
-          className="image-list-filter-toggle pressable"
-          disabled={disabled}
-          aria-expanded={open}
-          aria-controls="admin-image-filter-panel"
-          onClick={() =>
-            open
-              ? disclosure.setOpen(false, { restoreFocus: true })
-              : disclosure.setOpen(true)
-          }
-        >
-          <AdminIcon name="filter-3-line" />
-          筛选
-          {activeCount > 0 && (
-            <span className="image-list-filter-count">{activeCount}</span>
-          )}
-          <span className="image-list-filter-chevron">
-            <AdminIcon name="arrow-down-s-line" />
-          </span>
-        </button>
-        {mobileLayout && (
-          <>
-            <span className="image-list-filter-action-divider" aria-hidden="true" />
-            <button
-              ref={clearFiltersRef}
-              type="button"
-              className="image-list-filter-clear image-list-filter-clear-mobile pressable"
-              disabled={disabled || !hasFilters}
-              onClick={clearFilters}
-            >
-              清空
-            </button>
-          </>
-        )}
-      </div>
-      <AnchoredMenuDismissSignalContext
-        key={mobileLayout ? "mobile" : "desktop"}
-        value={disclosure.menuDismissSignal}
+    <>
+      {leadingControls?.(mobileLayout || doubleRowLayout)}
+      <div
+        ref={filterBarRef}
+        className={`image-list-filter-bar${open ? " filters-open" : ""}${disclosure.motionEnabled ? " filters-motion-enabled" : ""}`}
       >
-        <div
-          ref={disclosure.panelRef}
-          id="admin-image-filter-panel"
-          className="image-list-filter-panel"
-          role="group"
-          aria-label="图片列表筛选条件"
-          aria-hidden={disclosure.panelHidden}
-          inert={disclosure.panelHidden}
-        >
-          <div className="image-list-filter-primary">
-            {filterGroups.primary.map((key) => filterControls[key])}
-          </div>
-          <div className="image-list-filter-secondary">
-            {filterGroups.secondary.map((key) => filterControls[key])}
-          </div>
-          {!mobileLayout && (
-            <div className="image-list-filter-action">
+        <div className="image-list-filter-actions">
+          <button
+            ref={disclosure.triggerRef}
+            type="button"
+            className="image-list-filter-toggle pressable"
+            disabled={disabled}
+            aria-expanded={open}
+            aria-controls="admin-image-filter-panel"
+            onClick={() =>
+              open
+                ? disclosure.setOpen(false, { restoreFocus: true })
+                : disclosure.setOpen(true)
+            }
+          >
+            <AdminIcon name="filter-3-line" />
+            筛选
+            {activeCount > 0 && (
+              <span className="image-list-filter-count">{activeCount}</span>
+            )}
+            <span className="image-list-filter-chevron">
+              <AdminIcon name="arrow-down-s-line" />
+            </span>
+          </button>
+          {mobileLayout && (
+            <>
+              <span className="image-list-filter-action-divider" aria-hidden="true" />
               <button
                 ref={clearFiltersRef}
                 type="button"
-                className="image-list-filter-clear pressable"
+                className="image-list-filter-clear image-list-filter-clear-mobile pressable"
                 disabled={disabled || !hasFilters}
                 onClick={clearFilters}
               >
                 清空
               </button>
-            </div>
+            </>
           )}
         </div>
-      </AnchoredMenuDismissSignalContext>
-    </div>
+        <AnchoredMenuDismissSignalContext
+          key={mobileLayout ? "mobile" : "desktop"}
+          value={disclosure.menuDismissSignal}
+        >
+          <div
+            ref={disclosure.panelRef}
+            id="admin-image-filter-panel"
+            className="image-list-filter-panel"
+            role="group"
+            aria-label="图片列表筛选条件"
+            aria-hidden={disclosure.panelHidden}
+            inert={disclosure.panelHidden}
+          >
+            <div className="image-list-filter-primary">
+              {filterGroups.primary.map((key) => filterControls[key])}
+            </div>
+            <div className="image-list-filter-secondary">
+              {filterGroups.secondary.map((key) => filterControls[key])}
+            </div>
+            {!mobileLayout && (
+              <div className="image-list-filter-action">
+                <button
+                  ref={clearFiltersRef}
+                  type="button"
+                  className="image-list-filter-clear pressable"
+                  disabled={disabled || !hasFilters}
+                  onClick={clearFilters}
+                >
+                  清空
+                </button>
+              </div>
+            )}
+          </div>
+        </AnchoredMenuDismissSignalContext>
+      </div>
+    </>
   );
 }

@@ -1,4 +1,5 @@
 :root {
+  --admin-image-controls-max-width: calc(1920px - 220px - 48px);
   --admin-color-image-card-border: light-dark(#e3e6eb, var(--admin-color-border-default));
   --admin-color-workflow-filter-surface: var(--admin-color-surface-subtle);
   --admin-shadow-panel: light-dark(rgba(24, 28, 33, 0.16), rgba(0, 0, 0, 0.48));
@@ -310,7 +311,7 @@
   display: none;
 }
 .image-list-filter-panel {
-  width: min(100%, calc(1920px - 220px - 48px));
+  width: min(100%, var(--admin-image-controls-max-width));
   display: grid;
   align-items: end;
   gap: 12px;

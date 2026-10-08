@@ -27,24 +27,30 @@ type ParsedImageIds = {
   items: EditableImageSnapshotDto[];
   invalid: string[];
   missing: string[];
+  ineligible: string[];
 };
 
 const intentPresentation = {
   edit: { icon: "pencil-line", heading: "编辑图片", action: "编辑" },
-  delete: { icon: "delete-bin-line", heading: "删除图片", action: "删除" }
+  delete: { icon: "delete-bin-line", heading: "删除图片", action: "删除" },
+  "group-add": { icon: "add-line", heading: "加入分组", action: "核对" },
+  "group-remove": { icon: "subtract-line", heading: "移出分组", action: "核对" }
 } as const;
 
 /**
- * 按完整图片 ID 指定要编辑或删除的图片。快照接口只返回未删除的图片，其余 ID
- * 统一列为未找到或在回收站中；全部可用时直接交给编辑弹窗。
+ * 按完整图片 ID 指定待操作图片。快照接口只返回未删除的图片，其余 ID
+ * 统一列为未找到或在回收站中；分组用途同时排除不符合成员关系的图片，
+ * 全部可操作时直接交给图片操作窗口。
  */
 export function ImageIdInputDialog({
   intent,
+  groupSlug,
   onClose,
   onResolved,
   returnFocusRef
 }: {
   intent: ImageEditorIntent;
+  groupSlug?: string;
   onClose: () => void;
   /** 打开编辑弹窗；成功时由调用方在同一次渲染中关闭本弹窗。 */
   onResolved: (items: EditableImageSnapshotDto[]) => Promise<ImageEditorOpenResult>;
@@ -63,7 +69,7 @@ export function ImageIdInputDialog({
     resultDurationMs: null
   });
   const presentation = intentPresentation[intent];
-  const issueCount = parsed ? parsed.invalid.length + parsed.missing.length : 0;
+  const issueCount = parsed ? parsed.invalid.length + parsed.missing.length + parsed.ineligible.length : 0;
   const hintId = `${inputId}-hint`;
   const errorId = `${inputId}-error`;
   const issuesId = `${inputId}-issues`;
@@ -109,20 +115,26 @@ export function ImageIdInputDialog({
     requestControllerRef.current = controller;
     setError("");
     try {
-      const snapshots: EditableImageSnapshotDto[] = ids.length
-        ? (await readEditableImageSnapshots(ids, controller.signal)).items
+      const snapshots = ids.length
+        ? (await readEditableImageSnapshots(ids, controller.signal, groupSlug)).items
         : [];
       if (controller.signal.aborted) return false;
       const itemById = new Map(snapshots.map((item) => [item.id, item]));
+      const ineligible: string[] = [];
       const items = ids.flatMap((id) => {
         const item = itemById.get(id);
+        if (item && ((intent === "group-add" && item.in_group === true)
+          || (intent === "group-remove" && item.in_group === false))) {
+          ineligible.push(id);
+          return [];
+        }
         return item ? [item] : [];
       });
       const missing = ids.filter((id) => !itemById.has(id));
-      if (items.length && !invalid.length && !missing.length) {
+      if (items.length && !invalid.length && !missing.length && !ineligible.length) {
         return await openEditor(items);
       }
-      setParsed({ items, invalid, missing });
+      setParsed({ items, invalid, missing, ineligible });
       return true;
     } catch {
       if (!controller.signal.aborted) setError("图片读取失败，请稍后重试");
@@ -230,6 +242,12 @@ export function ImageIdInputDialog({
                       <li key={`missing:${id}`}>
                         <strong>{id}</strong>
                         <span>未找到或在回收站中</span>
+                      </li>
+                    ))}
+                    {parsed.ineligible.map((id) => (
+                      <li key={`ineligible:${id}`}>
+                        <strong>{id}</strong>
+                        <span>{intent === "group-add" ? "已在组内" : "不在组内"}</span>
                       </li>
                     ))}
                   </ol>

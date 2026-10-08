@@ -76,6 +76,87 @@ await runIntegrationScenario(async (runtime) => {
       assert.deepEqual(ids(body.items), ids(expected), query);
     }
   };
+  let fallbackSeedIds: string[] | undefined;
+  const verifyFallback = async (cacheReady: boolean) => {
+    const first = rows[0]!;
+    const request = (query: string, method = "GET") => app.request(
+      `http://images.example/random?${query}`,
+      { method, headers: { Referer: "http://images.example/gallery", "user-agent": "synthetic-unknown-agent" } }
+    );
+    const readOrdinary = async (query: string) => {
+      const response = await request(`mode=json&${query}`);
+      assert.equal(response.status, 200, query);
+      return await response.json() as { fallback: string[]; items: { id: string }[] };
+    };
+    const seededQuery = "device=all&theme=missing&fallback=theme&seed=fallback-window&limit=7";
+    const seeded = await readOrdinary(seededQuery);
+    assert.deepEqual(seeded.fallback, ["theme"]);
+    const orderedIds = seeded.items.map((item) => item.id);
+    assert.equal(new Set(orderedIds).size, 7);
+    if (fallbackSeedIds) assert.deepEqual(orderedIds, fallbackSeedIds, "Redis and PG keep the same seeded fallback order");
+    else fallbackSeedIds = orderedIds;
+    const prefix = await readOrdinary(seededQuery.replace("limit=7", "limit=3"));
+    assert.deepEqual(prefix.items.map((item) => item.id), orderedIds.slice(0, 3));
+    const reordered = await readOrdinary(seededQuery.replace("fallback=theme", "fallback=device,theme,device"));
+    assert.deepEqual(reordered.items.map((item) => item.id), orderedIds);
+    if (cacheReady) {
+      let connections = 0;
+      const restore = interceptPoolConnections(pool, () => { connections += 1; });
+      try { await readOrdinary(seededQuery); }
+      finally { restore(); }
+      assert.equal(connections, 0, "warm fallback selection uses Redis rather than silently falling back to PG");
+    }
+    const intermediate = "device=pc&brightness=dark&theme=fallback-stage&fallback=device,brightness";
+    const deviceFirst = await readOrdinary(intermediate);
+    assert.deepEqual(deviceFirst.fallback, ["device"]);
+    assert.deepEqual(deviceFirst.items.map((item) => item.id), [rows[5]!.id]);
+    await runtime.runtimeConfigStore.updateRuntimeConfig({
+      site: { random_fallback_order: ["brightness", "device", "author", "tag", "theme"] }
+    });
+    const brightnessFirst = await readOrdinary(intermediate);
+    assert.deepEqual(brightnessFirst.fallback, ["brightness"]);
+    assert.deepEqual(brightnessFirst.items.map((item) => item.id), [rows[2]!.id]);
+    await runtime.runtimeConfigStore.updateRuntimeConfig({
+      site: { random_fallback_order: ["device", "brightness", "author", "tag", "theme"] }
+    });
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const recent = await readOrdinary("device=all&theme=fallback-stage&fallback=theme&limit=200");
+      assert.deepEqual(recent.fallback, [], "all candidates being recent or below limit must not widen the theme");
+      assert.deepEqual(ids(recent.items), ids([rows[2]!, rows[5]!]));
+    }
+    const pick = async (query: string, expected: string[]) => {
+      const response = await request(`mode=json&id=${first.id}&seed=fallback-contract&${query}`);
+      assert.equal(response.status, 200, query);
+      const body = await response.json() as { fallback: string[]; items: { id: string }[] };
+      assert.deepEqual(body.fallback, expected, query);
+      assert.deepEqual(body.items.map((item) => item.id), [first.id]);
+    };
+    for (const [query, dimension] of [
+      ["device=pc", "device"], ["brightness=dark", "brightness"],
+      ["author=missing", "author"], ["tag=missing", "tag"], ["theme=missing", "theme"]
+    ]) await pick(`${query}&fallback=${dimension}`, [dimension!]);
+    await pick("device=all&brightness=light&fallback=all&limit=200", []);
+    const combined = "device=pc&brightness=dark&author=missing&tag=missing&theme=missing&fallback=all";
+    await pick(combined, ["device", "brightness", "author", "tag", "theme"]);
+    await runtime.runtimeConfigStore.updateRuntimeConfig({
+      site: { random_fallback_order: ["theme", "tag", "author", "brightness", "device"] }
+    });
+    await pick(combined, ["theme", "tag", "author", "brightness", "device"]);
+    await runtime.runtimeConfigStore.updateRuntimeConfig({
+      site: { random_fallback_order: ["device", "brightness", "author", "tag", "theme"] }
+    });
+    await pick("theme=missing&fallback=all", ["theme"]);
+    for (const query of [
+      `id=${first.id}&theme=missing,!null`, `id=${first.id}&author=missing,!null`,
+      "id=00000000-0000-7000-8000-ffffffffffff"
+    ]) assert.equal((await request(`mode=json&fallback=all&${query}`)).status, 404, query);
+    const get = await request(`mode=json&id=${first.id}&theme=missing&fallback=theme&seed=head`);
+    const head = await request(`mode=json&id=${first.id}&theme=missing&fallback=theme&seed=head`, "HEAD");
+    assert.equal(head.status, 200);
+    assert.equal(head.headers.get("content-length"), get.headers.get("content-length"));
+    assert.equal(await head.text(), "");
+    assert.equal((await request(`mode=redirect&id=${first.id}&theme=missing&fallback=theme`)).status, 302);
+  };
   try {
     await pool.query(
       "INSERT INTO tag(slug,display_name) VALUES('device-selected','Device selected')"
@@ -96,10 +177,21 @@ await runIntegrationScenario(async (runtime) => {
           row.id
         ]);
     }
+    await pool.query("INSERT INTO theme(slug) VALUES('fallback-stage')");
+    await pool.query("UPDATE metadata SET theme='fallback-stage' WHERE id = ANY($1::uuid[])", [[rows[2]!.id, rows[5]!.id]]);
+    await verifyFallback(false);
     await read("device=pc", pc);
     await read("device=mb", mb);
     await probeRedisOperationalState();
     assert.equal((await coordinator.initializeReadyImageCacheCoordinator()).readable, true);
+    await verifyFallback(true);
+    // Finish indexes scheduled by the fallback requests before the independent
+    // cold-build/connection-count assertions clear and rebuild their fixtures.
+    for (const plan of [
+      createImageFilterPlan({ brightnesses: ["dark"], theme: { include: ["fallback-stage"] } }),
+      createImageFilterPlan({ devices: ["pc"], theme: { include: ["fallback-stage"] } }),
+      createImageFilterPlan({ theme: { include: ["fallback-stage"] } })
+    ]) await publishedIndex(plan);
     await clearReadyImageDisposableCaches();
 
     let buildConnections = 0;
@@ -314,7 +406,7 @@ await runIntegrationScenario(async (runtime) => {
     assert.equal((await publishedIndex(pcPlan))?.count, pc.length - 1);
 
     await pool.query("UPDATE metadata SET device='mb' WHERE id=ANY($1::uuid[])", [ids(rows)]);
-    await pool.query("UPDATE ready_image_revision SET revision=revision+1 WHERE singleton=1");
+    await pool.query("UPDATE projection_revision SET revision=revision+1 WHERE singleton=1");
     await coordinator.requestReadyImageCacheRebuild({ signal: neverAbortedSignal });
     assert.equal((await publishedIndex(pcPlan))?.count, 0);
     await read("device=pc", []);

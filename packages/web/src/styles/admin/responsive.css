@@ -11,6 +11,8 @@
   }
   .admin:has(> .workspace-paged) > .admin-mobile-header {
     flex: 0 0 auto;
+    /* 分页页只滚动工作区，导航留在普通布局流中，不再参与另一层吸顶合成。 */
+    position: relative;
   }
   html:has(.workspace-paged),
   body:has(.workspace-paged) {

@@ -2295,8 +2295,7 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
   assert.equal(mixed.signature, signatureOf("theme=stage&author=photographer").signature);
   assert.equal(signatureOf("brightness=all").signature, signatureOf("").signature);
   const emptiedByExclusion = normalizeRandomQuery(parseQuery("theme=舞台,!stage"), maps);
-  assert.ok(emptiedByExclusion instanceof Response);
-  assert.equal(emptiedByExclusion.status, 404);
+  assert.equal(emptiedByExclusion.unmatchable, true);
   const targetedSignature = signatureOf(`id=${imageId}`).signature;
   assert.notEqual(targetedSignature, signatureOf("").signature);
   assert.equal(signatureOf(`id=${imageId}&device=auto`).signature, targetedSignature);

@@ -98,10 +98,10 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(cold.headers.get("Access-Control-Allow-Origin"), "*");
   await cold.arrayBuffer();
 
-  await expectStatus(await request(random("mode=proxy")), 200);
+  await expectStatus(await request(random("mode=proxy&author=missing&fallback=author")), 200);
   await expectStatus(await request(random("mode=redirect"), {}, "HEAD"), 302);
   await expectStatus(await request(random()), 200);
-  await expectLimited(await request(random()));
+  await expectLimited(await request(random("mode=json&fallback=all")));
   // Break-even is 3 / 2 = 1 image: limit=1 shares the image budget, larger limits use batch slots.
   await expectLimited(await request(random("mode=json&limit=1")));
   await expectStatus(await request(random("mode=json&limit=2")), 200);
@@ -307,7 +307,7 @@ await runIntegrationScenario(async (runtime) => {
   const ended = once(redis, "end");
   redis.disconnect();
   await ended;
-  const unavailable = await request(random(), { "X-Real-IP": "192.0.2.7" });
+  const unavailable = await request(random("mode=json&fallback=all"), { "X-Real-IP": "192.0.2.7" });
   assert.equal(unavailable.status, 503);
   assert.equal(unavailable.headers.get("Cache-Control"), "no-store");
   assert.equal((await unavailable.json()).code, "redis_unavailable");

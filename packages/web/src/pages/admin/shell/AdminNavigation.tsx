@@ -82,6 +82,13 @@ const adminNavigationModel = {
         },
         {
           kind: "link",
+          to: `${adminBasePath}/groups`,
+          icon: "image-line",
+          label: "分组管理",
+          routeModule: "groups"
+        },
+        {
+          kind: "link",
           to: `${adminBasePath}/themes`,
           icon: "palette-line",
           label: "主题管理",

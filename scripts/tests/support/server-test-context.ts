@@ -15,6 +15,7 @@ export function servingReadyCacheItem(overrides: Record<string, unknown> = {}) {
     storage_slug: "local",
     author: null,
     tags: [],
+    groups: [],
     l_width: 1920, l_height: 1080, l_byte_size: 123456, l_md5: "0123456789abcdef0123456789abcdef",
     m_width: 1920, m_height: 1080, m_byte_size: 123456, m_md5: "0123456789abcdef0123456789abcdef",
     s_width: 1920, s_height: 1080, s_byte_size: 123456, s_md5: "0123456789abcdef0123456789abcdef",

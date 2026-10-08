@@ -13,7 +13,7 @@ import {
   withVocabularyMutationLock
 } from "../mutation-sync.ts";
 
-export async function createTag(slug: string, displayName = "") {
+export async function createTag(slug: string, displayName = "", sortOrder?: number) {
   assertVocabularySlug("tag", slug);
 
   const result = await withVocabularyMutationLock("tag", slug, (signal) =>
@@ -21,10 +21,10 @@ export async function createTag(slug: string, displayName = "") {
       signal.throwIfAborted();
       const created = await pool.query(
         `INSERT INTO tag(slug, display_name, sort_order)
-       VALUES($1, $2, ${nextSortOrderSql("tag")})
+       VALUES($1, $2, COALESCE($3::integer, ${nextSortOrderSql("tag")}))
        ON CONFLICT (slug) DO NOTHING
        RETURNING slug`,
-        [slug, displayName]
+        [slug, displayName, sortOrder ?? null]
       );
       signal.throwIfAborted();
       return created;

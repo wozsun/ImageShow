@@ -73,7 +73,8 @@ export async function ensureAuthorWithMutationLockHeld(
 export async function createAuthor(
   slug: string,
   displayName: string,
-  link: string
+  link: string,
+  sortOrder?: number
 ): Promise<AuthorDto> {
   assertVocabularySlug("author", slug);
   const identity = deriveAuthorIdentityFromLink(link);
@@ -99,7 +100,7 @@ export async function createAuthor(
              $3,
              $4,
              $5,
-             ${nextSortOrderSql("author")}
+             COALESCE($6::integer, ${nextSortOrderSql("author")})
            )
            ON CONFLICT (slug) DO NOTHING
            RETURNING slug,
@@ -108,7 +109,7 @@ export async function createAuthor(
                      link,
                      identity_provider,
                      identity_id`,
-            [slug, displayName, link, identity?.provider ?? null, identity?.id ?? null]
+            [slug, displayName, link, identity?.provider ?? null, identity?.id ?? null, sortOrder ?? null]
           );
           signal.throwIfAborted();
           return result.rows[0] ?? null;

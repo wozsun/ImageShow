@@ -45,7 +45,7 @@ export async function readAdminPostgresqlStatus(): Promise<AdminPostgresqlStatus
                  count(*) AS total_images,
                  count(*) FILTER (WHERE status='ready') AS ready_images,
                  (SELECT revision::text
-                    FROM ready_image_revision
+                    FROM projection_revision
                    WHERE singleton=1) AS authoritative_revision,
                  (SELECT count(*)
                     FROM background_job

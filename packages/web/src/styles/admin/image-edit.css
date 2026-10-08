@@ -36,6 +36,11 @@
 .image-editor-save-button {
   min-width: max(calc(3em + 3ch + 26px), calc(4em + 1.125rem + 34px));
 }
+.image-editor-membership-button {
+  /* 四字操作名、图标与两侧留白完整占位，不受窄屏页脚的等分规则挤压。 */
+  min-width: calc(4em + 1.125rem + 34px);
+  flex: 0 0 auto;
+}
 /* 「删除 N 张」按三位数量与图标预留宽度，移除图片或进入确认时按钮与「取消」不变宽。 */
 .image-editor-delete-button {
   min-width: calc(3.6em + 3ch + 1.125rem + 34px);

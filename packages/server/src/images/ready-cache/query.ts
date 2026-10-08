@@ -34,7 +34,6 @@ import type { PageWindow } from "../page-window.ts";
 import { recordReadyImageCacheError } from "./status-observability.ts";
 import {
   READY_IMAGE_ALL_INDEX_KEY,
-  READY_IMAGE_ID_SUFFIX_LOOKUP_KEY,
   READY_IMAGE_ITEMS_KEY
 } from "./keys.ts";
 import {
@@ -50,6 +49,7 @@ import {
   type ReadyImagePageReadMode,
   type ReadyImageWindowDependencies
 } from "./ordered-window.ts";
+import { releaseReadyImageRequestIndex } from "./indexes/filter-store.ts";
 import { sampleResolvedReadyImageIndex } from "./random-sampler.ts";
 import { readReadyImageRandomMembers } from "./random-window.ts";
 
@@ -127,6 +127,7 @@ async function readCache<T>(
 
 function discardReadyImageQueryIndex(index: ReadyImageFilterIndex) {
   if (index.kind === "core") return Promise.resolve();
+  if (index.temporaryToken) return releaseReadyImageRequestIndex(index);
   return discardReadyImageDerivedResult(index.key, index.kind);
 }
 
@@ -444,8 +445,9 @@ export async function sampleReadyImages(
   signal: AbortSignal,
   seededStart?: number
 ): Promise<ReadyImageCacheResult<ReadyImageCacheItem[]>> {
+  let index: ReadyImageFilterIndex | null = null;
   try {
-    const index = await resolveReadyImageFilterIndex(plan, signal);
+    index = await resolveReadyImageFilterIndex(plan, signal);
     if (!index) return { cached: false };
     if (seededStart !== undefined) {
       const result = await readRandomWindowFromIndex(
@@ -461,7 +463,7 @@ export async function sampleReadyImages(
     }
     const result = await readCache(
       () => sampleResolvedReadyImageIndex(
-        index,
+        index!,
         limit,
         recent
       ),
@@ -474,59 +476,7 @@ export async function sampleReadyImages(
     if (signal.aborted) throw signal.reason ?? error;
     reportFilterResolutionFailure(error, plan.signature, "random");
     return { cached: false };
+  } finally {
+    await releaseReadyImageRequestIndex(index);
   }
-}
-
-export async function readTargetedReadyImages(
-  ids: string[]
-): Promise<ReadyImageCacheResult<ReadyImageCacheItem[]>> {
-  return readCache(async () => {
-    const fullIds = ids.filter((id) => id.length > 12);
-    const suffixes = ids.filter((id) => id.length === 12);
-    const members = new Set(fullIds.map(readyImageMember));
-    if (suffixes.length) {
-      const pipeline = redis.pipeline();
-      pipeline.zcard(READY_IMAGE_ID_SUFFIX_LOOKUP_KEY);
-      for (const suffix of suffixes) {
-        const score = Number.parseInt(suffix, 16);
-        pipeline.zrangebyscore(
-          READY_IMAGE_ID_SUFFIX_LOOKUP_KEY,
-          score,
-          score
-        );
-      }
-      const results = await execRedisPipeline(pipeline);
-      if (Number(results[0]?.[1] ?? 0) !== cacheItemCount()) {
-        throw new Error("Ready-image cache suffix index is incomplete");
-      }
-      for (const result of results.slice(1)) {
-        for (const member of result[1] as string[]) members.add(member);
-      }
-    }
-    if (!members.size) return [];
-    const orderedMembers = [...members];
-    const pipeline = redis.pipeline();
-    pipeline.hlen(READY_IMAGE_ITEMS_KEY);
-    pipeline.zcard(READY_IMAGE_ALL_INDEX_KEY);
-    pipeline.hmget(READY_IMAGE_ITEMS_KEY, ...orderedMembers);
-    pipeline.zmscore(READY_IMAGE_ALL_INDEX_KEY, ...orderedMembers);
-    const results = await execRedisPipeline(pipeline);
-    const expected = cacheItemCount();
-    if (Number(results[0]?.[1] ?? 0) !== expected
-      || Number(results[1]?.[1] ?? 0) !== expected) {
-      throw new Error("Ready-image cache core projection is incomplete");
-    }
-    const raws = (results[2]?.[1] as Array<string | null>) ?? [];
-    const scores = (results[3]?.[1] as Array<string | null>) ?? [];
-    if (raws.length !== orderedMembers.length || scores.length !== orderedMembers.length) {
-      throw new Error("Ready-image targeted lookup returned an incomplete result");
-    }
-    return raws.flatMap((raw, position) => {
-      if (Boolean(raw) !== Boolean(scores[position])) {
-        throw new Error("Ready-image targeted lookup is internally inconsistent");
-      }
-      if (!raw) return [];
-      return [parsedItem(raw, orderedMembers[position])];
-    });
-  });
 }

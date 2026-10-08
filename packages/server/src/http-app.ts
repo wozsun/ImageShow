@@ -25,6 +25,7 @@ import { prepareCompressionThreshold } from "./core/http/compression-threshold.t
 import { registerAdminLogRoutes } from "./routes/admin-logs.ts";
 import { registerAdminImageRoutes } from "./routes/admin-images.ts";
 import { registerAdminVocabularyRoutes } from "./routes/admin-vocabulary.ts";
+import { registerAdminGroupRoutes } from "./routes/admin-groups.ts";
 import { registerAdminUserRoutes } from "./routes/admin-users.ts";
 import { registerAdminPreferenceRoutes } from "./routes/admin-preferences.ts";
 import { registerAdminCacheRoutes } from "./routes/admin-cache.ts";
@@ -160,6 +161,7 @@ export function createHttpApp(
 
   registerAdminImageRoutes(app);
   registerAdminVocabularyRoutes(app);
+  registerAdminGroupRoutes(app);
   registerAdminUserRoutes(app);
   registerAdminPreferenceRoutes(app);
   registerAdminCacheRoutes(app);
