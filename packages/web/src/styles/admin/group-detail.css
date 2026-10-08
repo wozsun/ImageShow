@@ -23,15 +23,14 @@
 }
 
 .group-random-link {
-  --group-link-control-height: 40px;
   width: min(100%, var(--admin-image-controls-max-width));
   display: flex;
-  gap: 12px;
-  margin-bottom: 10px;
+  gap: var(--admin-control-gap);
+  margin-bottom: var(--admin-control-gap);
 }
 .group-random-link-options {
   display: flex;
-  gap: 12px;
+  gap: var(--admin-control-gap);
 }
 .group-random-link-select {
   display: grid;
@@ -42,8 +41,10 @@
   grid-area: 1 / 1;
   min-width: 0;
 }
+/* 隐藏的选项文字按最长一项撑开列宽；高度与下拉框相同，不让字体行高把这一行撑高。 */
 .group-random-link-option-width {
   visibility: hidden;
+  height: var(--admin-control-height);
   white-space: nowrap;
   padding: 9px var(--select-trigger-end-padding) 9px 10px;
   border: 1px solid transparent;
@@ -53,10 +54,10 @@
   min-width: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 55px;
-  gap: 12px;
+  gap: var(--admin-control-gap);
 }
-.group-random-link :is(input, .select-trigger, .copy-button) {
-  height: var(--group-link-control-height);
+.group-random-link :is(.select-trigger, .copy-button) {
+  height: var(--admin-control-height);
   min-width: 0;
   width: 100%;
 }
@@ -69,7 +70,7 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
-  height: var(--group-link-control-height);
+  height: var(--admin-control-height);
   padding-left: 10px;
   background: var(--color-control-surface);
   border: 1px solid var(--color-control-border);
@@ -98,10 +99,8 @@
 .group-random-link .copyable-link-field input:focus-visible {
   outline: none;
 }
-/* 控件区各行竖直间距一致：桌面与筛选、工具栏之间同为 10px，窄屏统一为 8px。 */
 .group-random-link[data-double-row="true"] {
   flex-direction: column;
-  row-gap: 10px;
 }
 .group-random-link[data-double-row="true"] > .group-random-link-options {
   display: grid;
@@ -119,22 +118,13 @@
 }
 
 @media (max-width: 760px) {
-  .group-random-link {
-    margin-bottom: 8px;
-  }
-  .group-random-link[data-double-row="true"] {
-    row-gap: 8px;
-  }
-  .group-random-link-options {
-    gap: 8px;
-  }
   .group-random-link-value {
     position: relative;
     grid-template-columns: minmax(0, 1fr);
   }
   /* 文字止于复制按钮前 4px：按钮内缩 3px、边长为控件高度减 8px，扣除 1px 边框；输入框自身不再留右内边距。 */
   .group-random-link .copyable-link-field {
-    padding-right: calc(var(--group-link-control-height) - 2px);
+    padding-right: calc(var(--admin-control-height) - 2px);
   }
   .group-random-link .copyable-link-field input {
     padding-right: 0;
@@ -143,9 +133,9 @@
     position: absolute;
     top: 3px;
     right: 3px;
-    width: calc(var(--group-link-control-height) - 8px);
-    min-height: calc(var(--group-link-control-height) - 8px);
-    height: calc(var(--group-link-control-height) - 8px);
+    width: calc(var(--admin-control-height) - 8px);
+    min-height: calc(var(--admin-control-height) - 8px);
+    height: calc(var(--admin-control-height) - 8px);
     padding: 0;
     color: var(--color-control-text-primary);
     background: transparent;
@@ -157,20 +147,12 @@
   .group-random-link .copy-button.is-failed {
     color: var(--admin-color-danger-text);
   }
+  /* 整个窄屏都沿用图片页 ≤546px 的两行排布：全选与视图切换一行，批量按钮各占半行。 */
   .group-detail-page .image-list-toolbar {
     grid-template-columns: minmax(0, 1fr) max-content;
-    grid-template-rows: auto auto;
-    gap: 8px;
+    grid-template-rows: 36px auto;
   }
-  .group-detail-page .image-list-selection {
-    grid-row: 1;
-    min-height: 36px;
-  }
-  .group-detail-page .image-list-toolbar > .image-list-toolbar-actions {
-    display: contents;
-  }
-  .group-detail-page .image-list-view-controls {
-    grid-column: 2;
+  .group-detail-page :is(.image-list-selection, .image-list-view-controls) {
     grid-row: 1;
   }
   .group-detail-page .image-list-batch-actions {
@@ -178,12 +160,8 @@
     grid-row: 2;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
   }
   .group-detail-page .image-list-batch-actions > button {
     width: 100%;
-    min-width: 0;
-    min-height: 40px;
-    white-space: nowrap;
   }
 }

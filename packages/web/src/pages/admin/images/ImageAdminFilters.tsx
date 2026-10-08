@@ -36,6 +36,7 @@ function isImageAdminDoubleRowWidth(width: number) {
   return width > 0 && width <= imageAdminDoubleRowMaxWidth;
 }
 
+// 各排布的 DOM 顺序与视觉顺序一致，键盘焦点按看到的顺序移动。
 const singleRowFilterGroups = {
   primary: ["device", "brightness", "theme"],
   secondary: ["tag", "author"]
@@ -46,7 +47,14 @@ const doubleRowFilterGroups = {
   secondary: ["theme", "tag"]
 } as const satisfies Record<string, readonly (keyof ImageAdminFilterValues)[]>;
 
-function imageAdminFilterDomGroups(doubleRowLayout: boolean) {
+// 窄屏面板两列：多选的标签独占最后一行。
+const mobileFilterGroups = {
+  primary: ["device", "brightness", "theme"],
+  secondary: ["author", "tag"]
+} as const satisfies Record<string, readonly (keyof ImageAdminFilterValues)[]>;
+
+function imageAdminFilterDomGroups(mobileLayout: boolean, doubleRowLayout: boolean) {
+  if (mobileLayout) return mobileFilterGroups;
   return doubleRowLayout ? doubleRowFilterGroups : singleRowFilterGroups;
 }
 
@@ -196,7 +204,7 @@ export function ImageAdminFilters({
       </div>
     )
   };
-  const filterGroups = imageAdminFilterDomGroups(doubleRowLayout);
+  const filterGroups = imageAdminFilterDomGroups(mobileLayout, doubleRowLayout);
 
   return (
     <>

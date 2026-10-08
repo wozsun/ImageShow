@@ -15,7 +15,7 @@
   display: flex;
   align-items: end;
   justify-content: flex-end;
-  gap: 10px;
+  gap: var(--admin-control-gap);
   min-width: 0;
   flex-wrap: wrap;
 }
@@ -26,6 +26,12 @@
   gap: 6px;
   color: var(--admin-color-text-label);
   font-size: 14px;
+  /* 标签行高固定，不随字体回退出现半像素高度。 */
+  line-height: 20px;
+}
+.log-control .select-trigger,
+.log-head-actions > button {
+  height: var(--admin-control-height);
 }
 
 .log-toolbar {

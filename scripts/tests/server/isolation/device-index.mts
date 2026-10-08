@@ -97,8 +97,16 @@ await runIntegrationScenario(async (runtime) => {
     else fallbackSeedIds = orderedIds;
     const prefix = await readOrdinary(seededQuery.replace("limit=7", "limit=3"));
     assert.deepEqual(prefix.items.map((item) => item.id), orderedIds.slice(0, 3));
-    const reordered = await readOrdinary(seededQuery.replace("fallback=theme", "fallback=device,theme,device"));
-    assert.deepEqual(reordered.items.map((item) => item.id), orderedIds);
+    const bothMissing = "device=all&theme=missing&author=missing&seed=fallback-window&limit=7";
+    const themeFirst = await readOrdinary(`${bothMissing}&fallback=theme,author`);
+    const authorFirst = await readOrdinary(`${bothMissing}&fallback=author,theme`);
+    assert.deepEqual(themeFirst.fallback, ["theme", "author"]);
+    assert.deepEqual(authorFirst.fallback, ["author", "theme"]);
+    assert.deepEqual(
+      authorFirst.items.map((item) => item.id),
+      themeFirst.items.map((item) => item.id),
+      "the seed depends on the relaxed set, not the relaxation order"
+    );
     if (cacheReady) {
       let connections = 0;
       const restore = interceptPoolConnections(pool, () => { connections += 1; });
@@ -106,19 +114,13 @@ await runIntegrationScenario(async (runtime) => {
       finally { restore(); }
       assert.equal(connections, 0, "warm fallback selection uses Redis rather than silently falling back to PG");
     }
-    const intermediate = "device=pc&brightness=dark&theme=fallback-stage&fallback=device,brightness";
-    const deviceFirst = await readOrdinary(intermediate);
+    const intermediate = "device=pc&brightness=dark&theme=fallback-stage";
+    const deviceFirst = await readOrdinary(`${intermediate}&fallback=device,brightness`);
     assert.deepEqual(deviceFirst.fallback, ["device"]);
     assert.deepEqual(deviceFirst.items.map((item) => item.id), [rows[5]!.id]);
-    await runtime.runtimeConfigStore.updateRuntimeConfig({
-      site: { random_fallback_order: ["brightness", "device", "author", "tag", "theme"] }
-    });
-    const brightnessFirst = await readOrdinary(intermediate);
+    const brightnessFirst = await readOrdinary(`${intermediate}&fallback=brightness,device`);
     assert.deepEqual(brightnessFirst.fallback, ["brightness"]);
     assert.deepEqual(brightnessFirst.items.map((item) => item.id), [rows[2]!.id]);
-    await runtime.runtimeConfigStore.updateRuntimeConfig({
-      site: { random_fallback_order: ["device", "brightness", "author", "tag", "theme"] }
-    });
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const recent = await readOrdinary("device=all&theme=fallback-stage&fallback=theme&limit=200");
       assert.deepEqual(recent.fallback, [], "all candidates being recent or below limit must not widen the theme");
@@ -142,6 +144,7 @@ await runIntegrationScenario(async (runtime) => {
       site: { random_fallback_order: ["theme", "tag", "author", "brightness", "device"] }
     });
     await pick(combined, ["theme", "tag", "author", "brightness", "device"]);
+    await pick(combined.replace("fallback=all", "fallback=brightness,all"), ["brightness", "theme", "tag", "author", "device"]);
     await runtime.runtimeConfigStore.updateRuntimeConfig({
       site: { random_fallback_order: ["device", "brightness", "author", "tag", "theme"] }
     });

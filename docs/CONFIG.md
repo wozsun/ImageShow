@@ -30,7 +30,7 @@
 | `site.robots_enabled` | `false` | 提供 `/robots.txt`，只允许搜索引擎抓取首页。关闭时该地址返回 404 |
 | `site.random_method` | `"redirect"` | `/random` 默认的返回方式：`redirect` 跳转到图片地址；`proxy` 由本站直接返回图片，会占用本站带宽 |
 | `site.random_size` | `"medium"` | `/random` 默认的图片尺寸：`large`、`medium`、`small` |
-| `site.random_fallback_order` | `["device","brightness","author","tag","theme"]` | 零匹配回退顺序，五个维度各出现一次；仅对请求 `fallback` 指定的维度生效 |
+| `site.random_fallback_order` | `["device","brightness","author","tag","theme"]` | 零匹配回退时 `all` 展开的顺序，五个维度各出现一次：`fallback=all` 按此顺序放宽全部维度，列表末尾的 `all` 按此顺序放宽其余维度；请求中写明的维度按书写顺序放宽 |
 | `site.assets_base_url` | `""` | 前端静态文件的独立地址，见[静态资源地址](#静态资源地址) |
 
 ### 首页与页脚

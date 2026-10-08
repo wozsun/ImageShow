@@ -80,12 +80,14 @@ const randomAllowedQuery = new Set<string>(randomAllowedQueryValues);
 const randomSingleValueQuery = new Set([
   "device",
   "brightness",
+  "fallback",
   "seed",
   "mode",
   "size",
   "limit"
 ]);
 const randomBrightnessSet = new Set(randomBrightnesses);
+const randomFallbackDimensionSet: ReadonlySet<string> = new Set(randomFallbackDimensions);
 const disallowedSelectorCharacters = /[\u0000-\u001f\u007f]/u;
 const fullUuidPattern = new RegExp(
   "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
@@ -97,9 +99,16 @@ export function isRandomBrightness(value: string): value is RandomBrightness {
   return randomBrightnessSet.has(value as RandomBrightness);
 }
 
+/** Fallback list items, trimmed and lowercased; blank items are dropped. */
+function fallbackTerms(value: string) {
+  return value.split(",").map((term) => term.trim().toLowerCase()).filter(Boolean);
+}
+
 /** Value compared when a single-value parameter is repeated; seed is used verbatim. */
 function comparableSingleValue(key: string, value: string) {
   if (key === "seed") return value;
+  // The written order is the relaxation order, so lists differing only in order conflict.
+  if (key === "fallback") return fallbackTerms(value).join(",");
   const trimmed = value.trim();
   if (key === "limit") return trimmed.replace(/^0+(?=\d)/u, "");
   return trimmed.toLowerCase();
@@ -129,6 +138,7 @@ function invalidQueryParameters(query: URLSearchParams) {
       query.getAll(key)
         .filter((value) => value.trim())
         .map((value) => comparableSingleValue(key, value))
+        .filter(Boolean)
     );
     if (values.size > 1) {
       return apiErrorResponse(
@@ -338,25 +348,44 @@ function parseSeed(query: URLSearchParams): string | null | Response {
   return seed;
 }
 
-function parseFallback(query: URLSearchParams): RandomFallbackDimension[] | Response {
-  const terms = new Set(query.getAll("fallback")
-    .flatMap((value) => value.split(","))
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean));
-  const allowed = new Set<string>([...randomFallbackDimensions, "all", "none"]);
-  if ([...terms].some((term) => !allowed.has(term)) || (terms.has("none") && terms.size > 1)) {
+/**
+ * The written order of one fallback list is the relaxation order. A CDN may
+ * reorder whole query pairs before the origin, never the text inside a value,
+ * so the order lives in a single list. A trailing all appends the dimensions
+ * not yet listed in site order.
+ */
+function parseFallback(
+  query: URLSearchParams,
+  siteOrder: readonly RandomFallbackDimension[]
+): RandomFallbackDimension[] | Response {
+  const terms = query.getAll("fallback").map(fallbackTerms).find((list) => list.length) ?? [];
+  const allIndex = terms.indexOf("all");
+  if (
+    terms.some((term) => term !== "all" && term !== "none" && !randomFallbackDimensionSet.has(term))
+    || new Set(terms).size !== terms.length
+    || (allIndex !== -1 && allIndex !== terms.length - 1)
+    || (terms.includes("none") && terms.length > 1)
+  ) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Invalid fallback" },
-      { field: "fallback", allowedValues: [...allowed], hint: "Use none alone" }
+      {
+        field: "fallback",
+        allowedValues: [...randomFallbackDimensions, "all", "none"],
+        hint: "List each dimension once; use all only at the end and none alone"
+      }
     );
   }
-  return randomFallbackDimensions.filter((dimension) => terms.has("all") || terms.has(dimension));
+  const listed = terms.filter((term): term is RandomFallbackDimension => randomFallbackDimensionSet.has(term));
+  return allIndex === -1
+    ? listed
+    : [...listed, ...siteOrder.filter((dimension) => !listed.includes(dimension))];
 }
 
 export function parseRandomQuery(
   url: URL,
   defaultMode: RandomDefaultMethod,
-  defaultSize: RandomImageSize = "medium"
+  defaultSize: RandomImageSize = "medium",
+  fallbackOrder: readonly RandomFallbackDimension[] = appConfig.runtimeDefaults.site.random_fallback_order
 ): ParsedRandomQuery | Response {
   const rawQuery = url.search.startsWith("?") ? url.search.slice(1) : url.search;
   const rawBytes = Buffer.byteLength(rawQuery, "utf8");
@@ -390,7 +419,7 @@ export function parseRandomQuery(
   if (limit instanceof Response) return limit;
   const seed = parseSeed(query);
   if (seed instanceof Response) return seed;
-  const fallback = parseFallback(query);
+  const fallback = parseFallback(query, fallbackOrder);
   if (fallback instanceof Response) return fallback;
   const submittedBrightness = singleQueryValue(query, "brightness")?.trim().toLowerCase();
   // brightness=all is the explicit spelling of "not specified".
@@ -556,6 +585,7 @@ export function normalizeRandomQuery(
       "a": normalized.author,
       ...(normalized.ids.length ? { "i": normalized.ids } : {}),
       ...(normalized.groups.length ? { "g": normalized.groups } : {}),
+      // The expanded relaxation order: different orders keep separate recent histories.
       ...(normalized.fallback.length ? {
         "f": normalized.fallback,
         "ex": Object.fromEntries((["theme", "author"] as const)

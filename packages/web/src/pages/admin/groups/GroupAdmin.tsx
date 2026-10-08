@@ -116,7 +116,7 @@ function GroupAdminContent({ settings }: { settings: AdminSettings }) {
           <EntityCreateForm
             draft={draft}
             noun="分组"
-            slugPlaceholder="分组标识"
+            slugPlaceholder="分组 slug"
             slugError={slugError}
             slugInvalid={slugInvalid}
             disabled={externalBusy}

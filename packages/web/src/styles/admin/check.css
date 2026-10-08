@@ -2,11 +2,15 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 10px;
+  gap: var(--admin-control-gap);
   margin-left: auto;
 }
 .check-actions .actions {
   justify-content: flex-end;
+  gap: var(--admin-control-gap);
+}
+.check-actions .actions > button {
+  height: var(--admin-control-height);
 }
 .check-status-grid {
   display: grid;
@@ -224,7 +228,6 @@
   .check-actions .actions {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
   }
   .check-actions .actions button {
     width: 100%;

@@ -338,7 +338,7 @@ const settingsFields = {
     group: "random",
     kind: "csv",
     label: "零匹配回退顺序",
-    hint: "用逗号分隔 device、brightness、author、tag、theme，各写一次。仅对请求 fallback 指定的维度生效。",
+    hint: "用逗号分隔 device、brightness、author、tag、theme，各写一次。请求写 fallback=all 或在列表末尾写 all 时，按此顺序放宽其余维度；写明的维度按请求的书写顺序放宽。",
     wide: true
   },
   "embed.enabled": {

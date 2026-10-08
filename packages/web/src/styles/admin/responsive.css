@@ -116,9 +116,6 @@
     align-items: stretch;
     row-gap: 0;
   }
-  .workspace-title-accessory {
-    align-self: center;
-  }
   /* 标题到描述 12px。 */
   .workspace-pinned > :is(p, .action-feedback-region) {
     margin-top: 12px;
@@ -169,7 +166,7 @@
     z-index: 3;
     flex: none;
     margin-inline: calc(-1 * var(--workspace-inline-padding));
-    padding: 16px var(--workspace-inline-padding);
+    padding: 16px var(--workspace-inline-padding) 8px;
     background: var(--admin-color-canvas);
   }
   .workspace-has-toolbar .workspace-pinned {
@@ -197,8 +194,10 @@
   .workspace-has-toolbar .workspace-toolbar {
     position: sticky;
     top: var(--workspace-pinned-height, 0px);
-    /* 底部 10px 是操作区到列表的唯一间距，浮在列表上时按钮也不贴下沿。 */
-    padding: 0 var(--workspace-inline-padding) 10px;
+    /* 顶部 8px 与标题区底部 8px 合成副标题到操作区的 16px；操作区滑到标题区下方时先遮住这段留白，
+       按钮不贴着标题区下沿被切。底部 8px 是操作区到列表的唯一间距，与操作区内各行间距一致，
+       浮在列表上时按钮也不贴下沿。 */
+    padding: 8px var(--workspace-inline-padding);
     background: var(--admin-color-canvas);
     pointer-events: auto;
   }

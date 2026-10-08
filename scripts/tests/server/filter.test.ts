@@ -186,24 +186,28 @@ test("[Server/筛选] 随机查询接受混合条件、忽略未知名称并限�
   const unmatchable = normalizeRandomQuery(parsed, { ...maps, tag: new Map(), author: new Map() });
   assert.equal(unmatchable.unmatchable, true);
   assert.deepEqual(unmatchable.ignored, { theme: [], tag: ["a", "b", "c"], author: ["owner"], group: [] });
-  for (const value of ["none,theme", "none,all", "null", "bogus"]) {
+  for (const value of [
+    "none,theme", "none,all", "null", "bogus", "theme,theme", "all,theme",
+    "theme&fallback=device", "theme,device&fallback=device,theme"
+  ]) {
     const invalid = parse(`fallback=${value}`);
-    assert.ok(invalid instanceof Response);
-    assert.equal(invalid.status, 400);
+    assert.ok(invalid instanceof Response, value);
+    assert.equal(invalid.status, 400, value);
   }
   for (const value of ["", "none", " , "]) {
     const query = parse(`fallback=${value}`);
     assert.ok(!(query instanceof Response));
     assert.deepEqual(query.fallback, []);
   }
-  const first = parse("fallback=theme,device&fallback=theme");
-  const second = parse("fallback=device,theme");
-  assert.ok(!(first instanceof Response) && !(second instanceof Response));
-  assert.deepEqual(first.fallback, ["device", "theme"]);
-  assert.equal(normalizeRandomQuery(first, maps).signature, normalizeRandomQuery(second, maps).signature);
+  const ordered = parse("fallback=theme, Device&fallback=THEME,device,");
+  const reversed = parse("fallback=device,theme");
+  assert.ok(!(ordered instanceof Response) && !(reversed instanceof Response));
+  assert.deepEqual(ordered.fallback, ["theme", "device"]);
+  assert.notEqual(normalizeRandomQuery(ordered, maps).signature, normalizeRandomQuery(reversed, maps).signature);
   const all = parse("fallback=all");
-  assert.ok(!(all instanceof Response));
-  assert.equal(all.fallback.length, 5);
+  const explicit = parse("fallback=device,brightness,author,tag,theme");
+  assert.ok(!(all instanceof Response) && !(explicit instanceof Response));
+  assert.equal(normalizeRandomQuery(all, maps).signature, normalizeRandomQuery(explicit, maps).signature);
   const repeated = Array.from({ length: 32 }, (_, i) => `t${i}`).join(",");
   assert.ok(!(parse(`tag=${repeated}&theme=${repeated}`) instanceof Response));
   const excessive = parse(`tag=${repeated}&theme=${repeated}&author=a`);

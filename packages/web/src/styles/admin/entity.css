@@ -11,15 +11,19 @@
 .admin-create-form {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 16px;
+  gap: var(--admin-control-gap);
+  margin-bottom: var(--admin-control-gap);
 }
 .admin-create-form input {
   flex: 1 1 200px;
   max-width: 280px;
+  height: var(--admin-control-height);
+}
+.admin-create-form > button {
+  height: var(--admin-control-height);
 }
 /* slug 输入框在列向的 .entity-slug-field 包裹内（下方堆叠校验提示），所以重置基础规则给 input 的
-   flex（否则 flex-basis:200px 会被当成列主轴=高度，把输入框撑成 200px 高）：自然高度、填满包裹宽。 */
+   flex（否则 flex-basis:200px 会被当成列主轴=高度，把输入框撑成 200px 高）：保持控件高度、填满包裹宽。 */
 .admin-create-form .entity-create-slug {
   flex: 0 0 auto;
   max-width: none;
@@ -58,6 +62,7 @@
 .entity-admin-grid {
   min-width: 0;
   display: grid;
+  padding-top: var(--admin-list-safe-area);
   grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
   gap: var(--admin-card-grid-gap);
   align-content: start;
@@ -68,7 +73,7 @@
   gap: 10px;
   padding: 14px;
   border: 1px solid var(--admin-color-border-card);
-  border-radius: 10px;
+  border-radius: 6px;
   background: var(--admin-color-surface-primary);
 }
 .entity-card-row {
@@ -143,10 +148,6 @@
 }
 
 @media (max-width: 760px) {
-  /* 窄屏控件区各行统一 8px；桌面单行与换行时保持 10px。 */
-  .admin-create-form {
-    gap: 8px;
-  }
   .admin-create-form input,
   .admin-create-form .admin-create-field,
   .admin-create-form .entity-slug-field {
@@ -155,6 +156,5 @@
   }
   .admin-create-form > button {
     flex: 1;
-    min-height: 44px;
   }
 }

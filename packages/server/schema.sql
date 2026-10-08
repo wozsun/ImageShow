@@ -82,7 +82,19 @@ CREATE UNIQUE INDEX idx_author_identity
 ON author(identity_provider, identity_id)
 WHERE identity_provider IS NOT NULL AND identity_id IS NOT NULL;
 
--- Image truth and relations
+-- Manually curated random-image scopes
+CREATE TABLE image_group (
+  slug TEXT PRIMARY KEY,
+  display_name TEXT NOT NULL DEFAULT '',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (length(slug) <= 32),
+  CHECK (slug ~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'),
+  CHECK (length(display_name) <= 64)
+);
+
+-- Image truth
 CREATE TABLE metadata (
   id UUID PRIMARY KEY,
   status TEXT NOT NULL DEFAULT 'ready',
@@ -179,6 +191,7 @@ ON metadata(device, brightness, theme, id) WHERE status = 'ready';
 CREATE INDEX idx_metadata_ready_id_suffix
 ON metadata ((right(id::text, 12))) WHERE status = 'ready';
 
+-- Image relations
 CREATE TABLE image_tag (
   image_id UUID NOT NULL REFERENCES metadata(id) ON DELETE CASCADE,
   tag_slug TEXT NOT NULL REFERENCES tag(slug) ON DELETE CASCADE,
@@ -187,6 +200,14 @@ CREATE TABLE image_tag (
 );
 
 CREATE INDEX idx_image_tag_tag ON image_tag(tag_slug, image_id);
+
+CREATE TABLE image_group_member (
+  group_slug TEXT NOT NULL REFERENCES image_group(slug) ON DELETE CASCADE,
+  image_id UUID NOT NULL REFERENCES metadata(id) ON DELETE CASCADE,
+  PRIMARY KEY (group_slug, image_id)
+);
+
+CREATE INDEX idx_image_group_member_image ON image_group_member(image_id);
 
 -- One PostgreSQL-owned revision validates the entire rebuildable image cache.
 -- Redis never becomes authoritative; cache-affecting business transactions
@@ -254,22 +275,3 @@ CREATE TABLE admin_account (
 
 CREATE UNIQUE INDEX idx_admin_single_super
 ON admin_account((role)) WHERE role = 'super';
-
--- Manually curated random-image scopes
-CREATE TABLE image_group (
-  slug TEXT PRIMARY KEY,
-  display_name TEXT NOT NULL DEFAULT '',
-  sort_order INTEGER NOT NULL DEFAULT 0,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CHECK (length(slug) <= 32),
-  CHECK (slug ~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'),
-  CHECK (length(display_name) <= 64)
-);
-
-CREATE TABLE image_group_member (
-  group_slug TEXT NOT NULL REFERENCES image_group(slug) ON DELETE CASCADE,
-  image_id UUID NOT NULL REFERENCES metadata(id) ON DELETE CASCADE,
-  PRIMARY KEY (group_slug, image_id)
-);
-CREATE INDEX idx_image_group_member_image ON image_group_member(image_id);

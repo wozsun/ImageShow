@@ -498,7 +498,7 @@ body:has(.admin > .workspace-contained) {
   grid-template-columns: minmax(0, 1fr) max-content;
   grid-template-areas:
     "heading accessory"
-    "description accessory";
+    "description description";
 }
 /* 操作组高于标题与描述时，多出的高度落在第三行，标题与描述的位置与无操作页头一致。 */
 .workspace-grid-head.has-actions {
@@ -536,18 +536,20 @@ body:has(.admin > .workspace-contained) {
 }
 .workspace-pinned > h1 {
   grid-area: heading;
-  min-height: 36px;
+  min-height: var(--admin-title-row-height);
   display: flex;
   align-items: center;
 }
 .workspace-title-accessory {
   grid-area: accessory;
-  align-self: start;
+  align-self: center;
   justify-self: end;
 }
+/* 副标题行高固定为 20px：默认行高随字体回退变化，会把下方操作区推低，与图片页错开。 */
 .workspace-pinned > p {
   grid-area: description;
   min-width: 0;
+  line-height: 20px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

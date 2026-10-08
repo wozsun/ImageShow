@@ -38,7 +38,7 @@ curl "https://img.example.com/random?mode=json&limit=3"
 | `mode` | `redirect`、`proxy`、`json` | 返回方式，见[返回方式](#返回方式)。省略时使用站点默认值（默认 `redirect`），`json` 只能显式指定 |
 | `limit` | 正整数 | 一次最多返回几张不重复的图片，超过 200 按 200 处理。大于 1 时只能搭配 `mode=json`；`limit=1` 与不填相同，任何返回方式都可用 |
 | `seed` | 任意字符串 | 固定选图，见[固定选图](#固定选图) |
-| `fallback` | 维度列表、`all`、`none` | 零匹配时允许放宽的条件，见[零匹配回退](#零匹配回退) |
+| `fallback` | 维度列表、`all`、`none` | 零匹配时依次放宽的条件，见[零匹配回退](#零匹配回退) |
 | `id` | 图片 ID | 从指定图片范围中选，见[指定图片](#指定图片) |
 | `group` | 分组标识 | 从指定分组的成员中选，见[图片分组](#图片分组) |
 
@@ -46,7 +46,7 @@ curl "https://img.example.com/random?mode=json&limit=3"
 - 不存在的主题、标签、作者不匹配任何图片：`theme=a,写错的名字` 只返回主题 a 的图片，排除不存在的名字没有效果；要包含的名字全部不存在且未允许对应维度回退时返回 404，错误详情的 `ignored` 列出这些名字。
 - `theme=null` 只选没有主题的图片，`theme=!null` 只选有主题的图片；`author=null`、`author=!null` 同理，按有无作者筛选。`null` 可与其他名字混写，如 `author=photographer,null` 为该作者或没有作者的图片。
 - 参数值为空或只有空白（如 `device=`）时视为未填写，`seed`、`id` 和 `group` 除外；除 `seed` 外，参数值和列表项的首尾空白会被忽略，逗号分隔的列表会忽略空项，如 `theme=a,`；`theme`、`author` 还会忽略空的排除项，如 `theme=a,!`。
-- `device`、`brightness`、`seed`、`mode`、`size`、`limit` 只取一个值。重复出现时，取值相同（不区分大小写，`seed` 除外）或其余几次为空，按一次处理，如 `size=small&size=small`、`device=&device=pc`；取值不同返回 400。
+- `device`、`brightness`、`fallback`、`seed`、`mode`、`size`、`limit` 只取一个值。重复出现时，取值相同（不区分大小写，`seed` 除外）或其余几次为空，按一次处理，如 `size=small&size=small`、`device=&device=pc`；取值不同返回 400。`fallback` 比较时忽略空格和空项，但顺序不同算作不同取值。
 - 参数名必须小写；不认识的参数会返回 400。
 
 参数可以自由组合，分三类：`id` 与 `group` 决定从哪些图片里选，两者取并集，都省略时为整个图库；`device`、`brightness`、`theme`、`tag`、`author` 在其中筛选，同时满足才会被选中；`seed`、`limit`、`mode`、`size` 决定怎样取图和返回。
@@ -76,13 +76,15 @@ curl "https://img.example.com/random?mode=json&limit=3"
 
 ## 零匹配回退
 
-默认严格匹配。可用 `fallback=device,brightness` 指定零匹配时允许放宽的维度，支持 `device`、`brightness`、`author`、`tag`、`theme`；逗号列表和重复参数等价，书写顺序不影响结果。`all` 允许全部维度，省略、空值或 `none` 不放宽；`none` 不能与其他值混写，`null` 与未知值返回 400。
+默认严格匹配。可用 `fallback=brightness,theme` 指定零匹配时允许放宽的维度，支持 `device`、`brightness`、`author`、`tag`、`theme`；书写顺序就是放宽顺序，每个维度只写一次。列表末尾可以写 `all`，表示其余维度按站点配置的顺序（`site.random_fallback_order`，默认为设备、明暗、作者、标签、主题）接在后面；单独写 `all` 即全部维度按站点顺序放宽。省略、空值或 `none` 不放宽。列表中同一项写了两次、`all` 不在末尾、`none` 与其他值混写、`null` 与未知值返回 400。
 
-站点按 `site.random_fallback_order` 的配置顺序累加放宽，默认顺序为设备、明暗、作者、标签、主题；每放宽一项重新选图，有结果即停止，数量不足 `limit` 时也不会继续补齐。未实际限制的维度直接跳过；缺省 / 自动设备在识别出访问设备时也是限制，`device=all` 或无法识别设备时不算限制。
+整个列表写在一个 `fallback` 参数里，用逗号分隔；中间经过的 CDN 可能重排查询参数，但不会改动参数值内部的顺序，所以不能用多个 `fallback` 参数表达顺序。
+
+按列表顺序累加放宽，每放宽一项重新选图，有结果即停止，数量不足 `limit` 时也不会继续补齐。未实际限制的维度直接跳过；缺省 / 自动设备在识别出访问设备时也是限制，`device=all` 或无法识别设备时不算限制。
 
 主题和作者只去掉包含条件，所有 `!` 排除条件仍有效；标签表达式整体去掉。未知的包含名称也可以随对应维度放宽。指定图片范围始终保留，范围为空仍返回 404。400、429、503、缓存不可用和近期图片重复本身不触发回退。
 
-例如 `/random?theme=city&brightness=dark&fallback=brightness,theme` 先找暗色城市图片，再找不限明暗的城市图片，仍无匹配才移除主题条件。JSON 的 `fallback` 始终列出实际放宽的维度（按应用顺序），没有放宽时为 `[]`；跳转与代理只返回图片，不增加响应头。固定 `seed` 同时考虑有效筛选与实际放宽的维度集合。
+例如 `/random?theme=city&brightness=dark&fallback=brightness,theme` 先找暗色城市图片，再找不限明暗的城市图片，仍无匹配才移除主题条件；写成 `fallback=theme,brightness` 则先找不限主题的暗色图片。JSON 的 `fallback` 始终列出实际放宽的维度（按应用顺序），没有放宽时为 `[]`；跳转与代理只返回图片，不增加响应头。固定 `seed` 同时考虑有效筛选与实际放宽的维度集合，与放宽的先后无关。
 
 ## 返回方式
 

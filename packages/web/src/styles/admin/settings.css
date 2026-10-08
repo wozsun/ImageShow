@@ -234,8 +234,11 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  gap: var(--admin-control-gap);
   min-width: 0;
+}
+.settings-head-actions > button {
+  height: var(--admin-control-height);
 }
 .settings-page > .query-error-state {
   flex: 1;

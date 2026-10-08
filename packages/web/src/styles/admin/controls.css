@@ -1,10 +1,28 @@
 :root {
-  /* 后台页面与可独立懒加载的管理编辑器共用卡片集合密度。 */
-  --admin-card-grid-gap: 6px;
+  /* 后台页面与可独立懒加载的管理编辑器共用卡片集合密度；窄屏收紧。 */
+  --admin-card-grid-gap: 8px;
   --admin-toggle-thumb-width: 12px;
   --admin-toggle-thumb-height: 22px;
   --admin-toggle-edge-gap: 5px;
   --admin-toggle-label-gap: 3px;
+  /* 页面操作区（页头操作组、工具栏与新建表单）中输入框、下拉框和文字按钮的高度，桌面与窄屏相同；
+     用 height 固定，内容撑开的高度会随字体行高出现半像素差。 */
+  --admin-control-height: 40px;
+  /* 操作区内控件之间、各行之间的间距，窄屏收紧。 */
+  --admin-control-gap: 10px;
+  /* 页头标题行：桌面与操作区控件同高，标题与右侧按钮中线对齐；窄屏为紧凑的 36px。 */
+  --admin-title-row-height: 40px;
+  /* 列表滚动区顶部的安全区：桌面列表在自身滚动区内滚动，卡片悬浮上移或阴影不被裁切；
+     窄屏整页滚动，只留 2px，像素取整时首张卡片的上边框不被吸顶操作区的底色盖住。 */
+  --admin-list-safe-area: 8px;
+}
+@media (max-width: 760px) {
+  :root {
+    --admin-card-grid-gap: 6px;
+    --admin-control-gap: 8px;
+    --admin-title-row-height: 36px;
+    --admin-list-safe-area: 2px;
+  }
 }
 
 button.state-toggle-button {
@@ -286,6 +304,8 @@ button.state-toggle-button:focus-visible {
 .action-feedback-region {
   min-width: 0;
   overflow: hidden;
+  /* 与临时替换的副标题同为 20px 行高，消息出现时页头高度不变。 */
+  line-height: 20px;
 }
 /* 空区域不占位；portal 子节点写入后 :empty 自动失效。 */
 .action-feedback-region:empty {

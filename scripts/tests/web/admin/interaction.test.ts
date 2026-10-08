@@ -1438,7 +1438,7 @@ test("[Web/后台] 后台图片筛选在临界视口保持清空、无障碍名�
   const structures: string[][] = [];
 
   for (const [width, primary, secondary] of [
-    [760, ["device", "brightness", "theme"], ["tag", "author"]],
+    [760, ["device", "brightness", "theme"], ["author", "tag"]],
     [761, ["device", "brightness", "author"], ["theme", "tag"]],
     [986.99, ["device", "brightness", "author"], ["theme", "tag"]],
     [987, ["device", "brightness", "author"], ["theme", "tag"]],

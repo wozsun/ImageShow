@@ -6,19 +6,18 @@
 }
 
 .image-list-toolbar {
-  min-height: 44px;
-  display: flex;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
+  gap: var(--admin-control-gap);
   color: var(--admin-color-text-secondary);
 }
 .image-list-toolbar-actions {
-  margin-left: auto;
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: flex-end;
+  gap: var(--admin-control-gap);
 }
 
 .image-list-toolbar-actions button {
@@ -72,13 +71,12 @@
 }
 .admin-image-grid {
   display: grid;
-  gap: var(--admin-card-grid-gap);
-}
-.admin-image-grid {
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: var(--admin-card-grid-gap);
   align-items: start;
   grid-auto-rows: min-content;
-  padding-block: 8px;
+  padding-top: var(--admin-list-safe-area);
+  padding-bottom: 8px;
 }
 .image-admin-view-switch {
   display: inline-flex;
@@ -87,6 +85,7 @@
   overflow: hidden;
 }
 .image-admin-view-switch button {
+  min-width: 76px;
   border: 0;
   border-radius: 0;
 }
@@ -100,7 +99,7 @@
   gap: 10px;
   background: var(--admin-color-surface-primary);
   border: 1px solid var(--admin-color-image-card-border);
-  border-radius: 8px;
+  border-radius: 6px;
   padding: 8px;
   transition:
     border-color 0.16s ease,
@@ -272,9 +271,13 @@
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--admin-control-gap);
 }
-/* 标题与副标题的几何与共用页头（WorkspaceHeader）一致：标题行 36px；页面反馈临时替换副标题。 */
+/* 导入、上传与桌面的图库 / 回收站切换同属操作区；切换的边框在外框上，内部按钮随外框拉伸。 */
+.image-admin-head-tools :is(.ingestion-trigger, .split-action-menu-trigger, .image-admin-view-switch) {
+  height: var(--admin-control-height);
+}
+/* 标题与副标题的几何与共用页头（WorkspaceHeader）一致：标题行取共用高度、副标题行高 20px；页面反馈临时替换副标题。 */
 .image-admin-head-copy {
   flex: 1 1 0;
   min-width: 0;
@@ -286,13 +289,13 @@
 }
 .image-admin-head-copy > h1 {
   grid-area: title;
-  min-height: 36px;
+  min-height: var(--admin-title-row-height);
   display: flex;
   align-items: center;
 }
 .image-admin-head-copy > p {
   grid-area: status;
-  min-height: 20px;
+  line-height: 20px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -302,9 +305,8 @@
   margin-top: 4px;
 }
 .image-list-filter-bar {
-  --image-list-filter-control-height: 40px;
   --image-list-filter-action-width: 55px;
-  margin-bottom: 10px;
+  margin-bottom: var(--admin-control-gap);
 }
 .image-list-filter-actions,
 .image-list-filter-toggle {
@@ -314,7 +316,7 @@
   width: min(100%, var(--admin-image-controls-max-width));
   display: grid;
   align-items: end;
-  gap: 12px;
+  gap: var(--admin-control-gap);
 }
 .image-list-filter-primary,
 .image-list-filter-secondary {
@@ -359,8 +361,7 @@
 }
 .image-list-filter-clear {
   width: 100%;
-  min-height: var(--image-list-filter-control-height);
-  height: var(--image-list-filter-control-height);
+  height: var(--admin-control-height);
   padding-inline: 10px;
   white-space: nowrap;
   color: var(--admin-color-text-primary);
@@ -368,34 +369,26 @@
   border-color: var(--admin-color-border-control);
 }
 .image-list-filter-panel :is(.select-trigger, .facet-search-input, .facet-search-collapse) {
-  height: var(--image-list-filter-control-height);
+  height: var(--admin-control-height);
   color: var(--admin-color-text-primary);
   background: var(--admin-color-surface-primary);
   border-color: var(--admin-color-border-control);
 }
-.image-list-toolbar {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  align-items: center;
-}
-.image-list-toolbar > .image-list-toolbar-actions {
-  min-width: 0;
-  margin-left: 0;
-  justify-content: flex-end;
-}
 .image-list-batch-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--admin-control-gap);
 }
 .image-list-batch-actions > button {
-  flex: 0 0 auto;
-  white-space: nowrap;
+  height: var(--admin-control-height);
 }
 
 @media (min-width: 761px) {
   .image-list-controls {
     container: image-list-controls / inline-size;
+  }
+  .image-list-toolbar {
+    margin-bottom: var(--admin-control-gap);
   }
   .image-list-filter-panel {
     display: flex;
@@ -406,15 +399,11 @@
     min-width: var(--image-list-filter-basis);
     flex: 1 1 var(--image-list-filter-basis);
   }
-  .image-admin-head {
-    align-items: center;
-  }
   .image-admin-head .image-admin-view-switch {
     flex: 0 0 auto;
   }
   .image-admin-head .image-admin-view-switch button {
     flex: 1 1 0;
-    min-width: 76px;
   }
   .image-admin-head-tools .ingestion-triggers {
     flex: 0 1 auto;
@@ -428,9 +417,6 @@
 }
 
 @media (min-width: 761px) and (max-width: 1080px) {
-  .image-admin-head {
-    align-items: flex-start;
-  }
   .image-admin-head-tools {
     flex-direction: column;
     align-items: flex-end;
@@ -444,8 +430,7 @@
   .image-admin-head-tools .import-source-split {
     flex: 0 0 auto;
   }
-  .image-admin-head-tools .ingestion-triggers .import-source-main,
-  .image-admin-head-tools .ingestion-triggers > .ingestion-trigger {
+  .image-admin-head-tools .ingestion-triggers .ingestion-trigger {
     min-width: 0;
     padding-inline: 8px;
   }
@@ -467,7 +452,7 @@
     .image-list-filter-secondary {
       min-width: 0;
       display: flex;
-      gap: 12px;
+      gap: var(--admin-control-gap);
     }
     .image-list-filter-primary > .image-list-filter-field,
     .image-list-filter-secondary > .image-list-filter-field {
@@ -483,15 +468,11 @@
 }
 
 @media (max-width: 760px) {
-  /* 列表顶部间距由操作区底部内边距提供。 */
-  .admin-image-grid {
-    padding-top: 0;
-  }
   /* 视图切换与标题同行。行距与共用页头窄屏一致：标题到副标题 12px。 */
   .image-admin-head-copy {
     display: grid;
     grid-template-columns: max-content minmax(0, 1fr);
-    grid-template-rows: 36px 20px;
+    grid-template-rows: var(--admin-title-row-height) 20px;
     grid-template-areas:
       "title switch"
       "status status";
@@ -507,15 +488,12 @@
     grid-area: switch;
     justify-self: end;
   }
-  .image-admin-head .image-admin-view-switch button {
-    min-width: 76px;
-  }
-  /* 回收站视图没有导入 / 上传时只保留列表工具栏；副标题到操作区的 16px 由吸顶标题区提供，
-     操作区内导入 / 上传与筛选之间和其余各行一样为 8px。 */
+  /* 回收站视图没有导入 / 上传时只保留列表工具栏；副标题到操作区的 16px 由吸顶标题区与操作区的内边距
+     提供（见 responsive.css），操作区内各行之间使用统一的控件间距。 */
   .image-admin-toolbar {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--admin-control-gap);
   }
   .image-admin-head-tools:empty {
     display: none;
@@ -523,10 +501,6 @@
   /* 竖排时不沿用桌面换行用的 100% 基准，否则按高度解析会把操作区算矮。 */
   .image-list-controls {
     flex: 0 0 auto;
-  }
-  /* 操作区到列表的间距只由操作区底部内边距提供。 */
-  .image-list-toolbar {
-    margin-bottom: 0;
   }
   .image-admin-head-tools {
     flex-direction: column;
@@ -540,27 +514,26 @@
     flex: 1 1 auto;
     min-width: 0;
   }
-  .image-admin-head-tools .import-source-main,
-  .image-admin-head-tools .ingestion-trigger {
+  .image-admin-head-tools .ingestion-triggers .ingestion-trigger {
     flex: 1 1 auto;
     min-width: 0;
   }
-  /* 窄屏控件区各行统一 8px，与工具栏两行之间、按钮之间的间距一致。 */
   .image-list-filter-bar {
     position: relative;
-    margin-bottom: 8px;
   }
   .image-list-filter-bar:is(.filters-open, .filters-motion-enabled) {
     z-index: 20;
   }
+  /* 外框（含边框）为操作区控件高度，内部的筛选与清空按钮随外框拉伸。 */
   .image-list-filter-actions {
     width: 100%;
+    height: var(--admin-control-height);
     display: grid;
     grid-template-columns: minmax(0, 1fr) 1px 72px;
     align-items: stretch;
     background: transparent;
     border: 1px solid var(--admin-color-border-control);
-    border-radius: 8px;
+    border-radius: 6px;
   }
   .image-list-filter-toggle {
     --pressable-active-scale: var(--pressable-scale-large, 0.99);
@@ -570,12 +543,12 @@
     justify-content: flex-start;
     gap: 8px;
     width: auto;
-    min-height: 40px;
-    padding: 8px 14px;
+    min-height: 0;
+    padding: 0 14px;
     color: var(--admin-color-text-primary);
     background: var(--admin-color-surface-primary);
     border: 0;
-    border-radius: 7px 0 0 7px;
+    border-radius: 5px 0 0 5px;
     font-weight: 600;
   }
   .image-list-filter-bar.filters-open > .image-list-filter-actions {
@@ -598,10 +571,10 @@
 
     min-width: 72px;
     height: auto;
-    min-height: 40px;
-    padding-inline: 12px;
+    min-height: 0;
+    padding: 0 12px;
     border: 0;
-    border-radius: 0 7px 7px 0;
+    border-radius: 0 5px 5px 0;
   }
   .image-list-filter-count {
     min-width: 20px;
@@ -633,8 +606,8 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas:
       "device brightness"
-      "theme tag"
-      "author author";
+      "theme author"
+      "tag tag";
     align-items: end;
     gap: 12px;
     padding: 12px;
@@ -644,7 +617,7 @@
     background: var(--admin-color-workflow-filter-surface);
     border: 1px solid var(--admin-color-border-control);
     border-top: 0;
-    border-radius: 0 0 8px 8px;
+    border-radius: 0 0 6px 6px;
     box-shadow: 0 12px 32px var(--admin-shadow-panel);
     transform: scaleY(0.98);
     transform-origin: top center;
@@ -664,10 +637,8 @@
     transition-delay: 0s;
   }
   .image-list-toolbar {
-    display: grid;
     grid-template-columns: max-content minmax(0, 1fr) max-content;
-    align-items: center;
-    column-gap: 8px;
+    align-items: stretch;
   }
   .image-list-selection {
     grid-column: 1;
@@ -684,7 +655,6 @@
   }
   .image-list-batch-actions {
     grid-column: 3;
-    gap: 4px;
   }
   .image-list-batch-actions > button {
     width: auto;
@@ -712,23 +682,15 @@
   .admin-image-card-actions {
     gap: 4px;
   }
-  .image-list-toolbar {
-    align-items: stretch;
-  }
 }
 
 @media (max-width: 546px) {
   .image-list-toolbar {
     grid-template-columns: minmax(0, 1fr) max-content;
     grid-template-rows: 36px auto;
-    row-gap: 8px;
   }
-  .image-list-selection {
-    grid-column: 1;
-    grid-row: 1;
-  }
+  .image-list-selection,
   .image-list-toolbar-actions > .image-list-view-controls {
-    grid-column: 2;
     grid-row: 1;
   }
   .image-list-batch-actions {
@@ -739,7 +701,6 @@
   }
   .image-list-batch-actions > button {
     width: 100%;
-    min-height: 40px;
   }
   .image-list-batch-actions > button:only-child {
     grid-column: 1 / -1;
@@ -750,7 +711,7 @@
 @media (max-width: 260px) {
   .image-admin-head-copy {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: 36px 20px auto;
+    grid-template-rows: var(--admin-title-row-height) 20px auto;
     grid-template-areas:
       "title"
       "status"

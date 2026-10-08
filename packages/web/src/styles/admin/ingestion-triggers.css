@@ -1,6 +1,6 @@
 .ingestion-triggers {
   display: flex;
-  gap: 10px;
+  gap: var(--admin-control-gap);
 }
 .ingestion-trigger {
   min-width: 120px;

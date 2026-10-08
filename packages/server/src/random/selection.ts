@@ -46,7 +46,8 @@ export async function selectRandomImages(
   const parsed = parseRandomQuery(
     url,
     random_method,
-    random_size
+    random_size,
+    random_fallback_order
   );
   if (parsed instanceof Response) return parsed;
 
@@ -66,7 +67,7 @@ export async function selectRandomImages(
   let recent: Set<string> | undefined;
   const relaxed: RandomFallbackDimension[] = [];
   let current = parsed;
-  const pending = random_fallback_order.filter((dimension) => parsed.fallback.includes(dimension));
+  const pending = [...parsed.fallback];
 
   while (true) {
     signal.throwIfAborted();
@@ -86,7 +87,7 @@ export async function selectRandomImages(
         ...(query.scoped ? { range: { groups: query.groups, ids: query.ids } } : {})
       });
       // The seed depends on the effective plan and the set of relaxed dimensions,
-      // not the order in which the caller wrote fallback or the requested limit.
+      // not the order in which they were relaxed or the requested limit.
       const relaxedSet = randomFallbackDimensions.filter((dimension) => relaxed.includes(dimension));
       const seed = query.seed !== null && relaxedSet.length
         ? JSON.stringify([query.seed, relaxedSet])
