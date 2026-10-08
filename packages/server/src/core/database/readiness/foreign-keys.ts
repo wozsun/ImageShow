@@ -1,4 +1,9 @@
-import type { DatabaseReader, DatabaseReadinessContract, RequiredForeignKey } from "./contract.ts";
+import {
+  requiredForeignKeys,
+  requiredTableNames,
+  type DatabaseReader,
+  type RequiredForeignKey
+} from "./contract.ts";
 import { primaryKeyLabel, sameColumns } from "./constraint-helpers.ts";
 
 type ForeignKeyRow = {
@@ -23,7 +28,7 @@ function foreignKeyLabel(required: RequiredForeignKey) {
   );
 }
 
-export async function assertRequiredForeignKeys(database: DatabaseReader, contract: DatabaseReadinessContract) {
+export async function assertRequiredForeignKeys(database: DatabaseReader) {
   const rows = (
     await database.query<ForeignKeyRow>(
       `SELECT source.relname AS table_name,
@@ -58,10 +63,10 @@ export async function assertRequiredForeignKeys(database: DatabaseReader, contra
         AND target_namespace.nspname='public'
         AND source.relname=ANY($1::text[])
         AND constraint_record.contype='f'`,
-      [Object.keys(contract.tables)]
+      [requiredTableNames]
     )
   ).rows;
-  const missing = contract.foreignKeys.filter(
+  const missing = requiredForeignKeys.filter(
     (required) =>
       !rows.some(
         (row) =>

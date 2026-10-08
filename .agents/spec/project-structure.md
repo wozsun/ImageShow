@@ -52,7 +52,7 @@ core / config
 - HTTP schema 以领域 DTO / 输入类型作编译期约束；列表、统计、JSONL 和 cursor 等非 HTTP 契约由对应图片或 Ingestion 模块拥有，领域模块不得反向导入 `routes/validation/`。
 - `core/` 和运行配置 schema / store 提供基础设施，不依赖业务领域或路由。`config/` 唯一拥有 RuntimeConfig 写入协调、持久化和内存发布；`app-settings.ts` 拥有公开 / 后台投影与完整配置保存，组合存储注册表的 Host 冲突校验，基础配置模块不反向依赖该入口。
 - `core/http/` 拥有供路由与审计共用的请求上下文契约；`users/` 实现会话认证及持久化。审计基础设施不得通过会话读取助手反向依赖用户业务。
-- 数据库启动负责空库完整初始化与非空库最小只读 readiness（6.8.0 的一次性升级例外见[数据库结构维护](../reference/database.md#结构维护与-readiness)）；既有结构由维护者处理，额外表不进入数据或权限核对，必需结构不满足时明确失败。
+- 数据库启动负责空库完整初始化与非空库最小只读 readiness；既有结构由维护者处理，额外表不进入数据或权限核对，必需结构不满足时明确失败。
 - `core/redis/` 只拥有唯一 client、连接与能力探测和通用 Redis 原语；具体领域拥有自己的 Lua、命令注册、参数布局和返回解析，不以导入副作用反转依赖方向。
 - 三档名称、对象目录、资源路径与随机 API 尺寸统一使用 `large/medium/small`；数据库保留 `l_/m_/s_` 列前缀，列映射由图片事实读取模块持有。
 - `images/` 拥有图片读写、展示、分类、回收站、缩略图、read model、ready cache 与 Ingestion；分类只更新 metadata 与必要投影，不得依赖或触发对象搬迁。`trash/` 集中回收站与永久删除流程，`serving/` 集中图片寻址、对象响应与外部原图处理。正式展示图与缩略图属于公开资源，外部原图由管理路由先校验会话再交给 `serving/`，访问与投影规则见[安全与主机](../reference/security.md#会话与鉴权)。回收站永久删除的逐图意图由 `background_job.target_id` 与幂等键持有，metadata 不保存任务字段。

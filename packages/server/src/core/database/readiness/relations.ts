@@ -1,6 +1,6 @@
-import type { DatabaseReader, DatabaseReadinessContract } from "./contract.ts";
+import { databaseReadiness, requiredTableNames, type DatabaseReader } from "./contract.ts";
 
-export async function assertRequiredTablesAndColumns(database: DatabaseReader, contract: DatabaseReadinessContract) {
+export async function assertRequiredTablesAndColumns(database: DatabaseReader) {
   const rows = (
     await database.query<{
       table_name: string;
@@ -31,12 +31,12 @@ export async function assertRequiredTablesAndColumns(database: DatabaseReader, c
          ON defaults.adrelid=attribute.attrelid AND defaults.adnum=attribute.attnum
       WHERE namespace.nspname='public'
         AND relation.relname = ANY($1::text[])`,
-      [Object.keys(contract.tables)]
+      [requiredTableNames]
     )
   ).rows;
 
   const relationKinds = new Map(rows.map((row) => [row.table_name, row.relation_kind]));
-  const invalidTables = Object.keys(contract.tables).filter((table) => {
+  const invalidTables = requiredTableNames.filter((table) => {
     const kind = relationKinds.get(table);
     return kind !== "r" && kind !== "p";
   });
@@ -48,7 +48,7 @@ export async function assertRequiredTablesAndColumns(database: DatabaseReader, c
 
   const actualColumns = new Map(rows.map((row) => [`${row.table_name}.${row.column_name}`, row]));
   const incompatible: string[] = [];
-  for (const [table, readiness] of Object.entries(contract.tables)) {
+  for (const [table, readiness] of Object.entries(databaseReadiness)) {
     for (const [column, expectedType] of Object.entries(readiness.columns)) {
       const actual = actualColumns.get(`${table}.${column}`);
       if (!actual

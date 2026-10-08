@@ -1,4 +1,10 @@
-import type { DatabaseReader, DatabaseReadinessContract, RequiredUniqueIndex } from "./contract.ts";
+import {
+  requiredPrimaryKeys,
+  requiredTableNames,
+  requiredUniqueIndexes,
+  type DatabaseReader,
+  type RequiredUniqueIndex
+} from "./contract.ts";
 import { primaryKeyLabel, sameColumns } from "./constraint-helpers.ts";
 
 type UniqueIndexRow = {
@@ -61,7 +67,7 @@ function uniqueIndexLabel(required: RequiredUniqueIndex) {
   return `${primaryKeyLabel(required)}${predicate}`;
 }
 
-export async function assertRequiredUniqueIndexes(database: DatabaseReader, contract: DatabaseReadinessContract) {
+export async function assertRequiredUniqueIndexes(database: DatabaseReader) {
   const rows = (
     await database.query<UniqueIndexRow>(
       `SELECT relation.relname AS table_name,
@@ -96,7 +102,7 @@ export async function assertRequiredUniqueIndexes(database: DatabaseReader, cont
       WHERE namespace.nspname='public'
         AND relation.relname=ANY($1::text[])
         AND index_record.indisunique`,
-      [Object.keys(contract.tables)]
+      [requiredTableNames]
     )
   ).rows;
   const usable = (row: UniqueIndexRow) =>
@@ -105,7 +111,7 @@ export async function assertRequiredUniqueIndexes(database: DatabaseReader, cont
     && row.is_ready
     && row.is_live
     && row.expressions === null;
-  const missingPrimaryKeys = contract.primaryKeys.filter(
+  const missingPrimaryKeys = requiredPrimaryKeys.filter(
     (required) =>
       !rows.some(
         (row) =>
@@ -124,7 +130,7 @@ export async function assertRequiredUniqueIndexes(database: DatabaseReader, cont
     );
   }
 
-  const missingUniqueIndexes = contract.uniqueIndexes.filter(
+  const missingUniqueIndexes = requiredUniqueIndexes.filter(
     (required) =>
       !rows.some(
         (row) =>

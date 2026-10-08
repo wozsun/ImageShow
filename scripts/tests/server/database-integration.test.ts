@@ -1,7 +1,7 @@
 import "../support/server-environment.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { readFile, rm } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import {
   join,
   resolve,
@@ -249,7 +249,6 @@ const selectedDatabaseScenario = process.env.IMAGESHOW_DATABASE_SCENARIO;
 const selectedStorageIngestionScenario = process.env.IMAGESHOW_STORAGE_INGESTION_SCENARIO;
 const databaseScenarioIds = new Set([
   "schema-baseline",
-  "upgrade-6.7.9",
   "storage-ingestion",
   "cold-redis",
   "readiness"
@@ -1058,71 +1057,6 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
     );
 
     await runDatabaseScenario(
-      "upgrade-6.7.9",
-      "6.7.9 单事务升级、数据保留、重复启动及不完整旧库拒绝 DDL（6.8.1 删除）",
-      180_000,
-      async () => {
-        const fixture = await readFile(resolve(workspace, "scripts/tests/verify/fixtures/schema-6.7.9.sql"), "utf8");
-        const old = databaseName("upgrade679");
-        await createDatabase(old);
-        await withClient(old, async (client) => {
-          await client.query(fixture);
-          await client.query(`INSERT INTO tag(slug,display_name) VALUES('preserved','原始数据');
-            UPDATE ready_image_revision SET revision=37;
-            CREATE TABLE upgrade_ddl_events (transaction_id bigint NOT NULL);
-            CREATE FUNCTION capture_upgrade_ddl() RETURNS event_trigger LANGUAGE plpgsql AS $$
-              BEGIN INSERT INTO upgrade_ddl_events VALUES(txid_current()); END $$;
-            CREATE EVENT TRIGGER capture_upgrade ON ddl_command_end EXECUTE FUNCTION capture_upgrade_ddl();`);
-        });
-        await withClient(old, (client) => client.query(
-          `INSERT INTO metadata(id,created_by,storage_slug,device,brightness,
-             l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5)
-           VALUES($1,'upgrade-fixture','local','pc','dark',1,1,1,$2,1,1,1,$2,1,1,1,$2)`,
-          [randomUUID(), "a".repeat(32)]
-        ));
-        const originalData = (await dataDump(old)).replaceAll("ready_image_revision", "projection_revision");
-        await initialize(old);
-        await withClient(old, async (client) => {
-          assert.equal((await client.query("SELECT count(DISTINCT transaction_id)::int AS n FROM upgrade_ddl_events")).rows[0].n, 1);
-          assert.equal((await client.query("SELECT revision::text FROM projection_revision")).rows[0].revision, "37");
-          assert.equal((await client.query("SELECT to_regclass('ready_image_revision') AS old")).rows[0].old, null);
-          const sortColumn = (await client.query("SELECT data_type,is_nullable,column_default FROM information_schema.columns WHERE table_schema='public' AND table_name='image_group' AND column_name='sort_order'")).rows[0];
-          assert.deepEqual(sortColumn, { data_type: "integer", is_nullable: "NO", column_default: "0" });
-          await client.query("DROP EVENT TRIGGER capture_upgrade; DROP FUNCTION capture_upgrade_ddl(); TRUNCATE upgrade_ddl_events;");
-        });
-        // New empty tables have no INSERT statements; compare every original row.
-        const inserts = (dump: string) => dump.split("\n").filter((line) => line.startsWith("INSERT INTO "));
-        assert.deepEqual(inserts(await dataDump(old)), inserts(originalData));
-        const beforeRepeat = await Promise.all([schemaDump(old), dataDump(old)]);
-        const repeated = await initialize(old);
-        assert.doesNotMatch(processResultText(repeated), /database_upgrade_6_8_0_completed/);
-        assert.deepEqual(await Promise.all([schemaDump(old), dataDump(old)]), beforeRepeat);
-        for (const [label, change] of [
-          ["partial", "CREATE TABLE image_group(slug text PRIMARY KEY)"],
-          ["renamed", "ALTER TABLE ready_image_revision RENAME TO projection_revision"],
-          ["column", "ALTER TABLE metadata DROP COLUMN title"],
-          ["constraint", "ALTER TABLE image_tag DROP CONSTRAINT image_tag_pkey"]
-        ]) {
-          const invalid = databaseName(`upgrade_${label}`);
-          await createDatabase(invalid);
-          await withClient(invalid, async (client) => {
-            await client.query(fixture);
-            await client.query(change!);
-            await client.query(`CREATE FUNCTION forbid_upgrade_ddl() RETURNS event_trigger LANGUAGE plpgsql AS $$
-              BEGIN RAISE EXCEPTION 'DDL should not run'; END $$;
-              CREATE EVENT TRIGGER forbid_upgrade ON ddl_command_start EXECUTE FUNCTION forbid_upgrade_ddl();`);
-          });
-          const before = await Promise.all([schemaDump(invalid), dataDump(invalid)]);
-          const rejected = await initialize(invalid, true);
-          assert.notEqual(rejected.code, 0);
-          assert.match(processResultText(rejected), /non-empty but is not ready/);
-          assert.doesNotMatch(processResultText(rejected), /DDL should not run/);
-          assert.deepEqual(await Promise.all([schemaDump(invalid), dataDump(invalid)]), before);
-        }
-      }
-    );
-
-    await runDatabaseScenario(
       "readiness",
       "现有库 readiness 只读校验与失败回滚",
       180_000,
@@ -1411,17 +1345,25 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
           /required foreign keys.*metadata\(author\).*SET NULL/i
         );
 
-        const missingTable = databaseName("missingtable");
-        await createCurrentDatabase(missingTable);
-        await withClient(missingTable, async (client) => {
-          await client.query("DROP TABLE author CASCADE");
-        });
-        const missingTableResult = await initialize(missingTable, true);
-        assert.notEqual(missingTableResult.code, 0);
-        assert.match(
-          processResultText(missingTableResult),
-          /(?:required public tables.*author|relation "author" does not exist)/i
-        );
+        for (const table of ["author", "image_group", "image_group_member", "projection_revision"]) {
+          const missingTable = databaseName("missingtable");
+          await createCurrentDatabase(missingTable);
+          await withClient(missingTable, async (client) => {
+            await client.query(`DROP TABLE ${table} CASCADE`);
+          });
+          const before = await Promise.all([schemaDump(missingTable), dataDump(missingTable)]);
+          const missingTableResult = await initialize(missingTable, true);
+          assert.notEqual(missingTableResult.code, 0);
+          assert.match(
+            processResultText(missingTableResult),
+            new RegExp(`required public tables.*${table}`, "i")
+          );
+          assert.deepEqual(
+            await Promise.all([schemaDump(missingTable), dataDump(missingTable)]),
+            before,
+            "缺少运行必需表时不得补表或改写数据"
+          );
+        }
 
         const missingColumn = databaseName("missingcolumn");
         await createCurrentDatabase(missingColumn);

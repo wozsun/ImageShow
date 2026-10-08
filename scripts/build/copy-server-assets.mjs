@@ -55,7 +55,6 @@ async function precompressDir(dir) {
 
 await mkdir(serverDist, { recursive: true });
 await cp(resolve(serverPackageDirectory, "schema.sql"), resolve(serverDist, "schema.sql"));
-await cp(resolve(serverPackageDirectory, "schema-upgrade-6.8.0.sql"), resolve(serverDist, "schema-upgrade-6.8.0.sql"));
 await rm(serverPublic, { recursive: true, force: true });
 await cp(webDist, serverPublic, {
   recursive: true,

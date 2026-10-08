@@ -20,7 +20,6 @@ const names = {
   network: `imageshow-verify-${suffix}`,
   postgres: `imageshow-verify-postgres-${suffix}`,
   redis: `imageshow-verify-redis-${suffix}`,
-  upgradedApp: `imageshow-verify-upgraded-app-${suffix}`,
   failedApp: `imageshow-verify-failed-app-${suffix}`,
   app: `imageshow-verify-app-${suffix}`
 };
@@ -216,7 +215,7 @@ async function terminateActiveChildren() {
 async function performRuntimeCleanup() {
   const errors = [];
   const containerResults = await Promise.allSettled(
-    [names.upgradedApp, names.failedApp, names.app, names.redis, names.postgres]
+    [names.failedApp, names.app, names.redis, names.postgres]
       .filter((name) => attemptedContainers.has(name))
       .map(async (name) => {
         await removeContainer(name);
@@ -451,10 +450,10 @@ async function applicationProbe(timeoutMs) {
   });
 }
 
-async function healthProbe(timeoutMs, name = names.app) {
+async function healthProbe(timeoutMs) {
   const result = await runDocker(
     [
-      "container", "inspect", "--format", "{{.State.Health.Status}}", name
+      "container", "inspect", "--format", "{{.State.Health.Status}}", names.app
     ],
     { allowFailure: true, timeoutMs }
   );
@@ -527,7 +526,7 @@ async function redisApplicationConnectionCount() {
     .length;
 }
 
-function applicationContainerArguments(name, databaseName, imageId, redisDb = 0) {
+function applicationContainerArguments(name, databaseName, imageId) {
   return [
     "run",
     "--detach",
@@ -558,15 +557,13 @@ function applicationContainerArguments(name, databaseName, imageId, redisDb = 0)
     "--env",
     "REDIS_PORT=6379",
     "--env",
-    `REDIS_DB=${redisDb}`,
+    "REDIS_DB=0",
     ...Object.entries(runtimeSeeds).flatMap(([key, value]) => ["--env", `${key}=${value}`]),
     imageId
   ];
 }
 
-async function schemaShape(databaseName = "imageshow") {
-  // Object names survive ALTER TABLE RENAME, so compare columns and constraint
-  // semantics rather than the generated names of the old revision constraints.
+async function schemaShape() {
   const sql = `SELECT 'column|' || table_name || '|' || column_name || '|' || data_type || '|' || is_nullable || '|' || coalesce(column_default, '')
       FROM information_schema.columns WHERE table_schema='public'
     UNION ALL
@@ -576,7 +573,7 @@ async function schemaShape(databaseName = "imageshow") {
     ORDER BY 1;`;
   return (await runDocker([
     "exec", "-e", `PGPASSWORD=${databasePassword}`, names.postgres,
-    "psql", "--username", "imageshow", "--dbname", databaseName,
+    "psql", "--username", "imageshow", "--dbname", "imageshow",
     "--tuples-only", "--no-align", "--command", sql
   ])).stdout.trim();
 }
@@ -621,7 +618,6 @@ try {
     names.postgres,
     names.redis,
     names.failedApp,
-    names.upgradedApp,
     names.app
   ]) {
     await confirmAbsent(`container ${name}`, ["container", "inspect", name]);
@@ -768,22 +764,6 @@ try {
     await runDocker(["exec", "--user", "node", names.app, "node", "--test", "/tmp/storage-publication.mjs"], { stdio: "inherit", timeoutMs: 120_000 });
     await runDocker(["cp", resolve(workspaceRoot, "scripts/tests/verify/config-publication.mjs"), `${names.app}:/tmp/config-publication.mjs`]);
     await runDocker(["exec", "--user", "node", names.app, "node", "--test", "/tmp/config-publication.mjs"], { stdio: "inherit", timeoutMs: 120_000 });
-  // 6.8.0-only upgrade proof; remove with the fixture in 6.8.1.
-  await runDocker(["exec", names.postgres, "psql", "-U", "imageshow", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-c", "CREATE DATABASE imageshow_679"]);
-  await runDocker(["cp", resolve(workspaceRoot, "scripts/tests/verify/fixtures/schema-6.7.9.sql"), `${names.postgres}:/tmp/schema-6.7.9.sql`]);
-  await runDocker(["exec", names.postgres, "psql", "-U", "imageshow", "-d", "imageshow_679", "-v", "ON_ERROR_STOP=1", "-f", "/tmp/schema-6.7.9.sql"]);
-  attemptedContainers.add(names.upgradedApp);
-  await runDocker(applicationContainerArguments(names.upgradedApp, "imageshow_679", imageId, 1));
-  await waitFor("ImageShow 6.7.9 upgrade health", (timeoutMs) => healthProbe(timeoutMs, names.upgradedApp), 180_000);
-  if (await schemaShape("imageshow_679") !== await schemaShape()) {
-    throw new Error("upgraded 6.7.9 schema differs from clean installation");
-  }
-  const upgradeLog = await runDocker(["logs", names.upgradedApp]);
-  if (!resultText(upgradeLog).includes("database_upgrade_6_8_0_completed")) {
-    throw new Error("upgrade completion log missing");
-  }
-  await runDocker(["stop", names.upgradedApp], { timeoutMs: 60_000 });
-  console.log("6.7.9 schema upgraded atomically to the clean installation contract");
   const coldShape = await schemaShape();
   if (!coldShape) {
     throw new Error(`unexpected schema shape before restart: ${coldShape}`);

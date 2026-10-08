@@ -107,6 +107,4 @@ Server 测试在导入应用模块前设置独立数据路径；宿主机生成�
 
 GitHub Actions 负责镜像构建与发布，本目录的测试和门禁在本地运行；测试不进入生产镜像。结论、比较决策和验收说明放入本地 `tests/report/`，保留的门禁与运行输出放入本地 `tests/log/`，临时运行产物留在根目录 `tests/`。
 
-6.8.0 一次性升级门禁（6.8.1 删除）：`verify/fixtures/schema-6.7.9.sql` 是升级基线，数据库场景 `upgrade-6.7.9` 验证单事务迁移、数据保留和拒绝不完整旧库；生产镜像验收另以该基线冷启动并与干净安装结构比较。
-
 `storage-ingestion` 场景 `image-group-lifecycle` 装配 `server/isolation/image-group-lifecycle.mts`，覆盖分组接口权限、逐项加入、并发上限与锁顺序、组内筛选、回收站保留与级联删除，以及随机范围在 PostgreSQL / Redis 上的一致性、seed、近期去重、临时集合清理和分组投影失效。
