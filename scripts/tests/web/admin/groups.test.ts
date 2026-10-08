@@ -8,7 +8,7 @@ import { queryKeys } from "../../../../packages/web/src/lib/api/query-keys.ts";
 import { clearCsrfToken } from "../../../../packages/web/src/lib/api/client.ts";
 import { createConfigStreamHarness, adminImageListItem, editableImage } from "../../support/web-test-context.ts";
 import { dispatchDomEvent, inputText } from "../../support/dom-events.ts";
-import { installProperties } from "../../support/property-descriptors.ts";
+import { installProperties, installPropertyDescriptors } from "../../support/property-descriptors.ts";
 
 async function groupPage(t: TestContext, role: "image" | "super", detail = false, initialGroups: ImageGroupDto[] | null = [
   { slug: "a", display_name: "A", image_count: 3, sort_order: 0 }
@@ -120,6 +120,15 @@ test("[Web/分组] 成员操作 404 只刷新分组并显示已删除状态", as
   for (const entry of ["toolbar", "card", "id"] as const) {
     await t.test(entry, async (t) => {
       const h = await groupPage(t, "image", true);
+      // linkedom 不实现焦点；按浏览器语义模拟，被移除的元素不再持有焦点。
+      let focused: HTMLElement | null = null;
+      t.after(installPropertyDescriptors(h.document, {
+        activeElement: { configurable: true, get: () => focused?.isConnected ? focused : h.document.body }
+      }));
+      t.after(installProperties(HTMLElement.prototype, {
+        focus(this: HTMLElement) { focused = this; },
+        blur(this: HTMLElement) { if (focused === this) focused = null; }
+      }));
       const item = adminImageListItem({ title: "member" });
       await h.respond(0, { items: [item], total: 1 });
       if (entry === "id") {
@@ -141,6 +150,7 @@ test("[Web/分组] 成员操作 404 只刷新分组并显示已删除状态", as
       assert.equal(h.document.body.textContent?.includes("结果未确认"), false);
       assert.equal(h.pending.length, mutation + 2, "404 does not trigger an unknown-write reconciliation read");
       assert.equal(h.document.querySelector(".image-editor-modal"), null);
+      assert.equal(h.document.activeElement, h.node(".group-missing-state a"), "发起按钮卸载后焦点交给返回入口");
     });
   }
 });
@@ -465,7 +475,7 @@ test("[Web/分组] 图库允许连选成员，可见图片直接操作且按成�
   items[0]!.in_group = true;
   await h.respond(3, { items, total: 3 });
   await h.respond(4, { items: h.items });
-  assert.ok(h.document.body.textContent?.includes(`${items[2]!.id}：已达每张图的分组上限`));
+  assert.ok(h.document.body.textContent?.includes(`已加入 1 张；已达每张图的分组上限 1 张。未加入：${items[2]!.id}`));
   await h.emit(h.node('[aria-label="加入分组：pick-3"]'), "click");
   assert.deepEqual(JSON.parse(String(h.pending[5]!.body)), { ids: [items[2]!.id] });
   await h.respond(5, { items: [{ id: items[2]!.id, status: "added" }] });

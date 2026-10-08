@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   adminBasePath,
-  type EditableImageSnapshotDto, type AdminImageListItemDto, type AdminImageSort, type AdminSettings
+  type AdminImageListItemDto, type AdminImageSort, type AdminSettings
 } from "@imageshow/shared/browser";
 import { AdminSettingsBoundary } from "../../../components/feedback/AdminSettingsBoundary.js";
 import {
@@ -21,33 +21,35 @@ import { useAdminImageDetailCapability } from "../../../components/image/useAdmi
 import { useImageEditorCapability } from "../../../components/image/editor/useImageEditorCapability.js";
 import { useAdminPreference } from "../../../hooks/useAdminPreferences.js";
 import { mobileViewportMediaQuery, useMediaQuery } from "../../../hooks/useMediaQuery.js";
-import { usePageScrollLock } from "../../../hooks/usePageScrollLock.js";
 import { useWorkspaceToolbarCollapse } from "../../../hooks/useWorkspaceToolbarCollapse.js";
 import { addImageGroupMembers, imageGroupsQuery, refreshImageGroup, removeImageGroupMembers } from "../../../lib/api/groups.js";
 import { isApiClientError } from "../../../lib/api/client.js";
 import { queryKeys } from "../../../lib/api/query-keys.js";
 import { useIngestionVocabulary } from "../../../lib/api/ingestion-vocabulary.js";
 import { useStorageNameResolver } from "../../../lib/api/storage-options.js";
-import { createPageLifetimeModuleLoader } from "../../../lib/page-lifetime-module-loader.js";
 import { createActionFeedback, type ActionFeedbackState } from "../../../lib/ui/action-feedback.js";
 import { preloadIntentProps } from "../../../lib/ui/preload-intent.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import { displayNameOrSlug, imageDisplayTitle } from "../../../lib/ui/formatters.js";
-import { workspaceScrollContainer } from "../../../lib/ui/workspace-scroll.js";
 import { ImageListViewControls } from "../../../components/image/ImageListViewControls.js";
 import { AdminImageCard } from "../images/AdminImageCard.js";
 import { emptyImageAdminFilters, ImageAdminFilters, type ImageAdminFilterValues } from "../images/ImageAdminFilters.js";
+import {
+  ImageGridStatus, ImageListSelectionBar, ImageListViewSwitch, imageRangeSelectionHelpId, useImageListPageReset
+} from "../images/ImageListPageParts.js";
 import { useImageAdminPageNavigation } from "../images/useImageAdminPageNavigation.js";
 import { useImageAdminSelection } from "../images/useImageAdminSelection.js";
+import { preloadImageIdInput, useImageIdInputEntry } from "../images/useImageIdInputEntry.js";
 import { GroupRandomLink, imageMatchesGroupLink, type GroupLinkOptions } from "./GroupRandomLink.js";
-import { groupMemberResultLabels } from "./group-member-results.js";
+import { groupMemberAddSummary, groupMemberRemoveSummary } from "./group-member-results.js";
 import "../../../styles/admin/images.css";
 import "../../../styles/admin/group-detail.css";
 
-const loadIdInput = createPageLifetimeModuleLoader(() => import("../images/ImageIdInputDialog.js"));
 type MembershipIntent = "group-add" | "group-remove";
-type IdInputSession = { module: Awaited<ReturnType<typeof loadIdInput>>; intent: MembershipIntent };
-const selectionHelpId = "group-image-range-selection-help";
+const viewOptions = [
+  { value: "members", label: "组内图片" },
+  { value: "picker", label: "图库" }
+] as const;
 
 export function GroupDetail() {
   const { slug = "" } = useParams();
@@ -55,6 +57,25 @@ export function GroupDetail() {
     <AdminSettingsBoundary>
       {(settings) => <GroupDetailContent key={slug} slug={slug} settings={settings} />}
     </AdminSettingsBoundary>
+  );
+}
+
+function GroupMissingState() {
+  const returnLinkRef = useRef<HTMLAnchorElement | null>(null);
+  // 成员写入收到 404 时，发起操作的按钮与弹窗随页面切换卸载；焦点落空时交给返回入口。
+  useLayoutEffect(() => {
+    if (!document.activeElement || document.activeElement === document.body) returnLinkRef.current?.focus();
+  }, []);
+  return (
+    <section className="workspace group-detail-page">
+      <header className="workspace-head">
+        <h1><Link className="group-title-link" to={`${adminBasePath}/groups`}>分组管理</Link></h1>
+      </header>
+      <div className="group-missing-state">
+        <p role="status">分组不存在或已删除</p>
+        <Link ref={returnLinkRef} className="button" to={`${adminBasePath}/groups`}>返回分组列表</Link>
+      </div>
+    </section>
   );
 }
 
@@ -93,30 +114,21 @@ function GroupDetailContent({ slug, settings }: { slug: string; settings: AdminS
     reportAdminUiError("group_detail.detail_load", error);
     setFeedback(createActionFeedback("图片详情加载失败，请重新加载页面", "error"));
   });
-  const [idInput, setIdInput] = useState<IdInputSession | null>(null);
-  const [idInputPending, setIdInputPending] = useState(false);
-  const openerRef = useRef<HTMLElement | null>(null);
-  const failedOpenerRef = useRef<HTMLElement | null>(null);
+  const idInput = useImageIdInputEntry<MembershipIntent>({
+    onLoadError: (error) => {
+      reportAdminUiError("group_detail.id_input_load", error);
+      setFeedback(createActionFeedback("按 ID 指定图片功能加载失败，请重新加载页面", "error"));
+    }
+  });
   const mountedRef = useRef(false);
-  const openingRef = useRef(false);
   useEffect(() => {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
-  usePageScrollLock(idInputPending);
-  useLayoutEffect(() => {
-    if (idInputPending) return;
-    const opener = failedOpenerRef.current;
-    failedOpenerRef.current = null;
-    if (opener?.isConnected && !opener.closest("[inert]")) opener.focus();
-  }, [idInputPending]);
   const entryBusy = writing || Boolean(editor.pending) || detail.pendingItemId !== null || !group;
-  const interfaceBusy = entryBusy || idInputPending || Boolean(detail.item) || Boolean(idInput) || Boolean(editor.session);
+  const interfaceBusy = entryBusy || idInput.pending || Boolean(detail.item) || Boolean(idInput.session) || Boolean(editor.session);
   const clearSelection = selection.clear;
-  useEffect(() => {
-    clearSelection();
-    workspaceScrollContainer(gridRef.current)?.scrollTo({ top: 0, left: 0 });
-  }, [clearSelection, navigation.scopeKey, navigation.pageNumber]);
+  useImageListPageReset(clearSelection, gridRef, navigation.scopeKey, navigation.pageNumber);
 
   const changeSort = (next: AdminImageSort) => {
     if (interfaceBusy) return;
@@ -127,35 +139,10 @@ function GroupDetailContent({ slug, settings }: { slug: string; settings: AdminS
     setFeedback(null);
   };
 
-  const openIdInput = async (intent: MembershipIntent, opener: HTMLButtonElement) => {
-    if (openingRef.current || entryBusy) return;
-    openingRef.current = true;
-    openerRef.current = opener;
-    setIdInputPending(true);
-    try {
-      const module = await loadIdInput();
-      if (mountedRef.current && opener.isConnected) setIdInput({ module, intent });
-    } catch (error) {
-      if (mountedRef.current) {
-        failedOpenerRef.current = opener;
-        reportAdminUiError("group_detail.id_input_load", error);
-        setFeedback(createActionFeedback("按 ID 指定图片功能加载失败，请重新加载页面", "error"));
-      }
-    } finally {
-      openingRef.current = false;
-      if (mountedRef.current) setIdInputPending(false);
-    }
-  };
-  const openResolvedImages = (items: EditableImageSnapshotDto[]) => {
-    if (!idInput || !openerRef.current) return Promise.resolve("interrupted" as const);
-    return editor.open(
-      { sources: items, intent: idInput.intent, fromDialog: true },
-      openerRef.current,
-      () => setIdInput(null)
-    );
-  };
-  const changeMembership = async (intent: MembershipIntent, ids: string[]) => {
+  const changeMembership = async (intent: MembershipIntent, ids: string[], fromDialog: boolean) => {
     const adding = intent === "group-add";
+    // 核对窗口要先关闭才能看到列表；页面入口直接核对刷新后的列表。
+    const recheck = fromDialog ? "请关闭后核对刷新后的组内图片" : "请核对刷新后的组内图片";
     let confirmed = false;
     let complete = false;
     let groupMissing = false;
@@ -166,20 +153,12 @@ function GroupDetailContent({ slug, settings }: { slug: string; settings: AdminS
       if (adding) {
         const { items } = await addImageGroupMembers(slug, ids);
         confirmed = true;
-        complete = items.every((item) => item.status === "added" || item.status === "already_member");
-        message = Object.entries(groupMemberResultLabels).flatMap(([status, label]) => {
-          const count = items.filter((item) => item.status === status).length;
-          return count ? [`${label} ${count} 张`] : [];
-        }).join("；");
-        if (!complete) {
-          message = items.filter((item) => item.status !== "added" && item.status !== "already_member")
-            .map((item) => `${item.id}：${groupMemberResultLabels[item.status]}`).join("；");
-        }
+        ({ complete, message } = groupMemberAddSummary(items));
       } else {
         const { removed } = await removeImageGroupMembers(slug, ids);
         confirmed = true;
         complete = true;
-        message = removed ? `已移出 ${removed} 张图片` : "这些图片已不在组内";
+        message = groupMemberRemoveSummary(ids.length, removed);
       }
       clearSelection();
     } catch (error) {
@@ -187,7 +166,7 @@ function GroupDetailContent({ slug, settings }: { slug: string; settings: AdminS
       groupMissing = isApiClientError(error) && error.status === 404;
       message = groupMissing
         ? "分组不存在或已删除"
-        : `${adding ? "加入" : "移出"}结果未确认，请关闭后核对刷新后的组内图片`;
+        : `${adding ? "加入" : "移出"}结果未确认，${recheck}`;
     } finally {
       try {
         if (groupMissing) {
@@ -197,7 +176,7 @@ function GroupDetailContent({ slug, settings }: { slug: string; settings: AdminS
         }
       } catch (error) {
         reportAdminUiError("group_members.refresh", error);
-        message += "；列表刷新失败，请关闭后重试加载";
+        message += fromDialog ? "；列表刷新失败，请关闭后重试加载" : "；列表刷新失败，请重试加载";
         complete = false;
       }
       if (mountedRef.current) {
@@ -212,7 +191,7 @@ function GroupDetailContent({ slug, settings }: { slug: string; settings: AdminS
     return intent === "group-add" ? !member : member;
   });
   const submitVisibleMembers = (intent: MembershipIntent, ids: string[]) => listAction.run(async () => {
-    const result = await changeMembership(intent, ids);
+    const result = await changeMembership(intent, ids, false);
     if (!result.complete && mountedRef.current) {
       setFeedback(createActionFeedback(result.message, "error"));
     }
@@ -243,10 +222,10 @@ function GroupDetailContent({ slug, settings }: { slug: string; settings: AdminS
         aria-label={label}
         title={label}
         disabled={(toolbar ? entryBusy : interfaceBusy) || disabled}
-        {...(!ids.length ? preloadIntentProps(() => { void loadIdInput().catch(() => undefined); }) : {})}
+        {...(!ids.length ? preloadIntentProps(preloadImageIdInput) : {})}
         onClick={(event) => {
           if (ids.length) void submitVisibleMembers(intent, ids);
-          else void openIdInput(intent, event.currentTarget);
+          else void idInput.open(intent, event.currentTarget);
         }}
       >
         <AdminIcon name={intent === "group-add" ? "add-line" : "subtract-line"} />
@@ -267,35 +246,10 @@ function GroupDetailContent({ slug, settings }: { slug: string; settings: AdminS
     );
   };
   const viewSwitch = (
-    <div className="image-admin-view-switch">
-      {(["members", "picker"] as const).map((mode) => (
-        <button
-          key={mode}
-          type="button"
-          className={view === mode ? "active" : ""}
-          aria-pressed={view === mode}
-          disabled={interfaceBusy}
-          onClick={() => setView(mode)}
-        >
-          {mode === "members" ? "组内图片" : "图库"}
-        </button>
-      ))}
-    </div>
+    <ImageListViewSwitch options={viewOptions} value={view} disabled={interfaceBusy} onChange={setView} />
   );
 
-  if (groups.isSuccess && !group) {
-    return (
-      <section className="workspace group-detail-page">
-        <header className="workspace-head">
-          <h1><Link className="group-title-link" to={`${adminBasePath}/groups`}>分组管理</Link></h1>
-        </header>
-        <div className="group-missing-state">
-          <p role="status">分组不存在或已删除</p>
-          <Link className="button" to={`${adminBasePath}/groups`}>返回分组列表</Link>
-        </div>
-      </section>
-    );
-  }
+  if (groups.isSuccess && !group) return <GroupMissingState />;
 
   return (
     <section
@@ -336,21 +290,7 @@ function GroupDetailContent({ slug, settings }: { slug: string; settings: AdminS
               onClear={() => setFilters({ ...emptyImageAdminFilters })}
             />
             <div className="image-list-toolbar">
-              <div className="inline-actions image-list-selection">
-                <span id={selectionHelpId} className="image-list-selection-help">按住 Shift 点击卡片主体，或按 Shift+Enter，可连续选择图片。</span>
-                <label className="image-list-check-label">
-                  <input
-                    type="checkbox"
-                    checked={selection.allSelected}
-                    disabled={interfaceBusy}
-                    onChange={(event) => selection.selectAll(event.target.checked, interfaceBusy)}
-                  />
-                  全选
-                </label>
-                <span className={`image-list-selection-status${selection.selected.length ? "" : " is-empty"}`} role="status">
-                  {selection.selected.length ? `已选 ${selection.selected.length}` : "未选择图片"}
-                </span>
-              </div>
+              <ImageListSelectionBar selection={selection} disabled={interfaceBusy} />
               <div className="image-list-toolbar-actions">
                 <ImageListViewControls
                   sort={sort}
@@ -385,7 +325,7 @@ function GroupDetailContent({ slug, settings }: { slug: string; settings: AdminS
               onDetail={(opener) => { void detail.open(item, opener); }}
               onCheck={(checked, extendRange) => selection.update(item.id, checked, extendRange, interfaceBusy)}
               onSelectRange={() => selection.update(item.id, true, true, interfaceBusy)}
-              rangeSelectionHelpId={selectionHelpId}
+              rangeSelectionHelpId={imageRangeSelectionHelpId}
               actions={(
                 <>
                   {view === "picker" && membershipButton("group-add", [item.id], `加入分组：${imageDisplayTitle(item)}`, item.in_group)}
@@ -395,9 +335,13 @@ function GroupDetailContent({ slug, settings }: { slug: string; settings: AdminS
             />
           ))}
           {groups.isError && <QueryErrorState error={groups.error} onRetry={() => void groups.refetch()} reportContext="group_detail.group_load" />}
-          {navigation.isError && <QueryErrorState error={navigation.error} onRetry={() => void navigation.refetch()} reportContext="group_detail.images_load" />}
-          {(groups.isPending || navigation.isFetching) && !navigation.items.length && <p className="muted">加载中</p>}
-          {group && !navigation.isError && !navigation.isFetching && !navigation.items.length && <p className="muted">暂无图片</p>}
+          <ImageGridStatus
+            navigation={navigation}
+            reportContext="group_detail.images_load"
+            emptyText="暂无图片"
+            waiting={groups.isPending}
+            ready={Boolean(group)}
+          />
         </div>
       </div>
       <OverlayScrollbar key={`scrollbar:${navigation.scopeKey}:${navigation.pageNumber}`} targetRef={gridRef} pageEdge />
@@ -418,13 +362,13 @@ function GroupDetailContent({ slug, settings }: { slug: string; settings: AdminS
           returnFocusRef={detail.returnFocusRef}
         />
       )}
-      {idInput && (
-        <idInput.module.ImageIdInputDialog
+      {idInput.session && (
+        <idInput.session.Dialog
           groupSlug={slug}
-          intent={idInput.intent}
-          onClose={() => setIdInput(null)}
-          onResolved={openResolvedImages}
-          returnFocusRef={openerRef}
+          intent={idInput.session.intent}
+          onClose={idInput.close}
+          onResolved={(items) => idInput.handOff(editor.open, items)}
+          returnFocusRef={idInput.returnFocusRef}
         />
       )}
       {editor.session && (
@@ -437,7 +381,7 @@ function GroupDetailContent({ slug, settings }: { slug: string; settings: AdminS
           allTags={editor.session.vocabulary.tags}
           authors={editor.session.vocabulary.authors}
           onClose={editor.close}
-          onMembershipChange={(ids) => changeMembership(editor.session!.intent === "group-add" ? "group-add" : "group-remove", ids)}
+          onMembershipChange={(ids) => changeMembership(editor.session!.intent === "group-add" ? "group-add" : "group-remove", ids, true)}
           returnFocusRef={editor.returnFocusRef}
         />
       )}

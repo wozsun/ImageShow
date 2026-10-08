@@ -24,6 +24,7 @@ export function DialogFrame({
   paused = false,
   animateClose = true,
   closeOnBackdrop = false,
+  backdropCloseEvent = "pointerdown",
   initialFocusRef,
   returnFocusRef,
   prepareClose,
@@ -39,6 +40,8 @@ export function DialogFrame({
   paused?: boolean;
   animateClose?: boolean;
   closeOnBackdrop?: boolean;
+  /** 图片预览与详情沿用原有 click 语义：完整点按遮罩才关闭，在遮罩上开始的触控滑动不会关闭。 */
+  backdropCloseEvent?: "pointerdown" | "click";
   initialFocusRef?: RefObject<HTMLElement | null>;
   returnFocusRef?: RefObject<HTMLElement | null>;
   prepareClose?: () => () => void;
@@ -62,6 +65,12 @@ export function DialogFrame({
     [animateClose, busy, onClose, prepareClose, requestAnimatedClose]
   );
 
+  const closeFromBackdrop = closeOnBackdrop
+    ? (event: { target: EventTarget; currentTarget: EventTarget }) => {
+        if (event.target === event.currentTarget) requestClose();
+      }
+    : undefined;
+
   usePageScrollLock();
   useDialogFocus({
     containerRef,
@@ -83,13 +92,8 @@ export function DialogFrame({
       aria-describedby={descriptionId}
       aria-label={titleId ? undefined : ariaLabel}
       tabIndex={-1}
-      onPointerDown={
-        closeOnBackdrop
-          ? (event) => {
-              if (event.target === event.currentTarget) requestClose();
-            }
-          : undefined
-      }
+      onPointerDown={backdropCloseEvent === "pointerdown" ? closeFromBackdrop : undefined}
+      onClick={backdropCloseEvent === "click" ? closeFromBackdrop : undefined}
       onAnimationEnd={onAnimationEnd}
     >
       <DialogPortalTargetContext value={containerRef}>

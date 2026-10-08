@@ -27,17 +27,13 @@ import type { PublicImageItem } from "../../lib/gallery/public-image.js";
 import { useGalleryFacets } from "../../lib/api/site-queries.js";
 import { createGalleryTaxonomyDisplayFormatter } from "../../lib/gallery/card-display.js";
 import { useOptionalAuthSessionQuery } from "../../hooks/useAuthSession.js";
-import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
-import { usePageScrollLock } from "../../hooks/usePageScrollLock.js";
-import { useDialogFocus } from "../../hooks/useDialogFocus.js";
 import {
   mobileViewportMediaQuery,
   useMediaQuery
 } from "../../hooks/useMediaQuery.js";
 import { OverlayScrollbar } from "../layout/OverlayScrollbar.js";
 import { ImageDescriptionSlot } from "./ImageDescriptionSlot.js";
-import { DialogLayerPortal } from "../dialog/DialogLayerPortal.js";
-import { DialogPortalTargetContext } from "../dialog/DialogPortalContext.js";
+import { DialogFrame } from "../dialog/DialogFrame.js";
 import { DirectActivationButton } from "../actions/DirectActivationButton.js";
 import { LazyImageAdminDetails } from "./image-admin-details-loader.js";
 import "../../styles/image-detail.css";
@@ -139,17 +135,6 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const detailLoading = !currentSnapshot && !admin && props.detailLoading === true;
   const detailError = !currentSnapshot && !admin ? (props.detailError?.trim() ?? "") : "";
   const onDetailRetry = !admin ? props.onDetailRetry : undefined;
-  const exit = useAnimatedClose(onClose);
-  const handleItemTrashed = useCallback(
-    (imageId: string) => {
-      try {
-        props.onTrashed?.(imageId);
-      } finally {
-        exit.requestClose();
-      }
-    },
-    [exit.requestClose, props.onTrashed]
-  );
   const handleItemUpdated = useCallback(
     (nextItem: EditableImageSnapshotDto) => {
       setEditedSnapshot(nextItem);
@@ -164,9 +149,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
     },
     [props.onItemRefreshRequested]
   );
-  usePageScrollLock();
   const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
-  const frameRef = useRef<HTMLDivElement | null>(null);
   const dialogRef = useRef<HTMLElement | null>(null);
   const desktopCloseButtonRef = useRef<HTMLButtonElement | null>(null);
   const mobileCloseButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -174,15 +157,6 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const titleHeaderRef = useRef<HTMLElement | null>(null);
   const actionsRef = useRef<HTMLDivElement | null>(null);
   const [nestedDialogOpen, setNestedDialogOpen] = useState(false);
-  useDialogFocus({
-    containerRef: frameRef,
-    initialFocusRef: mobileLayout
-      ? mobileCloseButtonRef
-      : desktopCloseButtonRef,
-    returnFocusRef: props.returnFocusRef,
-    onEscape: () => exit.requestClose(),
-    paused: nestedDialogOpen
-  });
   const { data: facets } = useGalleryFacets();
   const taxonomyDisplay = useMemo(
     () => createGalleryTaxonomyDisplayFormatter(facets),
@@ -217,33 +191,31 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
       : item.device === "mb" ? "9 / 16" : "16 / 9";
 
   return (
-    <DialogLayerPortal>
-      <div
-        ref={frameRef}
-        className={`modal image-detail-modal ${exit.closing ? "is-closing" : ""}`}
-        data-dialog-frame=""
-        data-admin-dialog={admin ? "" : undefined}
-        role="dialog"
-        aria-modal="true"
-        aria-label="图片详情"
-        onAnimationEnd={exit.onAnimationEnd}
-        onClick={(event) => {
-          if (event.target === event.currentTarget) exit.requestClose();
-        }}
-      >
-        {mobileLayout && (
-          <DirectActivationButton
-            ref={mobileCloseButtonRef}
-            className="icon close pressable image-detail-mobile-close"
-            type="button"
-            title="关闭"
-            aria-label="关闭图片详情"
-            onActivate={() => exit.requestClose()}
-          >
-            <Icon name="close-line" />
-          </DirectActivationButton>
-        )}
-        <DialogPortalTargetContext value={frameRef}>
+    <DialogFrame
+      className="modal image-detail-modal"
+      ariaLabel="图片详情"
+      colorContext={admin ? "admin" : "public"}
+      closeOnBackdrop
+      backdropCloseEvent="click"
+      paused={nestedDialogOpen}
+      initialFocusRef={mobileLayout ? mobileCloseButtonRef : desktopCloseButtonRef}
+      returnFocusRef={props.returnFocusRef}
+      onClose={onClose}
+    >
+      {({ requestClose }) => (
+        <>
+          {mobileLayout && (
+            <DirectActivationButton
+              ref={mobileCloseButtonRef}
+              className="icon close pressable image-detail-mobile-close"
+              type="button"
+              title="关闭"
+              aria-label="关闭图片详情"
+              onActivate={() => requestClose()}
+            >
+              <Icon name="close-line" />
+            </DirectActivationButton>
+          )}
           <article ref={dialogRef} tabIndex={-1} onClick={(event) => event.stopPropagation()}>
             <ProgressiveImage
               key={item.id}
@@ -279,7 +251,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                         type="button"
                         title="关闭"
                         aria-label="关闭图片详情"
-                        onClick={() => exit.requestClose()}
+                        onClick={() => requestClose()}
                       >
                         <Icon name="close-line" />
                       </button>
@@ -393,7 +365,13 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                           onItemUpdated={handleItemUpdated}
                           onItemRefreshRequested={handleItemRefreshRequested}
                           onItemTrashCommitted={props.onTrashCommitted}
-                          onItemTrashed={handleItemTrashed}
+                          onItemTrashed={(imageId) => {
+                            try {
+                              props.onTrashed?.(imageId);
+                            } finally {
+                              requestClose();
+                            }
+                          }}
                           onNestedDialogChange={setNestedDialogOpen}
                         />
                       </Suspense>
@@ -408,8 +386,8 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
               />
             </div>
           </article>
-        </DialogPortalTargetContext>
-      </div>
-    </DialogLayerPortal>
+        </>
+      )}
+    </DialogFrame>
   );
 }

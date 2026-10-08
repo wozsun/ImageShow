@@ -80,7 +80,8 @@
 /* 等宽 slug 小框：固定宽度让每张卡片的「显示名」输入框（及角色徽标）横向对齐。本身就是一个只读
    输入框（见 SlugChip）——光标可右移 / 横向滚动来查看并选中完整 slug（普通文本元素做不到）。超长时
    由原生 text-overflow:ellipsis 紧贴文字末尾画出截断号「…」（间距最短、与文字相连），聚焦时浏览器
-   自动让位，便于滚动 / 选中到末尾。 */
+   自动让位，便于滚动 / 选中到末尾。字体栈带 Consolas：Windows 若落到中文等宽字体，截断号会画在字身
+   中间而不是贴着基线。 */
 .entity-slug {
   flex: 0 0 120px;
   width: 120px;
@@ -89,7 +90,7 @@
   border-radius: 6px;
   background: var(--admin-color-entity-slug-surface);
   color: inherit;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 18px;
   white-space: nowrap;
   overflow: hidden;
@@ -142,6 +143,10 @@
 }
 
 @media (max-width: 760px) {
+  /* 窄屏控件区各行统一 8px；桌面单行与换行时保持 10px。 */
+  .admin-create-form {
+    gap: 8px;
+  }
   .admin-create-form input,
   .admin-create-form .admin-create-field,
   .admin-create-form .entity-slug-field {

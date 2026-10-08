@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { adminApiBasePath, adminBasePath, type ImageGroupDto } from "@imageshow/shared/browser";
 import { api } from "../../../lib/api/client.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
-import { AsyncActionButton } from "../../../components/actions/AsyncActionButton.js";
+import { SaveOrDeleteButton } from "../../../components/actions/SaveOrDeleteButton.js";
 import { SortOrderInput } from "../../../components/actions/SortOrderInput.js";
 import { SlugChip } from "../../../components/data-display/SlugChip.js";
 import type { ActionFeedbackTarget } from "../../../components/feedback/ActionFeedbackRegion.js";
@@ -31,7 +31,6 @@ export function GroupAdminItem({
   }, [item.display_name]);
   const saving = useAsyncActionStatus();
   const dirty = form.display !== form.saved;
-  const saveAction = dirty || saving.status !== "idle";
   const disabled = busy || saving.pending;
   const open = () => {
     if (!disabled) void navigate(`${adminBasePath}/groups/${item.slug}`);
@@ -98,25 +97,15 @@ export function GroupAdminItem({
         </div>
         <div className="vocabulary-cell vocabulary-cell-actions" role={cellRole}>
           <div className="vocabulary-item-actions">
-            {(canDelete || saveAction) && (
-              <AsyncActionButton
-                type="button"
-                className={`icon vocabulary-action-button ${saveAction ? "button" : "danger-button is-subtle"}`}
-                status={saving.status}
-                presentation={{
-                  idle: saveAction ? { icon: "save-3-line", label: "保存" } : { icon: "delete-bin-6-line", label: "删除" },
-                  pending: { icon: "save-3-line", label: "保存中" },
-                  success: { icon: "check-line", label: "已保存" },
-                  error: { icon: "close-line", label: "保存失败" }
-                }}
-                aria-label={`${saveAction ? "保存" : "删除"}分组 ${item.slug}`}
-                disabled={disabled || (saveAction && !dirty)}
-                onClick={() => {
-                  if (saveAction) { if (dirty) void save(); }
-                  else if (canDelete) onDelete();
-                }}
-              />
-            )}
+            <SaveOrDeleteButton
+              itemLabel={`分组 ${item.slug}`}
+              status={saving.status}
+              dirty={dirty}
+              canDelete={canDelete}
+              disabled={disabled}
+              onSave={() => void save()}
+              onDelete={onDelete}
+            />
           </div>
         </div>
       </div>

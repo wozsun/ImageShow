@@ -1,17 +1,14 @@
-import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   adminApiBasePath, adminPermissions, slugPattern, slugMaxLength,
-  isSortOrder, sortOrderMin, sortOrderMax,
   type AdminSettings, type ImageGroupDto, type ImageGroupListResponseDto
 } from "@imageshow/shared/browser";
 import { api, isApiClientError } from "../../../lib/api/client.js";
 import { imageGroupsQuery } from "../../../lib/api/groups.js";
 import { queryKeys } from "../../../lib/api/query-keys.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
-import { workspaceScrollContainer } from "../../../lib/ui/workspace-scroll.js";
-import { AdminIcon } from "../../../components/icon/AdminIcon.js";
-import { StableButtonLabel } from "../../../components/data-display/StableButtonLabel.js";
+import { ViewModeToggle } from "../../../components/actions/ViewModeToggle.js";
 import { OverlayScrollbar } from "../../../components/layout/OverlayScrollbar.js";
 import { WorkspaceHeader } from "../../../components/layout/WorkspaceHeader.js";
 import { WorkspaceToolbar } from "../../../components/layout/WorkspaceToolbar.js";
@@ -21,12 +18,14 @@ import { AdminSettingsBoundary } from "../../../components/feedback/AdminSetting
 import { QueryErrorState } from "../../../components/feedback/QueryErrorState.js";
 import { useActionFeedbackTarget } from "../../../components/feedback/ActionFeedbackRegion.js";
 import { ConfirmDialog } from "../../../components/dialog/ConfirmDialog.js";
-import { FieldError } from "../../../components/form/FieldError.js";
+import { EntityCreateForm, useEntityCreateDraft } from "../../../components/form/EntityCreateForm.js";
 import { slugFormatHint } from "../../../components/form/slug-format.js";
 import { useAdminPreference } from "../../../hooks/useAdminPreferences.js";
 import { useAdminPermissions } from "../../../hooks/useAuthSession.js";
+import { useClientPagination } from "../../../hooks/useClientPagination.js";
 import { useSortOrderSave } from "../../../hooks/useSortOrderSave.js";
 import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
+import { useViewModeScrollAnchor } from "../../../hooks/useViewModeScrollAnchor.js";
 import { useWorkspaceToolbarCollapse } from "../../../hooks/useWorkspaceToolbarCollapse.js";
 import { GroupAdminItem } from "./GroupAdminItem.js";
 import "../../../styles/admin/entity.css";
@@ -46,20 +45,16 @@ function GroupAdminContent({ settings }: { settings: AdminSettings }) {
   const [viewMode, setViewMode] = useAdminPreference("group_view_mode");
   const query = useQuery(imageGroupsQuery);
   const refresh = () => client.invalidateQueries({ queryKey: queryKeys.groups, exact: true }, { throwOnError: true });
-  const [slug, setSlug] = useState("");
-  const [display, setDisplay] = useState("");
-  const [sortOrder, setSortOrder] = useState("");
-  const sortOrderInvalid = sortOrder !== "" && !isSortOrder(Number(sortOrder));
+  const draft = useEntityCreateDraft();
   const [createError, setCreateError] = useState("");
   const createAction = useAsyncActionStatus({ resultDurationMs: null });
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<ImageGroupDto | null>(null);
-  const [page, setPage] = useState(1);
   const feedbackTarget = useActionFeedbackTarget("group-admin");
   const toolbarRef = useWorkspaceToolbarCollapse();
   const listRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
-  const anchorRef = useRef<{ element: HTMLElement; offset: number } | null>(null);
+  const captureScrollAnchor = useViewModeScrollAnchor(listRef, "[data-group-slug]", viewMode);
   const externalBusy = deleting || createAction.pending;
   const sorting = useSortOrderSave({
     basePath: `${adminApiBasePath}/groups`, externalBusy, refresh,
@@ -67,44 +62,26 @@ function GroupAdminContent({ settings }: { settings: AdminSettings }) {
     reportError: (stage, error) => reportAdminUiError(`group_admin.sort_order.${stage}`, error)
   });
   const items = query.data?.items ?? [];
-  const pageSize = settings.admin.image_page_size;
-  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
-  const pageItems = items.slice((page - 1) * pageSize, page * pageSize);
-  const slugInvalid = slug.length > 0 && (!slugPattern.test(slug) || slug.length > slugMaxLength);
+  const { page, setPage, totalPages, pageItems } = useClientPagination(items, settings.admin.image_page_size);
+  const slugInvalid = draft.slug.length > 0 && (!slugPattern.test(draft.slug) || draft.slug.length > slugMaxLength);
   const slugError = slugInvalid ? slugFormatHint : createError;
-  useEffect(() => { setPage((current) => Math.min(current, totalPages)); }, [totalPages]);
   useEffect(() => { if (!canDelete) setConfirmDelete(null); }, [canDelete]);
-  useLayoutEffect(() => {
-    const anchor = anchorRef.current;
-    anchorRef.current = null;
-    const viewport = workspaceScrollContainer(listRef.current);
-    if (!viewport || !anchor?.element.isConnected) return;
-    viewport.scrollTop += anchor.element.getBoundingClientRect().top - viewport.getBoundingClientRect().top - anchor.offset;
-  }, [viewMode]);
-  const changeView = () => {
-    const viewport = workspaceScrollContainer(listRef.current);
-    if (viewport && viewport.scrollTop > 0) {
-      const top = viewport.getBoundingClientRect().top;
-      const element = Array.from(viewport.querySelectorAll<HTMLElement>("[data-group-slug]"))
-        .find((element) => element.getBoundingClientRect().bottom > top);
-      anchorRef.current = element ? { element, offset: element.getBoundingClientRect().top - top } : null;
-    }
-    setViewMode(viewMode === "card" ? "list" : "card");
+  const changeView = (next: "card" | "list") => {
+    captureScrollAnchor();
+    setViewMode(next);
   };
   const create = async (event: FormEvent) => {
     event.preventDefault();
-    const value = slug.trim().toLowerCase();
-    if (!value || slugInvalid || sortOrderInvalid || sorting.busy) return;
+    const value = draft.slug.trim().toLowerCase();
+    if (!value || slugInvalid || draft.sortOrderInvalid || sorting.busy) return;
     setCreateError("");
     await createAction.run(async () => {
       try {
         await api(`${adminApiBasePath}/groups`, {
-          method: "POST", body: JSON.stringify({ slug: value, display_name: display.trim(), sort_order: sortOrder === "" ? undefined : Number(sortOrder) })
+          method: "POST", body: JSON.stringify({ slug: value, display_name: draft.display.trim(), sort_order: draft.sortOrderValue })
         });
         client.removeQueries({ queryKey: [...queryKeys.groupImages, value] });
-        setSlug("");
-        setDisplay("");
-        setSortOrder("");
+        draft.reset();
         setPage(1);
         await refresh();
         return true;
@@ -134,34 +111,21 @@ function GroupAdminContent({ settings }: { settings: AdminSettings }) {
         <WorkspaceHeader title="分组管理"
           description={`共 ${items.length} 个分组${query.isPending ? " · 加载中" : ""}`}
           feedbackTarget={feedbackTarget}
-          titleAccessory={
-            <button type="button" className="state-toggle-button vocabulary-view-switch"
-              data-shifted={viewMode === "list"} aria-pressed={viewMode === "list"}
-              aria-label={`分组以${viewMode === "card" ? "卡片" : "列表"}显示；点击切换为${viewMode === "card" ? "列表" : "卡片"}`}
-              onClick={changeView}>
-              <span className="state-toggle-label">{viewMode === "card" ? "卡片" : "列表"}</span>
-              <span className="state-toggle-thumb" aria-hidden="true" />
-            </button>
-          } />
+          titleAccessory={<ViewModeToggle noun="分组" value={viewMode} onChange={changeView} />} />
         <WorkspaceToolbar className="vocabulary-create-toolbar">
-          <form className="admin-create-form" onSubmit={create}>
-            <div className="admin-create-field entity-slug-field">
-              <input className="entity-create-slug" value={slug} placeholder="分组标识" aria-label="分组标识"
-                maxLength={slugMaxLength} disabled={externalBusy} aria-invalid={Boolean(slugError)}
-                onChange={(event) => { setSlug(event.target.value.toLowerCase()); setCreateError(""); }} />
-              <FieldError message={slugError} announce />
-            </div>
-            <input className="vocabulary-create-display" value={display} placeholder="显示名（可选）" aria-label="分组显示名"
-              maxLength={64} disabled={externalBusy} onChange={(event) => setDisplay(event.target.value)} />
-            <input className="vocabulary-create-sort" type="number" step={1}
-              min={sortOrderMin} max={sortOrderMax} value={sortOrder}
-              placeholder="排序（可选）" aria-label="分组排序（可选）" aria-invalid={sortOrderInvalid}
-              disabled={externalBusy} onChange={(event) => setSortOrder(event.target.value)} />
-            <button className="button vocabulary-create-button" type="submit" disabled={sorting.busy || !slug.trim() || slugInvalid || sortOrderInvalid}>
-              <AdminIcon name="add-line" />
-              <StableButtonLabel idle="新建分组" busyText="新建中" busy={createAction.pending} />
-            </button>
-          </form>
+          <EntityCreateForm
+            draft={draft}
+            noun="分组"
+            slugPlaceholder="分组标识"
+            slugError={slugError}
+            slugInvalid={slugInvalid}
+            disabled={externalBusy}
+            submitBlocked={sorting.busy}
+            pending={createAction.pending}
+            feedbackTarget={feedbackTarget}
+            onSlugChange={() => setCreateError("")}
+            onSubmit={create}
+          />
         </WorkspaceToolbar>
       </div>
       <div className="vocabulary-content">

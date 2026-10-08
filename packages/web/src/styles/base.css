@@ -115,6 +115,11 @@ html.has-overlay-scrollbar body::-webkit-scrollbar {
 .anchored-popup-boundary {
   display: contents;
 }
+/* 弹窗内的菜单绝对定位在弹窗层里，入场动画结束后若合回弹窗层重绘，文字与对号会有不到 1px 的
+   取整跳动；从展开起常驻独立合成层，只栅格化一次。 */
+[data-dialog-portal-menu] {
+  will-change: transform;
+}
 .overlay-scrollbar {
   position: fixed;
   top: 0;

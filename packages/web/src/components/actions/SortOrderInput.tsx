@@ -4,6 +4,9 @@ import { Icon } from "../icon/Icon.js";
 import { ActionFeedbackOutlet, type ActionFeedbackTarget } from "../feedback/ActionFeedbackRegion.js";
 import { createActionFeedback, type ActionFeedbackState } from "../../lib/ui/action-feedback.js";
 
+export const sortOrderRangeMessage =
+  `请输入 ${sortOrderMin.toLocaleString("en-US")} 至 ${sortOrderMax.toLocaleString("en-US")} 之间的整数`;
+
 function parseDraft(draft: string) {
   const text = draft.trim();
   const value = Number(text);
@@ -49,12 +52,7 @@ export function SortOrderInput({
     if (busy || runningRef.current) return;
     if (form.draft === String(value)) return;
     if (parsed === null || !isSortOrder(parsed)) {
-      setError(
-        createActionFeedback(
-          `请输入 ${sortOrderMin.toLocaleString("en-US")} 至 ${sortOrderMax.toLocaleString("en-US")} 之间的整数`,
-          "error"
-        )
-      );
+      setError(createActionFeedback(sortOrderRangeMessage, "error"));
       return;
     }
     if (parsed === value) {

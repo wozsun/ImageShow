@@ -1,10 +1,7 @@
 import { useRef, type CSSProperties, type RefObject } from "react";
 import { Icon } from "../icon/Icon.js";
 import { ProgressiveImage } from "./ProgressiveImage.js";
-import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
-import { usePageScrollLock } from "../../hooks/usePageScrollLock.js";
-import { useDialogFocus } from "../../hooks/useDialogFocus.js";
-import { DialogLayerPortal } from "../dialog/DialogLayerPortal.js";
+import { DialogFrame } from "../dialog/DialogFrame.js";
 
 export function ImagePreviewModal({
   src,
@@ -23,55 +20,44 @@ export function ImagePreviewModal({
   onClose: () => void;
   returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
-  const exit = useAnimatedClose(onClose);
-  usePageScrollLock();
-  const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
-  useDialogFocus({
-    containerRef: dialogRef,
-    initialFocusRef: closeButtonRef,
-    returnFocusRef,
-    onEscape: () => exit.requestClose()
-  });
   const ratio = width && height ? width / height : 16 / 9;
   const previewStyle = {
     "--image-preview-ratio": ratio,
     width: width && height ? `min(96vw, ${ratio * 92}vh)` : undefined
   } as CSSProperties;
   return (
-    <DialogLayerPortal>
-      <div
-        ref={dialogRef}
-        className={`modal image-preview-modal ${exit.closing ? "is-closing" : ""}`}
-        data-dialog-frame=""
-        data-admin-dialog=""
-        role="dialog"
-        aria-modal="true"
-        aria-label="图片预览"
-        tabIndex={-1}
-        onAnimationEnd={exit.onAnimationEnd}
-        onClick={() => exit.requestClose()}
-      >
-        <ProgressiveImage
-          key={src}
-          imageKey={src}
-          thumbSrc={thumbSrc || src}
-          fullSrc={src}
-          alt={alt}
-          className="image-preview-image"
-          style={previewStyle}
-          onClick={(event) => event.stopPropagation()}
-        />
-        <button
-          ref={closeButtonRef}
-          className="icon close pressable image-preview-close"
-          type="button"
-          title="关闭"
-          onClick={() => exit.requestClose()}
-        >
-          <Icon name="close-line" />
-        </button>
-      </div>
-    </DialogLayerPortal>
+    <DialogFrame
+      className="modal image-preview-modal"
+      ariaLabel="图片预览"
+      closeOnBackdrop
+      backdropCloseEvent="click"
+      initialFocusRef={closeButtonRef}
+      returnFocusRef={returnFocusRef}
+      onClose={onClose}
+    >
+      {({ requestClose }) => (
+        <>
+          <ProgressiveImage
+            key={src}
+            imageKey={src}
+            thumbSrc={thumbSrc || src}
+            fullSrc={src}
+            alt={alt}
+            className="image-preview-image"
+            style={previewStyle}
+          />
+          <button
+            ref={closeButtonRef}
+            className="icon close pressable image-preview-close"
+            type="button"
+            title="关闭"
+            onClick={() => requestClose()}
+          >
+            <Icon name="close-line" />
+          </button>
+        </>
+      )}
+    </DialogFrame>
   );
 }

@@ -510,11 +510,12 @@
   .image-admin-head .image-admin-view-switch button {
     min-width: 76px;
   }
-  /* 回收站视图没有导入 / 上传时只保留列表工具栏；副标题到操作区的 16px 由吸顶标题区提供。 */
+  /* 回收站视图没有导入 / 上传时只保留列表工具栏；副标题到操作区的 16px 由吸顶标题区提供，
+     操作区内导入 / 上传与筛选之间和其余各行一样为 8px。 */
   .image-admin-toolbar {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 8px;
   }
   .image-admin-head-tools:empty {
     display: none;
@@ -544,8 +545,10 @@
     flex: 1 1 auto;
     min-width: 0;
   }
+  /* 窄屏控件区各行统一 8px，与工具栏两行之间、按钮之间的间距一致。 */
   .image-list-filter-bar {
     position: relative;
+    margin-bottom: 8px;
   }
   .image-list-filter-bar:is(.filters-open, .filters-motion-enabled) {
     z-index: 20;

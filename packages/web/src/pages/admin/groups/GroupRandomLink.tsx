@@ -1,5 +1,5 @@
 import { detectDeviceFromUserAgent, type AdminImageListItemDto } from "@imageshow/shared/browser";
-import { CopyButton } from "../../../components/actions/CopyButton.js";
+import { CopyableLinkField } from "../../../components/actions/CopyableLinkField.js";
 import { SelectMenu } from "../../../components/form/SelectMenu.js";
 import type { SelectOption } from "../../../lib/ui/select-options.js";
 
@@ -73,13 +73,14 @@ export function GroupRandomLink({ slug, value, onChange, doubleRow, mobileLayout
           </div>
         ))}
       </div>
-      <div className="group-random-link-value">
-        <label className="group-random-link-field">
-          <span className="group-random-link-label">随机API</span>
-          <input aria-label="分组随机链接" readOnly value={url.href} />
-        </label>
-        <CopyButton value={url.href} ariaLabel="复制分组随机链接" variant={mobileLayout ? "icon" : "text"} />
-      </div>
+      <CopyableLinkField
+        className="group-random-link-value"
+        value={url.href}
+        prefix="随机API"
+        inputLabel="分组随机链接"
+        copyLabel="复制分组随机链接"
+        copyVariant={mobileLayout ? "icon" : "text"}
+      />
     </div>
   );
 }

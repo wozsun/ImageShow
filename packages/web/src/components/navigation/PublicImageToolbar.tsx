@@ -4,7 +4,7 @@ import {
   type GalleryFacetsDto,
   type ShowOrder
 } from "@imageshow/shared/browser";
-import { CopyButton } from "../actions/CopyButton.js";
+import { CopyableLinkField } from "../actions/CopyableLinkField.js";
 import { SelectMenu } from "../form/SelectMenu.js";
 import { AnchoredPopup } from "../menu/AnchoredPopup.js";
 import { Icon, type IconName } from "../icon/Icon.js";
@@ -304,15 +304,12 @@ export function PublicImageToolbar({
                   </p>
                 </header>
                 {pageUrl ? (
-                  <div className="public-toolbar-share-link">
-                    <input
-                      readOnly
-                      value={pageUrl}
-                      aria-label="页面链接"
-                      onClick={(event) => event.currentTarget.select()}
-                    />
-                    <CopyButton value={pageUrl} ariaLabel="复制页面链接" />
-                  </div>
+                  <CopyableLinkField
+                    className="public-toolbar-share-link"
+                    value={pageUrl}
+                    inputLabel="页面链接"
+                    copyLabel="复制页面链接"
+                  />
                 ) : (
                   <p>请先确认筛选条件</p>
                 )}
@@ -323,15 +320,12 @@ export function PublicImageToolbar({
                   <p>按当前筛选条件随机获取图片</p>
                 </header>
                 {randomUrl ? (
-                  <div className="public-toolbar-share-link">
-                    <input
-                      readOnly
-                      value={randomUrl}
-                      aria-label="随机图片API"
-                      onClick={(event) => event.currentTarget.select()}
-                    />
-                    <CopyButton value={randomUrl} ariaLabel="复制随机图片API链接" />
-                  </div>
+                  <CopyableLinkField
+                    className="public-toolbar-share-link"
+                    value={randomUrl}
+                    inputLabel="随机图片API"
+                    copyLabel="复制随机图片API链接"
+                  />
                 ) : (
                   <p role={randomLinkError ? "alert" : undefined}>
                     {randomLinkError ?? "请先确认筛选条件"}

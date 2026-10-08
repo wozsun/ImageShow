@@ -6,7 +6,7 @@ import {
   adminApiBasePath
 } from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
-import { AsyncActionButton, type AsyncActionPresentation } from "../../components/actions/AsyncActionButton.js";
+import { SaveOrDeleteButton } from "../../components/actions/SaveOrDeleteButton.js";
 import { SortOrderInput } from "../../components/actions/SortOrderInput.js";
 import type { ActionFeedbackTarget } from "../../components/feedback/ActionFeedbackRegion.js";
 import { SlugChip } from "../../components/data-display/SlugChip.js";
@@ -83,15 +83,6 @@ export function VocabularyAdminItem({
 
   const dirty = display !== form.savedDisplay || (isAuthor && link !== form.savedLink);
   const busy = saveStatus.pending || sortBusy;
-  const isSaveAction = dirty || saveStatus.status !== "idle";
-  const actionPresentation: AsyncActionPresentation = {
-    idle: isSaveAction
-      ? { icon: "save-3-line", label: "保存" }
-      : { icon: "delete-bin-6-line", label: "删除" },
-    pending: { icon: "save-3-line", label: "保存中" },
-    success: { icon: "check-line", label: "已保存" },
-    error: { icon: "close-line", label: "保存失败" }
-  };
 
   const acceptSaved = (savedDisplay: string, savedLink: string) => {
     setForm((current) =>
@@ -176,23 +167,15 @@ export function VocabularyAdminItem({
     ),
     actions: (
       <div className="vocabulary-item-actions">
-        {(canDelete || isSaveAction) && (
-          <AsyncActionButton
-            type="button"
-            className={`icon vocabulary-action-button ${isSaveAction ? "button" : "danger-button is-subtle"}`}
-            status={saveStatus.status}
-            presentation={actionPresentation}
-            aria-label={`${isSaveAction ? "保存" : "删除"}${noun} ${item.slug}`}
-            disabled={busy || (isSaveAction && !dirty)}
-            onClick={() => {
-              if (isSaveAction) {
-                if (dirty) void save();
-              } else if (canDelete) {
-                onDelete();
-              }
-            }}
-          />
-        )}
+        <SaveOrDeleteButton
+          itemLabel={`${noun} ${item.slug}`}
+          status={saveStatus.status}
+          dirty={dirty}
+          canDelete={canDelete}
+          disabled={busy}
+          onSave={() => void save()}
+          onDelete={onDelete}
+        />
       </div>
     )
   };

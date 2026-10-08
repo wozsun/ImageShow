@@ -1,6 +1,6 @@
 # ImageShow — 通用规则
 
-> 根目录 `.gitignore` 采用白名单，只跟踪其中列出的文件；`AGENTS.md`、`CLAUDE.md` 与 `.agents/` 下的 `process/`、`spec/`、`reference/` 随仓库跟踪，`.agents/` 其余内容（含 `plan/`、`skills/`）、`TODO.md`、`tests/`、`data/`、`postgres/`、`redis/` 与 `.env` 由 Git 忽略。测试凭据、待办与方案、版本报告、原始证据、留存文件与运行数据保持在忽略范围内；受跟踪文件不写凭据、本机路径与私有链接，提到被忽略的文件时以代码格式写路径，不加链接。
+> 根目录 `.gitignore` 采用白名单，只跟踪其中列出的文件；`AGENTS.md` 与 `.agents/` 下的 `process/`、`spec/`、`reference/` 随仓库跟踪，`.agents/` 其余内容（含 `plan/`、`skills/`）、`TODO.md`、`tests/`、`data/`、`postgres/`、`redis/` 与 `.env` 由 Git 忽略。测试凭据、待办与方案、版本报告、原始证据、留存文件与运行数据保持在忽略范围内；受跟踪文件不写凭据、本机路径与私有链接，提到被忽略的文件时以代码格式写路径，不加链接。
 
 ImageShow 是自托管图片画廊、随机图 API 和轻量后台管理项目，以 npm workspaces 管理 `server`、`web`、`shared` 三个包。本文件只保存全项目通用规则和专用规范入口；专用规范位于 `.agents/`，按下方导航在对应任务或步骤需要时读取。
 

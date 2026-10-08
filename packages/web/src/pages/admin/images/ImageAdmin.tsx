@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useRef,
   useState
 } from "react";
@@ -11,8 +10,7 @@ import {
   adminPermissions,
   type AdminImageSort,
   type AdminSettings,
-  type AdminImageListItemDto,
-  type EditableImageSnapshotDto
+  type AdminImageListItemDto
 } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { StableButtonLabel } from "../../../components/data-display/StableButtonLabel.js";
@@ -30,7 +28,6 @@ import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import { AdminSettingsBoundary } from "../../../components/feedback/AdminSettingsBoundary.js";
 import { useIngestionVocabulary } from "../../../lib/api/ingestion-vocabulary.js";
 import { useStorageNameResolver } from "../../../lib/api/storage-options.js";
-import { createPageLifetimeModuleLoader } from "../../../lib/page-lifetime-module-loader.js";
 import { ImageListViewControls } from "../../../components/image/ImageListViewControls.js";
 import { AdminImageCard } from "./AdminImageCard.js";
 import {
@@ -39,7 +36,6 @@ import {
   type ImageAdminFilterValues
 } from "./ImageAdminFilters.js";
 import { IngestionLauncher } from "../ingestion/IngestionLauncher.js";
-import { QueryErrorState } from "../../../components/feedback/QueryErrorState.js";
 import {
   invalidateImageData,
   invalidateImageDataAfterAdminListMutation,
@@ -49,17 +45,15 @@ import { useAdminPermissions } from "../../../hooks/useAuthSession.js";
 import { useAdminPreference } from "../../../hooks/useAdminPreferences.js";
 import { useAdminImageDetailCapability } from "../../../components/image/useAdminImageDetailCapability.js";
 import { useImageEditorCapability } from "../../../components/image/editor/useImageEditorCapability.js";
-import {
-  loadImageEditorCapabilityModule,
-  type ImageEditorIntent,
-  type ImageMetadataSaveCommit
+import type {
+  ImageEditorIntent,
+  ImageMetadataSaveCommit
 } from "../../../components/image/editor/image-editor-capability-loader.js";
 import {
   mobileViewportMediaQuery,
   useMediaQuery
 } from "../../../hooks/useMediaQuery.js";
 import { useWorkspaceToolbarCollapse } from "../../../hooks/useWorkspaceToolbarCollapse.js";
-import { usePageScrollLock } from "../../../hooks/usePageScrollLock.js";
 import { WorkspaceToolbarScrollbar } from "../../../components/layout/WorkspaceToolbarScrollbar.js";
 import { WorkspaceToolbar } from "../../../components/layout/WorkspaceToolbar.js";
 import { workspaceScrollContainer } from "../../../lib/ui/workspace-scroll.js";
@@ -70,27 +64,21 @@ import {
 } from "./useImageAdminOperations.js";
 import { useImageAdminSelection } from "./useImageAdminSelection.js";
 import { useImageAdminPageNavigation } from "./useImageAdminPageNavigation.js";
+import { preloadImageIdInput, useImageIdInputEntry } from "./useImageIdInputEntry.js";
+import {
+  ImageGridStatus,
+  ImageListSelectionBar,
+  ImageListViewSwitch,
+  imageRangeSelectionHelpId,
+  useImageListPageReset
+} from "./ImageListPageParts.js";
 import { imageAdminPaginationScopeKey } from "./image-admin-list-query.js";
 import "../../../styles/admin/images.css";
 
-const imageRangeSelectionHelpId = "admin-image-range-selection-help";
-
-type ImageIdInputDialogModule = typeof import("./ImageIdInputDialog.js");
-
-const loadImageIdInputDialog = createPageLifetimeModuleLoader<ImageIdInputDialogModule>(
-  () => import("./ImageIdInputDialog.js")
-);
-// 未勾选时「编辑图片」「删除图片」先输入 ID，再进入编辑弹窗；两段一并预取。
-const preloadImageIdInput = () => {
-  void loadImageIdInputDialog().catch(() => undefined);
-  void loadImageEditorCapabilityModule().catch(() => undefined);
-};
-
-type ImageIdInputSession = {
-  intent: ImageEditorIntent;
-  opener: HTMLButtonElement;
-  Dialog: ImageIdInputDialogModule["ImageIdInputDialog"];
-};
+const viewOptions = [
+  { value: "ready", label: "图库" },
+  { value: "deleted", label: "回收站" }
+] as const;
 
 export function ImageAdmin() {
   return (
@@ -115,10 +103,6 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
     order: preferredOrder
   }));
   const [batchTrashPending, setBatchTrashPending] = useState(false);
-  const [idInput, setIdInput] = useState<ImageIdInputSession | null>(null);
-  const [idInputPending, setIdInputPending] = useState(false);
-  const idInputOpenerRef = useRef<HTMLButtonElement | null>(null);
-  const failedIdInputFocusRef = useRef<HTMLButtonElement | null>(null);
   const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
   const permissions = useAdminPermissions();
   const canPurgeImage = permissions.includes(adminPermissions.imageTrashPurge);
@@ -144,16 +128,13 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
     items,
     hasCurrentPageData,
     total,
-    error: listError,
-    isError: listFailed,
     isFetching,
-    refetch: refetchList,
     scopeKey,
     pageNumber,
     totalPages
   } = navigation;
   const selection = useImageAdminSelection(items);
-  const { selected, selectedItems, allSelected } = selection;
+  const { selected, selectedItems } = selection;
   const invalidateData = useCallback(async () => {
     await invalidateImageDataAfterAdminListMutation(client);
   }, [client]);
@@ -204,23 +185,18 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
     }
   });
   const editorPending = editorCapability.pending !== null;
-  // ID 弹窗模块加载期间沿用上传 / 导入的做法锁住页面根节点：按钮外观不变，指针、键盘、焦点与滚动
-  // 一并隔离，弹窗挂载后由其自身的锁接替；加载失败时把焦点还给入口按钮。
-  usePageScrollLock(idInputPending);
-  useLayoutEffect(() => {
-    if (idInputPending) return;
-    const target = failedIdInputFocusRef.current;
-    failedIdInputFocusRef.current = null;
-    if (target?.isConnected
-      && !target.disabled
-      && !target.closest("[inert]")) target.focus();
-  }, [idInputPending]);
+  const idInput = useImageIdInputEntry<ImageEditorIntent>({
+    onLoadError: (error) => {
+      reportAdminUiError("image_admin.id_input_load", error);
+      showFeedback("按 ID 指定图片功能加载失败，请重新加载页面", "error");
+    }
+  });
   const editorConflictBusy = operationBusy || detailPending;
   const modalOpen = Boolean(
     detailCapability.item
     || editorCapability.session
     || confirmAction
-    || idInput
+    || idInput.session
   );
   const interfaceBusy = editorConflictBusy || editorPending || modalOpen;
   // 按 ID 指定图片的入口不随弹窗打开而禁用：弹窗期间页面已 inert，关闭时焦点要能还给按钮。
@@ -290,42 +266,11 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
     setFeedback(null);
     navigation.loadPage(targetPage, interfaceBusy);
   };
-  useEffect(() => {
-    clearImageSelection();
-    // 每个数字页与筛选 scope 都从顶部开始，避免首屏卡片只露出残片。
-    workspaceScrollContainer(gridRef.current)?.scrollTo({ top: 0, left: 0 });
-  }, [clearImageSelection, pageNumber, scopeKey]);
+  useImageListPageReset(clearImageSelection, gridRef, scopeKey, pageNumber);
   const preloadBatchEditor = () =>
     editorCapability.preload({
       sources: selectedItems
     });
-  const openImageIdInput = (intent: ImageEditorIntent, opener: HTMLButtonElement) => {
-    setIdInputPending(true);
-    void loadImageIdInputDialog().then(
-      (module) => {
-        if (!opener.isConnected) return;
-        idInputOpenerRef.current = opener;
-        setIdInput({ intent, opener, Dialog: module.ImageIdInputDialog });
-      },
-      (error: unknown) => {
-        failedIdInputFocusRef.current = opener;
-        reportAdminUiError("image_admin.id_input_load", error);
-        showFeedback("按 ID 指定图片功能加载失败，请重新加载页面", "error");
-      }
-    ).finally(() => setIdInputPending(false));
-  };
-  // ID 弹窗保持到编辑弹窗就绪，二者在同一次渲染中交接，避免中间露出页面。
-  const openEditorForImageIds = async (items: EditableImageSnapshotDto[]) => {
-    if (!idInput) return "interrupted" as const;
-    const { intent, opener } = idInput;
-    return editorCapability.open(
-      { sources: items, intent, fromDialog: true },
-      opener,
-      () => {
-        setIdInput(null);
-      }
-    );
-  };
   const selectedEditorPending = Boolean(
     editorCapability.pending &&
     editorCapability.pending.itemIds.length === selectedItems.length &&
@@ -339,24 +284,12 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
       : "";
   // 窄屏切换放在标题行，桌面留在工具区；两处共用同一组按钮。
   const viewSwitch = (
-    <div className="image-admin-view-switch">
-      <button
-        type="button"
-        className={view === "ready" ? "active" : ""}
-        disabled={interfaceBusy}
-        onClick={() => changeView("ready")}
-      >
-        图库
-      </button>
-      <button
-        type="button"
-        className={view === "deleted" ? "active" : ""}
-        disabled={interfaceBusy}
-        onClick={() => changeView("deleted")}
-      >
-        回收站
-      </button>
-    </div>
+    <ImageListViewSwitch
+      options={viewOptions}
+      value={view}
+      disabled={interfaceBusy}
+      onChange={changeView}
+    />
   );
   return (
     <section
@@ -401,30 +334,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
               onClear={clearFilters}
             />
             <div className="image-list-toolbar">
-              <div className="inline-actions image-list-selection">
-                <span id={imageRangeSelectionHelpId} className="image-list-selection-help">
-                  按住 Shift 点击卡片主体，或按 Shift+Enter，可将图片作为连续选择的区间端点。
-                </span>
-                <label className="image-list-check-label">
-                  <input
-                    id="admin-image-select-all"
-                    type="checkbox"
-                    checked={allSelected}
-                    disabled={interfaceBusy}
-                    onChange={(event) => selection.selectAll(
-                      event.target.checked,
-                      interfaceBusy
-                    )}
-                  />
-                  全选
-                </label>
-                <span
-                  className={`image-list-selection-status${selected.length ? "" : " is-empty"}`}
-                  role="status"
-                >
-                  {selected.length ? `已选 ${selected.length}` : "未选择图片"}
-                </span>
-              </div>
+              <ImageListSelectionBar selection={selection} disabled={interfaceBusy} />
               <div className="image-list-toolbar-actions">
                 <ImageListViewControls
                   sort={sort}
@@ -446,7 +356,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
                         : preloadImageIdInput)}
                       onClick={(event) => {
                         if (!selected.length) {
-                          openImageIdInput("edit", event.currentTarget);
+                          void idInput.open("edit", event.currentTarget);
                           return;
                         }
                         void editorCapability.open(
@@ -511,7 +421,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
                       type="button"
                       disabled={idInputEntryBusy}
                       {...preloadIntentProps(preloadImageIdInput)}
-                      onClick={(event) => openImageIdInput("delete", event.currentTarget)}
+                      onClick={(event) => void idInput.open("delete", event.currentTarget)}
                     >
                       <AdminIcon name="delete-bin-line" />
                       删除图片
@@ -629,15 +539,11 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
               }}
             />
           ))}
-          {listFailed && (
-            <QueryErrorState
-              error={listError}
-              onRetry={() => void refetchList()}
-              reportContext="image_admin.list_load"
-            />
-          )}
-          {isFetching && !items.length && <p className="muted">加载中</p>}
-          {!listFailed && !isFetching && !items.length && <p className="muted">暂无记录</p>}
+          <ImageGridStatus
+            navigation={navigation}
+            reportContext="image_admin.list_load"
+            emptyText="暂无记录"
+          />
         </div>
       </div>
       <OverlayScrollbar key={`scrollbar:${scopeKey}:${pageNumber}`} targetRef={gridRef} pageEdge />
@@ -685,12 +591,12 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
           returnFocusRef={editorCapability.returnFocusRef}
         />
       )}
-      {idInput && (
-        <idInput.Dialog
-          intent={idInput.intent}
-          onClose={() => setIdInput(null)}
-          onResolved={openEditorForImageIds}
-          returnFocusRef={idInputOpenerRef}
+      {idInput.session && (
+        <idInput.session.Dialog
+          intent={idInput.session.intent}
+          onClose={idInput.close}
+          onResolved={(items) => idInput.handOff(editorCapability.open, items)}
+          returnFocusRef={idInput.returnFocusRef}
         />
       )}
       {confirmAction && confirmCopy && (

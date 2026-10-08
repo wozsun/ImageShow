@@ -6,7 +6,13 @@
   color: var(--admin-color-navigation-active-text);
 }
 .group-missing-state {
-  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+.group-missing-state > p {
+  margin: 0;
 }
 .group-detail-page .admin-image-card-actions > .group-member-remove {
   grid-row: 2;
@@ -58,7 +64,7 @@
   padding-inline: 10px;
   white-space: nowrap;
 }
-.group-random-link-field {
+.group-random-link .copyable-link-field {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -69,7 +75,7 @@
   border: 1px solid var(--color-control-border);
   border-radius: 6px;
 }
-.group-random-link-label {
+.group-random-link .copyable-link-prefix {
   flex: 0 0 auto;
   color: var(--admin-color-text-secondary);
   font-size: 13px;
@@ -78,22 +84,24 @@
   -webkit-user-select: none;
   user-select: none;
 }
-.group-random-link .group-random-link-field input {
+.group-random-link .copyable-link-field input {
   flex: 1 1 0;
   height: 100%;
   padding-left: 0;
   border: 0;
   background: transparent;
 }
-.group-random-link-field:has(input:focus-visible) {
+.group-random-link .copyable-link-field:has(input:focus-visible) {
   outline: 1px auto var(--color-native-focus-outline);
   outline-offset: 0;
 }
-.group-random-link-field input:focus-visible {
+.group-random-link .copyable-link-field input:focus-visible {
   outline: none;
 }
+/* 控件区各行竖直间距一致：桌面与筛选、工具栏之间同为 10px，窄屏统一为 8px。 */
 .group-random-link[data-double-row="true"] {
   flex-direction: column;
+  row-gap: 10px;
 }
 .group-random-link[data-double-row="true"] > .group-random-link-options {
   display: grid;
@@ -111,6 +119,12 @@
 }
 
 @media (max-width: 760px) {
+  .group-random-link {
+    margin-bottom: 8px;
+  }
+  .group-random-link[data-double-row="true"] {
+    row-gap: 8px;
+  }
   .group-random-link-options {
     gap: 8px;
   }
@@ -118,8 +132,12 @@
     position: relative;
     grid-template-columns: minmax(0, 1fr);
   }
-  .group-random-link-field {
-    padding-right: calc(var(--group-link-control-height) + 8px);
+  /* 文字止于复制按钮前 4px：按钮内缩 3px、边长为控件高度减 8px，扣除 1px 边框；输入框自身不再留右内边距。 */
+  .group-random-link .copyable-link-field {
+    padding-right: calc(var(--group-link-control-height) - 2px);
+  }
+  .group-random-link .copyable-link-field input {
+    padding-right: 0;
   }
   .group-random-link .copy-button {
     position: absolute;
@@ -129,7 +147,7 @@
     min-height: calc(var(--group-link-control-height) - 8px);
     height: calc(var(--group-link-control-height) - 8px);
     padding: 0;
-    color: var(--admin-color-action-primary);
+    color: var(--color-control-text-primary);
     background: transparent;
     border: 0;
   }
