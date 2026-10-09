@@ -267,8 +267,7 @@ function presentImageBase(
     theme: row.theme,
     author: row.author,
     tags: row.tags,
-    base_url,
-    storage_slug: row.storage_slug
+    base_url
   };
 }
 
@@ -289,6 +288,7 @@ export async function ingestionImageItemsWithTags(rows: IngestionImageRecordWith
   const storageRecords = await storageRecordsForRows(rows);
   return rows.map((row): CompletedIngestionImageDto => ({
     ...presentImageBase(row, storageRecords),
+    storage_slug: row.storage_slug,
     variants: presentImageVariants(row),
     width: Number(row.s_width),
     height: Number(row.s_height),
@@ -325,15 +325,12 @@ export async function adminImageListItemsWithTags(rows: ImageRecordWithTags[]) {
 export async function adminImageDetailItemsWithTags(rows: AdminImageDetailRecordWithTags[]) {
   if (!rows.length) return [];
   const storageRecords = await storageRecordsForRows(rows);
-  return rows.map((row): AdminImageRecentItemDto => {
-    const { storage_slug: _storageSlug, ...base } = presentAdminImageBase(row, storageRecords);
-    return {
-      ...base,
-      original: hasOriginal(row),
-      image_time: serializeTimestamp(row.image_time),
-      ...presentImageAdminTimestamps(row)
-    };
-  });
+  return rows.map((row): AdminImageRecentItemDto => ({
+    ...presentAdminImageBase(row, storageRecords),
+    original: hasOriginal(row),
+    image_time: serializeTimestamp(row.image_time),
+    ...presentImageAdminTimestamps(row)
+  }));
 }
 
 export async function editableImageSnapshotsWithTags(rows: EditableImageSnapshotRecordWithTags[]) {

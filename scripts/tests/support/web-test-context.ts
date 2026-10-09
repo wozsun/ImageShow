@@ -105,7 +105,6 @@ export function editableImage(
     storage_label: "本地存储",
     width: 1920,
     height: 1080,
-    storage_slug: "local",
     ...overrides
   };
 }

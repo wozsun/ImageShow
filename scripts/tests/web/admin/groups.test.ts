@@ -112,7 +112,7 @@ test("[Web/分组] 分组读取失败可重试，不存在时不读取图片并�
   assert.ok(h.node(".group-missing-state").textContent?.includes("分组不存在或已删除"));
   assert.equal(h.document.querySelector(".group-random-link, .image-list-controls, .admin-image-grid, .admin-pagination"), null);
   assert.equal(h.pending.length, 2, "missing groups never issue an image list request");
-  await h.emit(h.node(".group-missing-state a"), "click", { button: 0 });
+  await h.emit(h.node(".group-missing-state .workspace-header-toolbar-row a"), "click", { button: 0 });
   assert.equal(h.pathname(), "/admin/groups");
 });
 
@@ -150,7 +150,7 @@ test("[Web/分组] 成员操作 404 只刷新分组并显示已删除状态", as
       assert.equal(h.document.body.textContent?.includes("结果未确认"), false);
       assert.equal(h.pending.length, mutation + 2, "404 does not trigger an unknown-write reconciliation read");
       assert.equal(h.document.querySelector(".image-editor-modal"), null);
-      assert.equal(h.document.activeElement, h.node(".group-missing-state a"), "发起按钮卸载后焦点交给返回入口");
+      assert.equal(h.document.activeElement, h.node(".group-missing-state .workspace-header-toolbar-row a"), "发起按钮卸载后焦点交给返回入口");
     });
   }
 });

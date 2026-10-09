@@ -5,14 +5,9 @@
 .group-title-link:hover {
   color: var(--admin-color-navigation-active-text);
 }
-.group-missing-state {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 12px;
-}
-.group-missing-state > p {
-  margin: 0;
+/* 返回入口位于页头下方的操作区，与其他管理页的新建控件同高。 */
+.group-missing-state .workspace-header-toolbar-row > .button {
+  height: var(--admin-control-height);
 }
 .group-detail-page .admin-image-card-actions > .group-member-remove {
   grid-row: 2;
@@ -105,16 +100,6 @@
 .group-random-link[data-double-row="true"] > .group-random-link-options {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-@media (min-width: 761px) {
-  .group-detail-page .image-list-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-  }
-  .group-detail-page .image-list-toolbar-actions {
-    margin-left: auto;
-  }
 }
 
 @media (max-width: 760px) {

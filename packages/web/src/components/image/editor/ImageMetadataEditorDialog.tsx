@@ -577,7 +577,6 @@ export function ImageMetadataEditorDialog({
               <ImageStorageMigrationDialog
                 open
                 imageIds={activeItems.map((item) => item.id)}
-                currentStorageSlugs={activeItems.map((item) => item.storage_slug)}
                 returnFocusRef={migrateTriggerRef}
                 onClose={() => setMigrating(false)}
                 onSaved={() => onSaved?.()}

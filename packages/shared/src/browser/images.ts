@@ -154,7 +154,6 @@ export type ImageAdminInfoDto = ImageAdminStorageDto & {
 export type EditableImageSnapshotDto = Omit<ImageDetailItemDto, "image_time"> &
   Pick<ShowImageCardDto, "width" | "height"> & ImageAdminStorageDto & {
     original: string;
-    storage_slug: string;
   };
 
 /** Admin detail input; it only reads whether `original` is truthy. */

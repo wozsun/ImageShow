@@ -14,6 +14,7 @@ import { TwoStepConfirmButton } from "../../../components/actions/TwoStepConfirm
 import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { OverlayScrollbar } from "../../../components/layout/OverlayScrollbar.js";
+import { WorkspaceHeader } from "../../../components/layout/WorkspaceHeader.js";
 import { WorkspaceToolbar } from "../../../components/layout/WorkspaceToolbar.js";
 import { WorkspaceToolbarScrollbar } from "../../../components/layout/WorkspaceToolbarScrollbar.js";
 import { AdminPagination } from "../../../components/navigation/AdminPagination.js";
@@ -60,20 +61,21 @@ export function GroupDetail() {
 }
 
 function GroupMissingState() {
+  const toolbarRef = useWorkspaceToolbarCollapse();
   const returnLinkRef = useRef<HTMLAnchorElement | null>(null);
   // 成员写入收到 404 时，发起操作的按钮与弹窗随页面切换卸载；焦点落空时交给返回入口。
   useLayoutEffect(() => {
     if (!document.activeElement || document.activeElement === document.body) returnLinkRef.current?.focus();
   }, []);
   return (
-    <section className="workspace group-detail-page">
-      <header className="workspace-head">
-        <h1><Link className="group-title-link" to={`${adminBasePath}/groups`}>分组管理</Link></h1>
-      </header>
-      <div className="group-missing-state">
-        <p role="status">分组不存在或已删除</p>
-        <Link ref={returnLinkRef} className="button" to={`${adminBasePath}/groups`}>返回分组列表</Link>
-      </div>
+    <section ref={toolbarRef} className="workspace workspace-contained workspace-has-toolbar group-detail-page group-missing-state">
+      {/* 与其他管理页同用页头：返回入口位于页头下方的操作行，左缘与标题、副标题对齐。 */}
+      <WorkspaceHeader
+        title={<Link className="group-title-link" to={`${adminBasePath}/groups`}>分组管理</Link>}
+        description={<span role="status">分组不存在或已删除</span>}
+        toolbarRow={<Link ref={returnLinkRef} className="button" to={`${adminBasePath}/groups`}>返回分组列表</Link>}
+      />
+      <WorkspaceToolbarScrollbar />
     </section>
   );
 }

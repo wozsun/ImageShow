@@ -961,7 +961,7 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
         status: 200,
         headers: { "content-type": "application/json" }
       });
-    const image = (serial: string): AdminImageListItemDto => ({...galleryCard(`00000000-0000-7000-8000-${serial}`),device: "pc", brightness: "dark", author: null, image_time: "2026-09-01T00:00:00.000Z",description: "",storage_label: "本地存储",source: null,status: "deleted",purge_pending: false,storage_slug: "local",original: "",deleted_at: "2026-08-15T00:00:00.000Z",created_at: "2026-08-14T00:00:00.000Z",updated_at: "2026-08-15T00:00:00.000Z",base_url:"/images",variants:{large:{byte_size:1024},medium:{byte_size:800},small:{byte_size:200}}});
+    const image = (serial: string): AdminImageListItemDto => ({...galleryCard(`00000000-0000-7000-8000-${serial}`),device: "pc", brightness: "dark", author: null, image_time: "2026-09-01T00:00:00.000Z",description: "",storage_label: "本地存储",source: null,status: "deleted",purge_pending: false,original: "",deleted_at: "2026-08-15T00:00:00.000Z",created_at: "2026-08-14T00:00:00.000Z",updated_at: "2026-08-15T00:00:00.000Z",base_url:"/images",variants:{large:{byte_size:1024},medium:{byte_size:800},small:{byte_size:200}}});
     const waitFor = async (condition: () => boolean, message: string) => {
       for (let attempt = 0; attempt < 120; attempt += 1) {
         await React.act(async () => {

@@ -330,4 +330,11 @@
   .workspace-has-toolbar > .vocabulary-content {
     flex-grow: 1;
   }
+  /* 列表表头排在滚动区之前，让出操作区高度的上边距改由整个集合承担，表头不落到吸顶操作区下方。 */
+  .workspace-has-toolbar .vocabulary-collection {
+    margin-top: var(--workspace-toolbar-height, 0px);
+  }
+  .workspace-has-toolbar .vocabulary-scroll[data-workspace-content] {
+    margin-top: 0;
+  }
 }

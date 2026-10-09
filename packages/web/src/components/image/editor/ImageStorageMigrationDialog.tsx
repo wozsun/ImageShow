@@ -26,7 +26,6 @@ const migratePresentation = {
 export function ImageStorageMigrationDialog({
   open,
   imageIds,
-  currentStorageSlugs,
   returnFocusRef,
   onClose,
   onSaved,
@@ -34,23 +33,17 @@ export function ImageStorageMigrationDialog({
 }: {
   open: boolean;
   imageIds: string[];
-  currentStorageSlugs: string[];
   returnFocusRef: RefObject<HTMLElement | null>;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
   onSucceeded: (message: string, storageLabel: string) => void;
 }) {
   const single = imageIds.length === 1;
-  const { data } = useStorageOptions();
-  // 目标至少要让一张图片真正离开当前后端。单图编辑因此不会再列出其本身的
-  // 存储；混合来源的批量迁移仍可选择其中一个已启用来源，以迁移其余图片。
+  const { data, isLoading, isError } = useStorageOptions();
+  // 迁移极低频，图片数据不为它携带所在后端，这里列出全部已启用后端；
+  // 已在目标后端的图片由服务端计为未变化。
   const options = (data?.backends ?? [])
-    .filter(
-      (backend) =>
-        backend.enabled && currentStorageSlugs.some(
-          (storageSlug) => storageSlug !== backend.slug
-        )
-    )
+    .filter((backend) => backend.enabled)
     .map((backend) => ({
       value: backend.slug,
       label: backend.display_name || backend.slug
@@ -87,7 +80,7 @@ export function ImageStorageMigrationDialog({
     const succeeded = await status.run(async () => {
       setError("");
       if (!targetAvailable) {
-        setError("没有可迁移的其他存储后端。");
+        setError("请选择目标存储。");
         return false;
       }
       let response: ImageStorageMigrationResponseDto;
@@ -211,9 +204,10 @@ export function ImageStorageMigrationDialog({
                 disabled={!options.length}
               />
             </label>
-            {!options.length && (
-              <p className="notice-line" role="note">
-                没有可迁移的其他存储后端，请先在设置页启用其他后端。
+            {isLoading && <p className="muted">正在加载存储后端</p>}
+            {isError && (
+              <p className="admin-error" role="alert">
+                存储后端列表加载失败，请关闭弹窗后重试。
               </p>
             )}
             <p className="notice-line">
@@ -234,7 +228,7 @@ export function ImageStorageMigrationDialog({
               type="submit"
               status={status.status}
               presentation={migratePresentation}
-              disabled={status.pending || !targetAvailable}
+              disabled={status.pending || isError || !targetAvailable}
             />
           </footer>
         </form>
