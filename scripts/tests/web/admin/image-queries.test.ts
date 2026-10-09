@@ -961,7 +961,7 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
         status: 200,
         headers: { "content-type": "application/json" }
       });
-    const image = (serial: string): AdminImageListItemDto => ({...galleryCard(`00000000-0000-7000-8000-${serial}`),device: "pc", brightness: "dark", author: null, image_time: "2026-09-01T00:00:00.000Z",description: "",original_url: null,source: null,status: "deleted",purge_pending: false,storage_slug: "local",original: "",deleted_at: "2026-08-15T00:00:00.000Z",created_at: "2026-08-14T00:00:00.000Z",updated_at: "2026-08-15T00:00:00.000Z",base_url:"/images",variants:{large:{width:1600,height:900,byte_size:1024},medium:{width:1200,height:675,byte_size:800},small:{width:600,height:338,byte_size:200}}});
+    const image = (serial: string): AdminImageListItemDto => ({...galleryCard(`00000000-0000-7000-8000-${serial}`),device: "pc", brightness: "dark", author: null, image_time: "2026-09-01T00:00:00.000Z",description: "",storage_label: "本地存储",source: null,status: "deleted",purge_pending: false,storage_slug: "local",original: "",deleted_at: "2026-08-15T00:00:00.000Z",created_at: "2026-08-14T00:00:00.000Z",updated_at: "2026-08-15T00:00:00.000Z",base_url:"/images",variants:{large:{byte_size:1024},medium:{byte_size:800},small:{byte_size:200}}});
     const waitFor = async (condition: () => boolean, message: string) => {
       for (let attempt = 0; attempt < 120; attempt += 1) {
         await React.act(async () => {
@@ -1453,11 +1453,6 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
           ingestion: { list_page_size: 20 }
         }
       });
-      client.setQueryData(queryKeys.ingestionVocabulary, {
-        themes: [],
-        tags: [],
-        authors: []
-      });
       client.setQueryData(queryKeys.storageOptions, {
         backends: [
           {
@@ -1482,6 +1477,8 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
       // 按 ID 指定的图片不在当前列表页上，只由快照接口返回。
       const offPageImageId = "00000000-0000-7000-8000-000000000014";
       const snapshotBodies: Array<{ ids: string[] }> = [];
+      let readyListReads = 0;
+      let vocabularyReads = 0;
       const trashedIds = new Set<string>();
       const trashBodies: Array<{ ids: string[] }> = [];
       const releaseTrashMutations: Array<() => void> = [];
@@ -1494,6 +1491,7 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
       globalThis.fetch = async (input, init) => {
         const url = new URL(String(input), "https://imageshow.test");
         if (url.pathname === "/api/admin/images") {
+          readyListReads++;
           const remaining = readyItems.filter((item) => !trashedIds.has(item.id));
           const response = jsonResponse({
             items: remaining.slice(0, 2),
@@ -1511,6 +1509,7 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
           return response;
         }
         if (url.pathname === "/api/admin/ingestion/vocabulary") {
+          vocabularyReads++;
           return jsonResponse({ themes: [], tags: [], authors: [] });
         }
         if (url.pathname === "/api/admin/images/snapshot") {
@@ -1587,6 +1586,25 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
           () => container.querySelectorAll(".admin-image-card").length === 2,
           "trash interface scenario did not load ready items"
         );
+        const editButton = () => container.querySelector<HTMLButtonElement>('button[aria-label^="编辑图片："]');
+        assert.ok(editButton());
+        await React.act(async () => editButton()!.dispatchEvent(new window.Event("focusin", { bubbles: true })));
+        await waitFor(() => vocabularyReads === 1, "editor preload did not prepare vocabulary");
+        readyItems[0] = { ...readyItems[0]!, title: "refreshed before opening" };
+        await React.act(async () => client.invalidateQueries({ queryKey: queryKeys.adminImages }));
+        await waitFor(() => (container.textContent ?? "").includes("refreshed before opening"), "new list value did not render");
+        const readsBeforeOpen = readyListReads;
+        await click(editButton()!);
+        await waitFor(() => Boolean(document.querySelector(".image-editor-row")), "editor did not open from refreshed list");
+        assert.equal(document.querySelector<HTMLInputElement>(".image-editor-row .image-fields-title")?.value, "refreshed before opening");
+        assert.equal(snapshotBodies.length, 0, "完整列表在预热后换成新对象也无需补快照");
+        assert.equal(readyListReads, readsBeforeOpen, "打开编辑器不额外验证整页");
+        assert.equal(vocabularyReads, 1, "新列表对象复用已有词表");
+        const editorClose = document.querySelector<HTMLButtonElement>('.image-metadata-editor-dialog button[title="关闭"]')
+          ?? document.querySelector<HTMLButtonElement>('[data-dialog-frame] button[title="关闭"]');
+        assert.ok(editorClose);
+        await click(editorClose);
+        await waitFor(() => !document.querySelector("[data-dialog-frame]"), "editor did not close");
         const selectionTargets = [
           ...container.querySelectorAll<HTMLElement>(".admin-image-card-checkbox-hit-area")
         ];
@@ -2294,7 +2312,7 @@ test("[Web/后台] 图片元数据保存按实际字段失效投影并复用权�
       queryKey: [...queryKeys.publicImageDetail, "image-1", identity],
       queryFn: () =>
         new Promise<object>((resolve) =>
-          lateResponses.push(() => resolve({ original_url: "/images/original/image-1" }))
+          lateResponses.push(() => resolve({ original: true }))
         )
     })
   );

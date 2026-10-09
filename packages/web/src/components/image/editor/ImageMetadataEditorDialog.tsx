@@ -28,7 +28,6 @@ import {
   commonImageBrightnessOptions,
   commonImageDeviceOptions
 } from "../../../lib/ui/select-options.js";
-import { storageNameResolver, useStorageOptions } from "../../../lib/api/storage-options.js";
 import {
   imageAttributeClearPatch,
   mergeCommonImageAttributes,
@@ -157,9 +156,6 @@ export function ImageMetadataEditorDialog({
   const [migrating, setMigrating] = useState(false);
   const permissions = useAdminPermissions();
   const canMigrateStorage = permissions.includes(adminPermissions.imageStorageMigrate);
-  const { data: storageOptionsData } = useStorageOptions();
-  // 列表行左下角的「所在存储」展示后端显示名。
-  const resolveStorageName = storageNameResolver(storageOptionsData?.backends ?? []);
   const activeIdSet = new Set(session.activeIds);
   const activeItems = session.baselineItems.filter((item) => activeIdSet.has(item.id));
   const trashAvailable = activeItems.length > 0;
@@ -447,7 +443,6 @@ export function ImageMetadataEditorDialog({
                   themes={themes}
                   allTags={allTags}
                   authors={authors}
-                  storageName={resolveStorageName(item)}
                   onPatch={(patch) => patchDraft(item.id, patch)}
                   onRemove={() => {
                     if (activeItems.length === 1) requestClose();
@@ -458,8 +453,8 @@ export function ImageMetadataEditorDialog({
                     setPreview({
                       src: imageVariantUrl(item, "medium"),
                       thumbSrc: imageVariantUrl(item, "small"),
-                      width: item.variants.medium.width,
-                      height: item.variants.medium.height
+                      width: item.width,
+                      height: item.height
                     });
                   }}
                 />

@@ -14,7 +14,6 @@ import {
   withStorageLocationReadAndAdvisoryLocksOnClient
 } from "../storage/maintenance-lock.ts";
 import { replaceImageTagAssociations } from "../vocab/tags/mutations.ts";
-import { resolveTagSlugs } from "../vocab/tags/query.ts";
 import { ensureThemeWithMutationLockHeld } from "../vocab/themes/mutations.ts";
 import {
   invalidateOrCollectEntityCountCaches,
@@ -59,7 +58,7 @@ type ImageUpdateItemOptions = {
 
 export type PreparedImageUpdateItem = {
   item: ImageUpdateItemInputDto;
-  resolvedTags: string[] | null;
+  tagSlugs: string[] | null;
 };
 
 type ImageUpdateTransactionOutcome = {
@@ -150,14 +149,14 @@ async function repairDerivedCaches(
 
 async function commitImageUpdate({
   item,
-  resolvedTags,
+  tagSlugs,
   sourceImage,
   detectedBrightness,
   classificationRequested,
   signal
 }: {
   item: ImageUpdateItemInputDto;
-  resolvedTags: string[] | null;
+  tagSlugs: string[] | null;
   sourceImage: UpdateImageRecord | null;
   detectedBrightness: Brightness | undefined;
   classificationRequested: boolean;
@@ -195,7 +194,7 @@ async function commitImageUpdate({
       }
 
       const currentTags =
-        resolvedTags === null
+        tagSlugs === null
           ? null
           : (
               await transaction.query(
@@ -238,8 +237,8 @@ async function commitImageUpdate({
       const metadataChanged = classificationChanged
         || authorChanged
         || fieldsChanged;
-      const tagsChanged = resolvedTags !== null
-        && !sameTags(resolvedTags, currentTags ?? []);
+      const tagsChanged = tagSlugs !== null
+        && !sameTags(tagSlugs, currentTags ?? []);
       const changed = metadataChanged || tagsChanged;
       const changedEntityKinds = new Set<EntityCacheKind>();
       const createdEntityKinds = new Set<EntityCacheKind>();
@@ -299,7 +298,7 @@ async function commitImageUpdate({
         const tagMutation = await replaceImageTagAssociations(
           transaction,
           item.id,
-          resolvedTags ?? [],
+          tagSlugs ?? [],
           signal
         );
         if (tagMutation.createdTag) createdEntityKinds.add("tag");
@@ -321,7 +320,7 @@ async function commitImageUpdate({
 
 async function mutateImageItem(
   item: ImageUpdateItemInputDto,
-  resolvedTags: string[] | null,
+  tagSlugs: string[] | null,
   options: ImageUpdateItemOptions,
   signal: AbortSignal
 ) {
@@ -360,7 +359,7 @@ async function mutateImageItem(
     const outcome = await withImageMutationSync(async (mutationSyncBatch) => {
       const transactionOutcome = await commitImageUpdate({
         item,
-        resolvedTags,
+        tagSlugs,
         sourceImage,
         detectedBrightness,
         classificationRequested,
@@ -390,14 +389,14 @@ async function mutateImageItem(
   }
 }
 
-export async function prepareImageUpdateItem(
+export function prepareImageUpdateItem(
   item: ImageUpdateItemInputDto
-): Promise<PreparedImageUpdateItem> {
-  const resolvedTags =
+): PreparedImageUpdateItem {
+  const tagSlugs =
     item.tags === undefined
       ? null
-      : [...await resolveTagSlugs(item.tags)].sort();
-  return { item, resolvedTags };
+      : [...item.tags].sort();
+  return { item, tagSlugs };
 }
 
 /** Acquire one bounded group's locks before any sibling starts database work. */
@@ -408,14 +407,14 @@ export function withImageUpdateItemLocks<T>(
   work: (signal: AbortSignal) => Promise<T>
 ): Promise<T> {
   const vocabularyLocks = vocabularyAssociationLockRequests(
-    items.flatMap(({ item, resolvedTags }) => [
+    items.flatMap(({ item, tagSlugs }) => [
       ...(item.author
         ? [{ entity: "author" as const, slug: item.author }]
         : []),
       ...(item.theme
         ? [{ entity: "theme" as const, slug: item.theme }]
         : []),
-      ...(resolvedTags ?? []).map((slug) => ({
+      ...(tagSlugs ?? []).map((slug) => ({
         entity: "tag" as const,
         slug
       }))
@@ -437,9 +436,9 @@ export function withImageUpdateItemLocks<T>(
 
 /** The request owns the group's image, vocabulary and optional storage locks. */
 export function updateImageItem(
-  { item, resolvedTags }: PreparedImageUpdateItem,
+  { item, tagSlugs }: PreparedImageUpdateItem,
   options: ImageUpdateItemOptions,
   signal: AbortSignal
 ) {
-  return mutateImageItem(item, resolvedTags, options, signal);
+  return mutateImageItem(item, tagSlugs, options, signal);
 }

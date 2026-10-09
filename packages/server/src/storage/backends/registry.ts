@@ -227,17 +227,17 @@ export async function getStorageBackend(
   );
 }
 
-/** Response-scoped configs selected from one current registry revision. */
-export function getStorageBackendConfigs(
+/** Response-scoped records selected from one current registry revision. */
+export function getStorageBackendRecords(
   slugs: readonly string[],
   access?: StorageRegistryAccess
-): Promise<ReadonlyMap<string, StorageConfig>> {
+): Promise<ReadonlyMap<string, StorageBackendRecord>> {
   return withCurrentStorageBackends((backends) => {
     const records = new Map(backends.map((backend) => [backend.slug, backend]));
     return new Map(
       [...new Set(slugs)].map((slug) => [
         slug,
-        storageConfigFromRecord(requireStorageRecord(records.get(slug), slug))
+        requireStorageRecord(records.get(slug), slug)
       ])
     );
   }, access);

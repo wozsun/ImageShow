@@ -12,7 +12,7 @@ import type { VocabularyReadAccess } from "../../vocab/cache.ts";
 import {
   createImageFilterPlan,
   resolveImageFilterPlan,
-  resolveImageTagExpressions,
+  validateImageTagExpressions,
   type ImageFilterPlan
 } from "../filter-plan.ts";
 
@@ -55,12 +55,10 @@ export async function resolveGalleryStatsPlan(
       field: "tag_scope"
     });
   }
-  const [base, expressions] = await Promise.all([
+  const expressions = groups.map((group) => group.expression);
+  const [base] = await Promise.all([
     resolveImageFilterPlan({ ...query, tag: undefined }, access),
-    resolveImageTagExpressions(
-      groups.map((group) => group.expression),
-      access
-    )
+    validateImageTagExpressions(expressions, access)
   ]);
   if (!expressions.length) return { plan: base, tagCounts: undefined };
 

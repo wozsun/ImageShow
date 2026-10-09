@@ -27,7 +27,6 @@ import { preloadIntentProps } from "../../../lib/ui/preload-intent.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import { AdminSettingsBoundary } from "../../../components/feedback/AdminSettingsBoundary.js";
 import { useIngestionVocabulary } from "../../../lib/api/ingestion-vocabulary.js";
-import { useStorageNameResolver } from "../../../lib/api/storage-options.js";
 import { ImageListViewControls } from "../../../components/image/ImageListViewControls.js";
 import { AdminImageCard } from "./AdminImageCard.js";
 import {
@@ -114,8 +113,6 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
   const client = useQueryClient();
 
   const { data: vocabulary } = useIngestionVocabulary();
-  // 列表卡片的「所在存储」展示后端显示名（而非 slug）；从后端列表解析。
-  const storageName = useStorageNameResolver();
   const pageSize = settings.admin.image_page_size;
   const editPageSize = settings.ingestion.list_page_size;
   const navigation = useImageAdminPageNavigation({
@@ -269,7 +266,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
   useImageListPageReset(clearImageSelection, gridRef, scopeKey, pageNumber);
   const preloadBatchEditor = () =>
     editorCapability.preload({
-      sources: selectedItems
+      items: selectedItems
     });
   const selectedEditorPending = Boolean(
     editorCapability.pending &&
@@ -361,7 +358,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
                         }
                         void editorCapability.open(
                           {
-                            sources: selectedItems
+                            items: selectedItems
                           },
                           event.currentTarget
                         );
@@ -481,7 +478,6 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
             <AdminImageCard
               key={item.id}
               item={item}
-              storageName={storageName}
               checked={selected.includes(item.id)}
               detailDisabled={operationBusy || editorPending}
               detailPending={detailCapability.pendingItemId === item.id}
@@ -511,13 +507,13 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
               }
               onPreloadEdit={() =>
                 editorCapability.preload({
-                  sources: [item]
+                  items: [item]
                 })
               }
               onEdit={(opener) => {
                 void editorCapability.open(
                   {
-                    sources: [item]
+                    items: [item]
                   },
                   opener
                 );
@@ -561,7 +557,10 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
           onClose={detailCapability.close}
           onTrashed={() => showFeedback("图片已移入回收站", "success")}
           returnFocusRef={detailCapability.returnFocusRef}
-          storageLabel={storageName(detailCapability.item)}
+          editTarget={detailCapability.item.status === "ready" && !detailCapability.item.deleted_at
+            ? { items: [detailCapability.item] }
+            : null}
+          deletedAt={detailCapability.item.deleted_at}
           admin
         />
       )}

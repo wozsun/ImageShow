@@ -725,7 +725,10 @@ export function IngestionWorkflowWindow({
             <ImageDetailModal
               item={detailItem}
               admin
-              storageLabel={storageName(detailItem.storage_slug)}
+              editTarget={detailItem.status === "ready" && !detailItem.deleted_at
+                ? { items: [detailItem] }
+                : null}
+              deletedAt={detailItem.deleted_at}
               onClose={closeJobDetail}
               onTrashed={(imageId) => {
                 detailOwnerRef.current = null;

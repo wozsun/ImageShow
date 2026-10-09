@@ -43,7 +43,7 @@ export type ParsedRandomQuery = {
   author: RandomSelectorGroup;
 };
 
-/** Submitted names that match no vocabulary entry and therefore no image. */
+/** Submitted slugs that match no vocabulary entry and therefore no image. */
 type RandomIgnoredSelectors = Record<"theme" | "tag" | "author" | "group", string[]>;
 
 export type NormalizedRandomQuery = ParsedRandomQuery & {
@@ -52,11 +52,11 @@ export type NormalizedRandomQuery = ParsedRandomQuery & {
   unmatchable: boolean;
 };
 
-export type RandomSelectorMaps = {
+export type RandomSelectorSlugs = {
   groups?: ReadonlySet<string>;
-  theme: ReadonlyMap<string, string>;
-  tag: ReadonlyMap<string, string>;
-  author: ReadonlyMap<string, string>;
+  theme: ReadonlySet<string>;
+  tag: ReadonlySet<string>;
+  author: ReadonlySet<string>;
 };
 
 const randomRequestDevices: ReadonlySet<string> = new Set(randomRequestDeviceValues);
@@ -166,22 +166,13 @@ function parseSelectorGroup(
       const submittedTerm = (excluded ? part.slice(1) : part).trim();
       // An empty exclusion names nothing, like an empty list item.
       if (excluded && !submittedTerm) continue;
-      if (disallowedSelectorCharacters.test(submittedTerm)) {
+      const term = submittedTerm.toLowerCase();
+      if (!slugPattern.test(term) || term.length > slugMaxLength) {
         return apiErrorResponse(
           { status: 400, message: "Bad Request: Invalid selector" },
           { field, value: part }
         );
       }
-      if ([...submittedTerm].length > appConfig.randomQuery.maxSelectorCharacters) {
-        return apiErrorResponse(
-          { status: 400, message: "Bad Request: Selector is too long" },
-          {
-            field,
-            maxCharacters: appConfig.randomQuery.maxSelectorCharacters
-          }
-        );
-      }
-      const term = submittedTerm.toLowerCase();
       submittedCount += 1;
       if (submittedCount > appConfig.randomQuery.maxSelectorsPerField) {
         return apiErrorResponse(
@@ -485,20 +476,19 @@ export function parseRandomQuery(
 }
 
 /**
- * Keeps known names as slugs and records the rest, which match no image. Each
+ * Keeps known slugs and records the rest, which match no image. Each
  * image has one theme and one author, so a list mixing both forms selects the
  * included slugs that are not excluded.
  */
 function knownSelectorGroup(
   selectors: RandomSelectorGroup,
-  map: ReadonlyMap<string, string>,
+  knownSlugs: ReadonlySet<string>,
   ignored: string[]
 ): RandomSelectorGroup {
   const known = (terms: string[]) => {
     const slugs: string[] = [];
     for (const term of terms) {
-      const slug = map.get(term);
-      if (slug) slugs.push(slug);
+      if (knownSlugs.has(term)) slugs.push(term);
       else ignored.push(term);
     }
     return [...new Set(slugs)].sort();
@@ -516,18 +506,15 @@ function knownSelectorGroup(
 /** An all-clause naming an unknown tag cannot match, so only fully known clauses remain. */
 function knownTagExpression(
   expression: TagExpression,
-  map: ReadonlyMap<string, string>,
+  knownSlugs: ReadonlySet<string>,
   ignored: string[]
 ): TagExpression {
   if (!expression) return null;
   const clauses: string[][] = [];
   for (const clause of expression.anyOf) {
-    const slugs = clause.flatMap((term) => {
-      const slug = map.get(term);
-      return slug ? [slug] : [];
-    });
+    const slugs = clause.filter((slug) => knownSlugs.has(slug));
     if (slugs.length === clause.length) clauses.push(slugs);
-    else ignored.push(...clause.filter((term) => !map.has(term)));
+    else ignored.push(...clause.filter((slug) => !knownSlugs.has(slug)));
   }
   return clauses.length ? normalizeTagExpression(clauses) : null;
 }
@@ -540,21 +527,21 @@ export function ignoredSelectorDetails(ignored: RandomIgnoredSelectors) {
 }
 
 /**
- * Unknown names match no image: they drop out of include lists and tag
+ * Unknown slugs match no image: they drop out of include lists and tag
  * clauses before planning, so they never reach index keys, dedupe or seed
  * signatures. An impossible filter is recorded so selection can try an explicitly
- * requested fallback without querying an index for an unknown name.
+ * requested fallback without querying an index for an unknown slug.
  */
 export function normalizeRandomQuery(
   query: ParsedRandomQuery,
-  maps: RandomSelectorMaps
+  slugs: RandomSelectorSlugs
 ): NormalizedRandomQuery {
   const ignored: RandomIgnoredSelectors = { theme: [], tag: [], author: [], group: [] };
-  const theme = knownSelectorGroup(query.theme, maps.theme, ignored.theme);
-  const tag = knownTagExpression(query.tag, maps.tag, ignored.tag);
-  const author = knownSelectorGroup(query.author, maps.author, ignored.author);
+  const theme = knownSelectorGroup(query.theme, slugs.theme, ignored.theme);
+  const tag = knownTagExpression(query.tag, slugs.tag, ignored.tag);
+  const author = knownSelectorGroup(query.author, slugs.author, ignored.author);
   const groups = query.groups.filter((slug) => {
-    if (maps.groups?.has(slug)) return true;
+    if (slugs.groups?.has(slug)) return true;
     ignored.group.push(slug);
     return false;
   });
@@ -591,7 +578,7 @@ export function normalizeRandomQuery(
         "ex": Object.fromEntries((["theme", "author"] as const)
           .filter((field) => query.fallback.includes(field) && query[field].include.length)
           .map((field) => [field, knownSelectorGroup(
-            { include: [], exclude: query[field].exclude }, maps[field], []
+            { include: [], exclude: query[field].exclude }, slugs[field], []
           ).exclude]))
       } : {}),
       ...(unmatchable ? { "empty": true } : {})

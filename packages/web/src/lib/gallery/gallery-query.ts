@@ -3,7 +3,7 @@ import {
   parseGalleryTagFilter,
   tagFilterValues,
   basicTagValue,
-  resolveTagExpression,
+  assertKnownTags,
   tagExpressionValues,
   readableFilterSearch,
   detectDeviceFromUserAgent,
@@ -47,26 +47,22 @@ export const emptyGalleryFilters: GalleryFilters = {
 
 function galleryTagValue(
   values: string[],
-  tags?: readonly { slug: string; display_name: string }[]
+  tags?: readonly { slug: string }[]
 ) {
   parseGalleryTagFilter(values);
-  const map = tags
-    ? new Map(tags.map((tag) => [tag.display_name.trim().toLowerCase(), tag.slug]))
-    : null;
-  for (const tag of tags ?? []) map!.set(tag.slug, tag.slug);
+  const slugs = tags ? new Set(tags.map((tag) => tag.slug)) : null;
   const normalizedTags = values.map((value) => {
     const parsed = parseTagFilter([value]);
-    const expression = map ? resolveTagExpression(parsed.expression, map) : parsed.expression;
-    return basicTagValue(expression?.anyOf.flat() ?? [], parsed.mode);
+    if (slugs) assertKnownTags(parsed.expression, slugs);
+    return basicTagValue(parsed.expression?.anyOf.flat() ?? [], parsed.mode);
   });
-  parseGalleryTagFilter(normalizedTags);
   return normalizedTags.length > 1 ? normalizedTags : (normalizedTags[0] ?? "");
 }
 
 /** Keep field errors separate so repairing one cannot silently remove another. */
 export function readGalleryFilters(
   params: URLSearchParams,
-  tags?: readonly { slug: string; display_name: string }[]
+  tags?: readonly { slug: string }[]
 ) {
   const device = params.get("device")?.trim().toLowerCase() ?? "";
   const brightness = params.get("brightness")?.trim().toLowerCase() ?? "";
@@ -99,7 +95,7 @@ export function readGalleryFilters(
 
 export function galleryFiltersFromSearchParams(
   params: URLSearchParams,
-  tags?: readonly { slug: string; display_name: string }[]
+  tags?: readonly { slug: string }[]
 ): GalleryFilters {
   const result = readGalleryFilters(params, tags);
   if (result.error) throw result.error;

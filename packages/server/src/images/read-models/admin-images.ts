@@ -23,6 +23,9 @@ import {
   adminImageListItemsWithTags,
   editableImagePresentationColumnsWithTags,
   editableImageSnapshotsWithTags,
+  imageAdminInfoPresentationColumns,
+  imageAdminInfo,
+  type ImageAdminInfoRecord,
   type EditableImageSnapshotRecordWithTags
 } from "../presenter.ts";
 import {
@@ -30,8 +33,6 @@ import {
   buildResolvedReadyImageListFilters
 } from "./list-filters.ts";
 import { fetchAdminImageOffsetRows } from "./pagination.ts";
-import { storageBackendLabel } from "../../storage/backends/label.ts";
-import { presentImageVariantByteSizes, type ImageVariantByteSizeRecord } from "../variants/record.ts";
 
 export type AdminImageListQuery = {
   status: "ready" | "deleted";
@@ -181,30 +182,13 @@ export async function getAdminImageSnapshots(
 export async function getAdminImageInfo(id: string): Promise<ImageAdminInfoDto> {
   const row = (
     await pool.query(
-      `SELECT m.l_byte_size, m.m_byte_size, m.s_byte_size,
-            m.storage_slug,
-            m.created_at::text AS created_at,
-            m.updated_at::text AS updated_at,
-            COALESCE(sb.display_name, '') AS storage_display_name
-       FROM metadata m
-       LEFT JOIN storage_backend sb ON sb.slug = m.storage_slug
-      WHERE m.id=$1
+      `SELECT ${imageAdminInfoPresentationColumns}
+       FROM metadata
+      WHERE id=$1
       LIMIT 1`,
       [id]
     )
-  ).rows[0] as
-    | (ImageVariantByteSizeRecord & {
-        storage_slug: string;
-        created_at: string;
-        updated_at: string;
-        storage_display_name: string;
-      })
-    | undefined;
+  ).rows[0] as ImageAdminInfoRecord | undefined;
   if (!row) throw new ApiError(404, "not_found", "Image not found");
-  return {
-    variants: presentImageVariantByteSizes(row),
-    storage_label: storageBackendLabel(row),
-    created_at: row.created_at ?? "",
-    updated_at: row.updated_at ?? ""
-  };
+  return imageAdminInfo(row);
 }

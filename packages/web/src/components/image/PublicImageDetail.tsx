@@ -29,7 +29,6 @@ function imagePlaceholder(card: ShowImageCardDto | GalleryImageCardDto): PublicI
     ...card,
     device: imageDevice(card.width, card.height),
     description: "",
-    original_url: null,
     source: null
   };
 }

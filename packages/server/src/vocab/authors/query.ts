@@ -3,21 +3,12 @@ import {
   type VocabularyReadAccess
 } from "../cache.ts";
 import { pool } from "../../core/database/pools.ts";
-import { resolveVocabularySlugs, resolveTermSlugMap } from "../terms.ts";
 import { isWeiboUserId } from "./identity.ts";
 
-export function resolveAuthorTermMap(
-  terms: string[],
+export async function getAuthorSlugs(
   access: VocabularyReadAccess = {}
-): Promise<Map<string, string>> {
-  return resolveTermSlugMap(() => getAuthorVocab(access), terms);
-}
-
-export function resolveAuthorSlugs(
-  terms: string[],
-  access: VocabularyReadAccess = {}
-): Promise<string[]> {
-  return resolveVocabularySlugs(() => getAuthorVocab(access), terms);
+) {
+  return new Set((await getAuthorVocab(access)).map((entry) => entry.slug));
 }
 
 export async function resolveWeiboAuthorSlugs(

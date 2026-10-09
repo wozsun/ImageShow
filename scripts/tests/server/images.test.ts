@@ -117,7 +117,7 @@ import {
   normalizeRandomQuery,
   parseRandomQuery,
   type ParsedRandomQuery,
-  type RandomSelectorMaps
+  type RandomSelectorSlugs
 } from "../../../packages/server/src/random/query.ts";
 import { resolveCandidateAxes } from "../../../packages/server/src/random/selection-model.ts";
 import { registerAdminImageRoutes } from "../../../packages/server/src/routes/admin-images.ts";
@@ -1672,11 +1672,7 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
   }
   for (const unavailable of [
     null,
-    { ...record, original: "" },
-    {
-      ...record,
-      original: `https://img.example.com/images/large/${storageObjectKey(item.id)}`
-    }
+    { ...record, original: "" }
   ]) {
     await assert.rejects(
       serveAdminExternalOriginal(
@@ -2156,19 +2152,10 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
     assert.equal(result instanceof Response, false);
     return result as ParsedRandomQuery;
   };
-  const maps: RandomSelectorMaps = {
-    theme: new Map([
-      ["舞台", "stage"],
-      ["stage", "stage"]
-    ]),
-    tag: new Map([
-      ["现场", "live"],
-      ["live", "live"]
-    ]),
-    author: new Map([
-      ["摄影师", "photographer"],
-      ["photographer", "photographer"]
-    ])
+  const maps: RandomSelectorSlugs = {
+    theme: new Set(["stage"]),
+    tag: new Set(["live"]),
+    author: new Set(["photographer"])
   };
 
   const omittedDevice = parseQuery("");
@@ -2247,7 +2234,7 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
 
   const normalized = normalizeRandomQuery(
     parseQuery(
-      "device=PC&brightness=DARK&theme=%E8%88%9E%E5%8F%B0&tag=%E7%8E%B0%E5%9C%BA&author=%E6%91%84%E5%BD%B1%E5%B8%88&mode=PROXY"
+      "device=PC&brightness=DARK&theme=STAGE&tag=LIVE&author=PHOTOGRAPHER&mode=PROXY"
     ),
     maps
   );
@@ -2289,12 +2276,12 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
     assert.ok(!(result instanceof Response), search);
     return result;
   };
-  const mixed = signatureOf("theme=舞台,!unknown-theme&author=!nobody,photographer");
+  const mixed = signatureOf("theme=stage,!unknown-theme&author=!nobody,photographer");
   assert.deepEqual(mixed.theme, { include: ["stage"], exclude: [] });
   assert.deepEqual(mixed.author, { include: ["photographer"], exclude: [] });
   assert.equal(mixed.signature, signatureOf("theme=stage&author=photographer").signature);
   assert.equal(signatureOf("brightness=all").signature, signatureOf("").signature);
-  const emptiedByExclusion = normalizeRandomQuery(parseQuery("theme=舞台,!stage"), maps);
+  const emptiedByExclusion = normalizeRandomQuery(parseQuery("theme=stage,!stage"), maps);
   assert.equal(emptiedByExclusion.unmatchable, true);
   const targetedSignature = signatureOf(`id=${imageId}`).signature;
   assert.notEqual(targetedSignature, signatureOf("").signature);
@@ -2316,6 +2303,8 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
 
   for (const search of [
     "tag=live&tag=!blocked",
+    "theme=invalid_slug",
+    `author=${"a".repeat(33)}`,
     "device=pc&device=mb",
     "id=",
     "id=,",

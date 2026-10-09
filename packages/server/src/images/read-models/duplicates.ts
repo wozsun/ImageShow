@@ -8,6 +8,7 @@ import {
 } from "../presenter.ts";
 
 type DuplicateSnapshotRow = ImageRecordWithTags & {
+  l_md5: string;
   duplicate_match_count: string | number;
 };
 
@@ -23,7 +24,7 @@ export async function readDuplicateSnapshotsByMd5(md5s: readonly string[]) {
   const rows = (
     await pool.query(
       `WITH ranked AS (
-       SELECT ${adminImageListPresentationColumnsWithTags},
+       SELECT ${adminImageListPresentationColumnsWithTags}, l_md5,
               count(*) OVER (PARTITION BY l_md5) AS duplicate_match_count,
               row_number() OVER (
                 PARTITION BY l_md5
@@ -33,7 +34,7 @@ export async function readDuplicateSnapshotsByMd5(md5s: readonly string[]) {
         WHERE l_md5 = ANY($1::text[])
           AND status = 'ready'
      )
-     SELECT ${adminImageListPresentationColumns}, purge_pending, tags, duplicate_match_count
+     SELECT ${adminImageListPresentationColumns}, l_md5, purge_pending, tags, duplicate_match_count
        FROM ranked
       WHERE duplicate_rank <= 20
       ORDER BY l_md5 ASC, duplicate_rank ASC`,

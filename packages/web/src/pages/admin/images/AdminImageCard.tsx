@@ -12,7 +12,6 @@ import { preloadIntentProps } from "../../../lib/ui/preload-intent.js";
 
 type ImageCardCommonProps = {
   item: AdminImageListItemDto;
-  storageName: (item: { storage_slug: string }) => string;
   checked: boolean;
   metadata?: ReactNode;
   busy: boolean;
@@ -45,7 +44,6 @@ type AdminImageCardProps = ImageCardCommonProps & (
 export function AdminImageCard(props: AdminImageCardProps) {
   const {
     item,
-    storageName,
     checked,
     busy,
     actionsDisabled,
@@ -59,7 +57,7 @@ export function AdminImageCard(props: AdminImageCardProps) {
   } = props;
   const title = imageDisplayTitle(item);
   const classification = formatImageClassification(item);
-  const storage = item.status === "ready" ? storageName(item) : "";
+  const storage = item.status === "ready" ? item.storage_label : "";
   const deletedAt =
     item.status === "deleted" && item.deleted_at
       ? `删除于 ${formatDate(item.deleted_at)}`

@@ -4,12 +4,11 @@ import test from "node:test";
 import {
   parseTagFilter,
   readableFilterSearch,
-  resolveTagExpression,
+  assertKnownTags,
   tagExpressionValues,
   TagFilterError,
   type TagExpression
 } from "../../../packages/shared/src/browser/tag-filter.ts";
-import { resolveTermSlugMap } from "../../../packages/server/src/vocab/terms.ts";
 import {
   createImageFilterPlan,
   imageFilterPlanWithout
@@ -91,9 +90,9 @@ test("[Server/筛选] 词项预算按规范表达式计数并独立约束原始�
   assert.equal(parseTagFilter(["all:a,b", "all:b,a"], "mixed").termCount, 2);
   assert.equal(parseTagFilter(["all:a,b", "all:a,c"], "mixed").termCount, 4);
   assert.equal(parseTagFilter(["a,b", "b,c"], "mixed").termCount, 3);
-  assert.equal(parseTagFilter(["😀".repeat(64)]).termCount, 1);
-  assert.throws(() => parseTagFilter(["😀".repeat(65)]), TagFilterError);
-  const fullLength = [...Array(15).fill("a".repeat(64)), "b".repeat(49)].join(",");
+  assert.equal(parseTagFilter(["a".repeat(32)]).termCount, 1);
+  assert.throws(() => parseTagFilter(["a".repeat(33)]), TagFilterError);
+  const fullLength = [...Array(31).fill("a".repeat(32)), "b"].join(",");
   assert.equal(fullLength.length, 1024);
   assert.equal(parseTagFilter([fullLength]).termCount, 2);
   assert.throws(() => parseTagFilter([fullLength + "b"]), TagFilterError);
@@ -107,36 +106,27 @@ test("[Server/筛选] 词项预算按规范表达式计数并独立约束原始�
     "!a",
     ":a",
     "a,all:b",
+    "现场",
+    "😀",
+    "a_b",
     "a\u0000b"
   ]) {
     assert.throws(() => parseTagFilter([value]), TagFilterError, value);
   }
 });
 
-test("[Server/筛选] slug 优先于显示名且未知分支使完整条件失败", async () => {
-  const terms = await resolveTermSlugMap(
-    async () => [
-      { slug: "live", display_name: "现场" },
-      { slug: "other", display_name: "live" },
-      { slug: "empty", display_name: "空标签" }
-    ],
-    ["live", "现场", "empty", "空标签", "missing"]
-  );
-  assert.equal(terms.get("live"), "live");
-  const resolved = resolveTagExpression(parseTagFilter(["all:现场,live"]).expression, terms);
-  assert.deepEqual(resolved, { anyOf: [["live"]] });
-  assert.deepEqual(resolveTagExpression(parseTagFilter(["空标签"]).expression, terms), {
-    anyOf: [["empty"]]
-  });
+test("[Server/筛选] 标签使用 slug 且未知分支使完整条件失败", () => {
+  const slugs = new Set(["live", "empty"]);
+  assert.doesNotThrow(() => assertKnownTags(parseTagFilter(["all:LIVE,empty"]).expression, slugs));
   assert.throws(
     () =>
-      resolveTagExpression(
+      assertKnownTags(
         parseTagFilter(["live", "all:live,missing"], "mixed").expression,
-        terms
+        slugs
       ),
     { kind: "unknown", term: "missing" }
   );
-  assert.throws(() => parseTagFilter(["all:现场,live", "empty"]), { kind: "mixed" });
+  assert.throws(() => parseTagFilter(["all:live,empty", "empty"]), { kind: "mixed" });
 });
 
 test("[Server/筛选] 查询签名统一等价写法并保留全部和分支边界", () => {
@@ -162,20 +152,16 @@ test("[Server/筛选] 随机查询接受混合条件、忽略未知名称并限�
   const parsed = parse("tag=all:a,b&tag=c&theme=!blocked&author=owner");
   assert.ok(!(parsed instanceof Response));
   const maps = {
-    tag: new Map([
-      ["a", "a"],
-      ["b", "b"],
-      ["c", "c"]
-    ]),
-    theme: new Map([["blocked", "blocked"]]),
-    author: new Map([["owner", "owner"]])
+    tag: new Set(["a", "b", "c"]),
+    theme: new Set(["blocked"]),
+    author: new Set(["owner"])
   };
   const normalized = normalizeRandomQuery(parsed, maps);
   assert.ok(!(normalized instanceof Response));
   assert.deepEqual(normalized.tag, { anyOf: [["a", "b"], ["c"]] });
   assert.deepEqual(normalized.theme, { include: [], exclude: ["blocked"] });
   // Unknown names match nothing and stay out of the signature used by indexes, dedupe and seed.
-  const unknownBranch = normalizeRandomQuery(parsed, { ...maps, tag: new Map([["c", "c"]]) });
+  const unknownBranch = normalizeRandomQuery(parsed, { ...maps, tag: new Set(["c"]) });
   assert.ok(!(unknownBranch instanceof Response));
   assert.deepEqual(unknownBranch.tag, { anyOf: [["c"]] });
   const knownOnly = parse("tag=c&theme=!blocked&author=owner");
@@ -183,7 +169,7 @@ test("[Server/筛选] 随机查询接受混合条件、忽略未知名称并限�
   const knownNormalized = normalizeRandomQuery(knownOnly, maps);
   assert.ok(!(knownNormalized instanceof Response));
   assert.equal(unknownBranch.signature, knownNormalized.signature);
-  const unmatchable = normalizeRandomQuery(parsed, { ...maps, tag: new Map(), author: new Map() });
+  const unmatchable = normalizeRandomQuery(parsed, { ...maps, tag: new Set(), author: new Set() });
   assert.equal(unmatchable.unmatchable, true);
   assert.deepEqual(unmatchable.ignored, { theme: [], tag: ["a", "b", "c"], author: ["owner"], group: [] });
   for (const value of [
@@ -217,7 +203,7 @@ test("[Server/筛选] 随机查询接受混合条件、忽略未知名称并限�
 
 test("[Server/筛选] 分组范围规范化、未知名称和设备默认值保持统一契约", () => {
   const parse = (search: string) => parseRandomQuery(new URL(`https://img.example/random?${search}`), "redirect");
-  const maps = { tag: new Map(), theme: new Map(), author: new Map(), groups: new Set(["a", "b"]) };
+  const maps = { tag: new Set<string>(), theme: new Set<string>(), author: new Set<string>(), groups: new Set(["a", "b"]) };
   const query = parse("group=B,a&group=a,missing");
   assert.ok(!(query instanceof Response));
   assert.equal(query.device, "auto");

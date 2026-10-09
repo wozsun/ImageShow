@@ -244,7 +244,6 @@ await runIntegrationScenario(async (runtime) => {
       assert.equal((await get(`/api/images/${ids[0]}${query}`)).status, 400);
     }
     assert.equal(detailBody.item.source, null);
-    assert.equal(detailBody.item.original_url, null);
     const detailEtag = detail.headers.get("etag")!;
     const listPath = "/api/images?view=show&order=oldest&limit=1";
     const list = await get(listPath);

@@ -2,9 +2,9 @@ import { hash } from "node:crypto";
 import { randomFallbackDimensions, type RandomFallbackDimension, type RandomImageSize, type RandomMethod } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
-import { resolveAuthorTermMap } from "../vocab/authors/query.ts";
-import { resolveTagTermMap } from "../vocab/tags/query.ts";
-import { resolveThemeTermMap } from "../vocab/themes/query.ts";
+import { getAuthorSlugs } from "../vocab/authors/query.ts";
+import { getTagSlugs } from "../vocab/tags/query.ts";
+import { getThemeSlugs } from "../vocab/themes/query.ts";
 import { createImageFilterPlan } from "../images/filter-plan.ts";
 import { sampleReadyImages } from "../images/ready-cache/query.ts";
 import {
@@ -16,8 +16,7 @@ import {
   ignoredSelectorDetails,
   normalizeRandomQuery,
   parseRandomQuery,
-  type ParsedRandomQuery,
-  type RandomSelectorGroup
+  type ParsedRandomQuery
 } from "./query.ts";
 import {
   resolveCandidateAxes,
@@ -51,19 +50,15 @@ export async function selectRandomImages(
   );
   if (parsed instanceof Response) return parsed;
 
-  const [themeMap, tagMap, authorMap, groupSlugs] = await Promise.all([
-    resolveSelectorMap(parsed.theme, (terms) => (
-      resolveThemeTermMap(terms, database)
-    )),
-    resolveTagTermMap(parsed.tag?.anyOf.flat() ?? [], database),
-    resolveSelectorMap(parsed.author, (terms) => (
-      resolveAuthorTermMap(terms, database)
-    )),
+  const [theme, tag, author, groups] = await Promise.all([
+    hasSelectors(parsed.theme) ? getThemeSlugs(database) : new Set<string>(),
+    parsed.tag ? getTagSlugs(database) : new Set<string>(),
+    hasSelectors(parsed.author) ? getAuthorSlugs(database) : new Set<string>(),
     parsed.groups.length ? readImageGroupSlugs(database) : new Set<string>()
   ]);
   signal.throwIfAborted();
-  const maps = { theme: themeMap, tag: tagMap, author: authorMap, groups: groupSlugs };
-  const original = normalizeRandomQuery(parsed, maps);
+  const slugs = { theme, tag, author, groups };
+  const original = normalizeRandomQuery(parsed, slugs);
   let recent: Set<string> | undefined;
   const relaxed: RandomFallbackDimension[] = [];
   let current = parsed;
@@ -71,7 +66,7 @@ export async function selectRandomImages(
 
   while (true) {
     signal.throwIfAborted();
-    const query = normalizeRandomQuery(current, maps);
+    const query = normalizeRandomQuery(current, slugs);
     let items: SelectedReadyImage[] = [];
     if (!query.unmatchable) {
       recent ??= parsed.seed === null
@@ -130,14 +125,6 @@ export async function selectRandomImages(
     },
     ignoredSelectorDetails(original.ignored)
   );
-}
-
-async function resolveSelectorMap(
-  selectors: RandomSelectorGroup,
-  resolve: (terms: string[]) => Promise<Map<string, string>>
-): Promise<Map<string, string>> {
-  const terms = [...selectors.include, ...selectors.exclude];
-  return terms.length ? resolve(terms) : new Map();
 }
 
 /** Returns null when this dimension places no positive restriction on the request. */

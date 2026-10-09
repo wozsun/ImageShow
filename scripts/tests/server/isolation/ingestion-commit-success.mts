@@ -15,7 +15,7 @@ type IrreversibleCoordinatorModule =
   typeof import("../../../../packages/server/src/images/ingestion/execution/irreversible-coordinator.ts");
 
 await runIntegrationScenario(async (runtime) => {
-  const { presentIngestionSession } = await import("../../../../packages/server/src/images/ingestion/queue/session-view.ts");
+  const { presentIngestionSession, readIngestionStatuses } = await import("../../../../packages/server/src/images/ingestion/queue/session-view.ts");
   const commitWorker = (await import(
     runtime.moduleUrl("packages/server/src/images/ingestion/commit/worker.ts")
   )) as CommitWorkerModule;
@@ -32,6 +32,11 @@ await runIntegrationScenario(async (runtime) => {
     );
   const s3 = await createS3HttpFixture();
   try {
+    await runtime.databasePools.pool.query(
+      "INSERT INTO tag(slug,display_name) VALUES ('different-slug','literal-label'),('existing-slug','现有标签')"
+    );
+    const { refreshEntityVocabularies } = await import("../../../../packages/server/src/vocab/cache.ts");
+    await refreshEntityVocabularies(["tag"]);
     for (const capability of ["local", "supported", "unsupported", "unknown"] as const) {
       const storageSlug = capability === "local" ? "local" : `s3-${capability}`;
       if (capability !== "local") {
@@ -56,6 +61,7 @@ await runIntegrationScenario(async (runtime) => {
         runtime,
         `commit-${capability}`,
         async (fixture) => {
+          fixture.commitRequest.metadata.tags = ["literal-label", "existing-slug"];
           const committing = await freezeFixtureCommit(fixture);
           const preparedView = presentIngestionSession(committing as IngestionSessionSnapshot).prepared!;
           for (const variant of ["large", "medium", "small"] as const) {
@@ -76,6 +82,11 @@ await runIntegrationScenario(async (runtime) => {
             new AbortController().signal
           );
           assert.equal(item?.id, fixture.imageId);
+          assert.deepEqual(item?.tags.slice().sort(), ["existing-slug", "literal-label"]);
+          assert.deepEqual(
+            (await runtime.databasePools.pool.query("SELECT tag_slug FROM image_tag WHERE image_id=$1 ORDER BY tag_slug", [fixture.imageId])).rows.map((row) => row.tag_slug),
+            ["existing-slug", "literal-label"]
+          );
           assert.equal(
             await readReadyRevision(),
             revisionBeforeCommit + 1n,
@@ -133,6 +144,17 @@ await runIntegrationScenario(async (runtime) => {
           assert.equal(receipt?.status, "completed");
           assert.ok(receipt?.status === "completed");
           assert.deepEqual(receipt.display?.variant_quality, preparedView.variant_quality);
+          const [completed] = await readIngestionStatuses(fixture.repository, fixture.owner, [
+            { session_id: fixture.sessionId, image_id: fixture.imageId }
+          ]);
+          assert.ok(completed?.status === "completed");
+          assert.equal(completed.completed_item.large_md5, fixture.prepared.variants.large.md5);
+          for (const variant of ["large", "medium", "small"] as const) {
+            const facts = fixture.prepared.variants[variant];
+            assert.deepEqual(completed.completed_item.variants[variant], {
+              width: facts.width, height: facts.height, byte_size: facts.bytes
+            });
+          }
         },
         storageSlug
       );

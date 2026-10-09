@@ -84,7 +84,8 @@ test("[Web/后台] 无会话上下文的公开详情保持访客身份并隔离�
     clearCsrfToken();
   });
   const id = "00000000-0000-7000-8000-000000000545";
-  const item = { ...adminImageListItem({ id }), original_url: `/images/original/${id}` };
+  const item = { ...adminImageListItem({ id }), original: true };
+  const { original: _visitorOmitted, ...visitorItem } = item;
   const auth = {
     authenticated: true,
     username: "embedded-test-admin",
@@ -119,7 +120,7 @@ test("[Web/后台] 无会话上下文的公开详情保持访客身份并隔离�
     [`/api/images/${id}?view=gallery`]
   );
   assert.equal(h.pending[0]!.credentials, "omit");
-  await h.respond(0, { ok: true, item: { ...item, original_url: null } });
+  await h.respond(0, { ok: true, item: visitorItem });
   assert.ok(h.document.querySelector('[role="dialog"]'));
   assert.equal(h.document.querySelector(".image-detail-original"), null);
   await h.React.act(async () => {
@@ -167,7 +168,8 @@ test("[Web/后台] 公开详情等待首次认证，按身份读取并隔离迟�
   const id = "00000000-0000-7000-8000-000000000544";
   const card = galleryCard(id);
   const url = `/images/original/${id}`;
-  const item = { ...adminImageListItem({ id }), original_url: url };
+  const item = { ...adminImageListItem({ id }), original: true };
+  const { original: _visitorOmitted, ...visitorItem } = item;
   client.setQueryData([...queryKeys.adminImageInfo, id], { item });
   const authenticated = (username: string) => ({
     ok: true,
@@ -240,7 +242,7 @@ test("[Web/后台] 公开详情等待首次认证，按身份读取并隔离迟�
   await h.React.act(async () => detailRequests()[2]!.resolve(Response.json({ ok: true, item })));
   await settle(() => originalLink() === url);
   await h.React.act(async () =>
-    detailRequests()[1]!.resolve(Response.json({ ok: true, item: { ...item, original_url: null } }))
+    detailRequests()[1]!.resolve(Response.json({ ok: true, item: visitorItem }))
   );
   await h.flush();
   assert.equal(originalLink(), url, "迟到访客结果不覆盖新登录身份");
@@ -252,7 +254,7 @@ test("[Web/后台] 公开详情等待首次认证，按身份读取并隔离迟�
   await h.React.act(async () => client.setQueryData(queryKeys.me, guest));
   await settle(() => detailRequests().length === 5);
   await h.React.act(async () =>
-    detailRequests()[4]!.resolve(Response.json({ ok: true, item: { ...item, original_url: null } }))
+    detailRequests()[4]!.resolve(Response.json({ ok: true, item: visitorItem }))
   );
   await settle(
     () => client.getQueryState([...queryKeys.publicImageDetail, id, null, "gallery"])?.status === "success"
@@ -285,7 +287,7 @@ test("[Web/后台] 公开详情切图和切换视图隔离迟到响应并采用�
   );
   const payload = (source: string) => ({ item: {
     device: "mb", author: null, brightness: "dark", image_time: "2026-09-01T00:00:00.000Z",
-    description: "", source, original_url: null, base_url: "https://new.example.test/images"
+    description: "", source, base_url: "https://new.example.test/images"
   } });
   const sourceLink = () => h.document.querySelector(".image-detail-source")?.getAttribute("href");
   await render(first, "gallery");

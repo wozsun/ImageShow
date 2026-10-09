@@ -42,9 +42,9 @@ curl "https://img.example.com/random?mode=json&limit=3"
 | `id` | 图片 ID | 从指定图片范围中选，见[指定图片](#指定图片) |
 | `group` | 分组标识 | 从指定分组的成员中选，见[图片分组](#图片分组) |
 
-- 主题、标签、作者可以使用标识（如 `city-night`）或显示名（如 `城市夜景`）。
-- 不存在的主题、标签、作者不匹配任何图片：`theme=a,写错的名字` 只返回主题 a 的图片，排除不存在的名字没有效果；要包含的名字全部不存在且未允许对应维度回退时返回 404，错误详情的 `ignored` 列出这些名字。
-- `theme=null` 只选没有主题的图片，`theme=!null` 只选有主题的图片；`author=null`、`author=!null` 同理，按有无作者筛选。`null` 可与其他名字混写，如 `author=photographer,null` 为该作者或没有作者的图片。
+- 主题、标签、作者和分组只接受标识（slug，如 `city-night`）。显示名仅用于界面展示，不能作为筛选参数。
+- 不存在的主题、标签、作者不匹配任何图片：`theme=a,missing-theme` 只返回主题 a 的图片，排除不存在的标识没有效果；要包含的标识全部不存在且未允许对应维度回退时返回 404，错误详情的 `ignored` 列出这些标识。
+- `theme=null` 只选没有主题的图片，`theme=!null` 只选有主题的图片；`author=null`、`author=!null` 同理，按有无作者筛选。`null` 可与其他标识混写，如 `author=photographer,null` 为该作者或没有作者的图片。
 - 参数值为空或只有空白（如 `device=`）时视为未填写，`seed`、`id` 和 `group` 除外；除 `seed` 外，参数值和列表项的首尾空白会被忽略，逗号分隔的列表会忽略空项，如 `theme=a,`；`theme`、`author` 还会忽略空的排除项，如 `theme=a,!`。
 - `device`、`brightness`、`fallback`、`seed`、`mode`、`size`、`limit` 只取一个值。重复出现时，取值相同（不区分大小写，`seed` 除外）或其余几次为空，按一次处理，如 `size=small&size=small`、`device=&device=pc`；取值不同返回 400。`fallback` 比较时忽略空格和空项，但顺序不同算作不同取值。
 - 参数名必须小写；不认识的参数会返回 400。
@@ -54,7 +54,6 @@ curl "https://img.example.com/random?mode=json&limit=3"
 | 示例 | 含义 |
 | --- | --- |
 | `/random?theme=city-night` | 主题为「城市夜景」 |
-| `/random?theme=城市夜景` | 同上，使用显示名 |
 | `/random?theme=!city-night` | 不要主题「城市夜景」 |
 | `/random?author=photographer` | 作者「photographer」的图片 |
 
@@ -82,7 +81,7 @@ curl "https://img.example.com/random?mode=json&limit=3"
 
 按列表顺序累加放宽，每放宽一项重新选图，有结果即停止，数量不足 `limit` 时也不会继续补齐。未实际限制的维度直接跳过；缺省 / 自动设备在识别出访问设备时也是限制，`device=all` 或无法识别设备时不算限制。
 
-主题和作者只去掉包含条件，所有 `!` 排除条件仍有效；标签表达式整体去掉。未知的包含名称也可以随对应维度放宽。指定图片范围始终保留，范围为空仍返回 404。400、429、503、缓存不可用和近期图片重复本身不触发回退。
+主题和作者只去掉包含条件，所有 `!` 排除条件仍有效；标签表达式整体去掉。未知的包含标识也可以随对应维度放宽。指定图片范围始终保留，范围为空仍返回 404。400、429、503、缓存不可用和近期图片重复本身不触发回退。
 
 例如 `/random?theme=city&brightness=dark&fallback=brightness,theme` 先找暗色城市图片，再找不限明暗的城市图片，仍无匹配才移除主题条件；写成 `fallback=theme,brightness` 则先找不限主题的暗色图片。JSON 的 `fallback` 始终列出实际放宽的维度（按应用顺序），没有放宽时为 `[]`；跳转与代理只返回图片，不增加响应头。固定 `seed` 同时考虑有效筛选与实际放宽的维度集合，与放宽的先后无关。
 
@@ -177,7 +176,7 @@ curl "https://img.example.com/random?device=all&mode=json"
 
 ## 图片分组
 
-`group` 只接受分组标识（slug），不接受显示名。用逗号或重复参数指定多个分组，每次最多 32 项；多个分组取并集，重复成员只出现一次。与 `id` 同用时，先合并分组成员与指定图片，再应用设备、明暗、主题、标签和作者筛选。
+`group` 使用分组标识（slug）。用逗号或重复参数指定多个分组，每次最多 32 项；多个分组取并集，重复成员只出现一次。与 `id` 同用时，先合并分组成员与指定图片，再应用设备、明暗、主题、标签和作者筛选。
 
 ```text
 /random?group=wallpaper&fallback=device
@@ -260,5 +259,5 @@ const { items } = await response.json();
 
 - 查询串最多 4096 字节；`device`、`brightness`、`seed`、`mode`、`size`、`limit` 不能以不同的值重复。
 - `limit` 不能为 0；`tag` 不支持排除写法。
-- `theme`、`tag`、`author` 每项最多 64 字符，每类最多 32 项，合计最多 64 项。
-- `id` 与 `group` 各最多 32 项；分组标识最长 32 字符，由小写字母、数字和连字符组成，首尾必须为字母或数字。`seed` 最多 128 字符。
+- `theme`、`tag`、`author` 每类最多 32 项，合计最多 64 项；标识与 `group` 使用同一格式，最长 32 字符，由小写字母、数字和连字符组成，首尾必须为字母或数字。格式非法返回 400。
+- `id` 与 `group` 各最多 32 项；`seed` 最多 128 字符。

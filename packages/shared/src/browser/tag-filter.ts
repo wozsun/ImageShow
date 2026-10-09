@@ -1,4 +1,5 @@
 import { randomQueryLimits } from "./random-limits.ts";
+import { slugMaxLength, slugPattern } from "./vocabulary.ts";
 
 type TagClause = readonly [string, ...string[]];
 export type TagExpression = { anyOf: readonly [TagClause, ...TagClause[]] } | null;
@@ -13,7 +14,6 @@ export function tagFilterValues(value: TagFilterValue): string[] {
 const tagFilterLimits = Object.freeze({
   terms: randomQueryLimits.maxSelectorsPerField,
   segments: randomQueryLimits.maxSelectorsPerField,
-  termCharacters: randomQueryLimits.maxSelectorCharacters,
   basicCharacters: 1024
 });
 
@@ -66,18 +66,11 @@ export function parseTagFilter(
     const raw = value.trim();
     const all = /^all:/iu.test(raw);
     const terms = (all ? raw.slice(4) : raw).split(",").map((part) => {
-      const term = part.trim();
-      if (
-        !term ||
-        /^[!:]/u.test(term) ||
-        /^all:/iu.test(term) ||
-        /[\u0000-\u001f\u007f]/u.test(term)
-      ) {
+      const term = part.trim().toLowerCase();
+      if (!slugPattern.test(term) || term.length > slugMaxLength) {
         throw new TagFilterError("标签条件格式无效");
       }
-      if ([...term].length > tagFilterLimits.termCharacters)
-        throw new TagFilterError("标签词项过长");
-      return term.toLowerCase();
+      return term;
     });
     clauses.push(...(all ? [terms] : terms.map((term) => [term])));
   }
@@ -94,20 +87,15 @@ export function parseTagFilter(
   return { expression, mode, termCount };
 }
 
-export function resolveTagExpression(
+export function assertKnownTags(
   expression: TagExpression,
-  terms: ReadonlyMap<string, string>
-): TagExpression {
-  if (!expression) return null;
-  return normalizeTagExpression(
-    expression.anyOf.map((clause) =>
-      clause.map((term) => {
-        const slug = terms.get(term);
-        if (!slug) throw new TagFilterError(`未知标签：${term}`, "unknown", term);
-        return slug;
-      })
-    )
-  );
+  slugs: ReadonlySet<string>
+) {
+  for (const clause of expression?.anyOf ?? []) {
+    for (const slug of clause) {
+      if (!slugs.has(slug)) throw new TagFilterError(`未知标签：${slug}`, "unknown", slug);
+    }
+  }
 }
 
 export function tagExpressionValues(expression: TagExpression, mode?: TagMatchMode): string[] {

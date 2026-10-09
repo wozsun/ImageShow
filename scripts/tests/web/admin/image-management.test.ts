@@ -459,7 +459,7 @@ test("[Web/后台] 图片详情根据链接显示原图并保持来源、标题�
       tags: ["blue", "stars"],
       width: 1600,
       height: 900,
-      original_url: originalUrl,
+      original: Boolean(originalUrl),
       image_time: "2026-09-01T00:00:00.000Z",
       base_url: "/images",
     });
@@ -557,10 +557,10 @@ test("[Web/后台] 图片详情根据链接显示原图并保持来源、标题�
                         item: adminImageListItem({
                           id: publicItem(originalUrl).id,
                           status: "deleted",
-                          original_url: originalUrl
+                          original: originalUrl ?? ""
                         }),
                         admin: true,
-                        storageLabel: "本地存储",
+                        editTarget: null,
                         onClose() {}
                       })
                     : React.createElement(ImageDetailModal, {
@@ -713,7 +713,7 @@ test("[Web/后台] 图片详情根据链接显示原图并保持来源、标题�
     });
     assert.equal(
       deleted.href,
-      "https://img.example.com/images/original/00000000-0000-7000-8000-000000000544"
+      "/images/original/00000000-0000-7000-8000-000000000544"
     );
   } finally {
     window.HTMLElement.prototype.focus = originalFocus;

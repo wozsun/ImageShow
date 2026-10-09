@@ -26,7 +26,6 @@ import { addImageGroupMembers, imageGroupsQuery, refreshImageGroup, removeImageG
 import { isApiClientError } from "../../../lib/api/client.js";
 import { queryKeys } from "../../../lib/api/query-keys.js";
 import { useIngestionVocabulary } from "../../../lib/api/ingestion-vocabulary.js";
-import { useStorageNameResolver } from "../../../lib/api/storage-options.js";
 import { createActionFeedback, type ActionFeedbackState } from "../../../lib/ui/action-feedback.js";
 import { preloadIntentProps } from "../../../lib/ui/preload-intent.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
@@ -92,7 +91,6 @@ function GroupDetailContent({ slug, settings }: { slug: string; settings: AdminS
   const [sort, setSort] = useState<AdminImageSort>(() => ({ sort_by: sortBy, order: sortOrder }));
   const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
   const { data: vocabulary } = useIngestionVocabulary();
-  const storageName = useStorageNameResolver();
   const toolbarRef = useWorkspaceToolbarCollapse();
   const gridRef = useRef<HTMLDivElement | null>(null);
   const navigation = useImageAdminPageNavigation({
@@ -314,7 +312,6 @@ function GroupDetailContent({ slug, settings }: { slug: string; settings: AdminS
             <AdminImageCard
               key={item.id}
               item={item}
-              storageName={storageName}
               checked={selection.selected.includes(item.id)}
               metadata={cardMetadata(item)}
               busy={writing}
@@ -357,7 +354,7 @@ function GroupDetailContent({ slug, settings }: { slug: string; settings: AdminS
         <detail.Modal
           item={detail.item}
           admin
-          storageLabel={storageName(detail.item)}
+          editTarget={{ items: [detail.item] }}
           onClose={detail.close}
           returnFocusRef={detail.returnFocusRef}
         />

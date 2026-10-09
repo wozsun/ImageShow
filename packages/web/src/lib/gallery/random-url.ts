@@ -32,13 +32,8 @@ export function buildRandomUrl(input: {
       .split(",")
       .map((value) => value.trim().toLowerCase())
       .filter(Boolean);
-    if (
-      submitted.length > randomQueryLimits.maxSelectorsPerField ||
-      submitted.some(
-        (term) => [...term.replace(/^!/, "")].length > randomQueryLimits.maxSelectorCharacters
-      )
-    ) {
-      throw new TagFilterError("随机链接的筛选词项超过数量或长度限制");
+    if (submitted.length > randomQueryLimits.maxSelectorsPerField) {
+      throw new TagFilterError("随机链接的筛选词项超过数量限制");
     }
     submittedCount += submitted.length;
     const values = [...new Set(submitted)].sort();

@@ -2,7 +2,6 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState
 } from "react";
@@ -14,10 +13,8 @@ import {
 } from "../../lib/api/client.js";
 import {
   adminApiBasePath,
-  type AdminImageDetailItemDto,
   type EditableImageSnapshotDto,
-  type ImageAdminInfoDto,
-  type AdminImageListItemDto
+  type ImageAdminInfoDto
 } from "@imageshow/shared/browser";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import { clearSessionProbeHint } from "../../lib/api/auth-session.js";
@@ -29,19 +26,12 @@ import {
 } from "./editor/image-editor-capability-loader.js";
 import { errorMessage, formatBytes, formatDate } from "../../lib/ui/formatters.js";
 import { preloadIntentProps } from "../../lib/ui/preload-intent.js";
-import { storageBackendLabel } from "../../lib/ui/select-options.js";
 import { useImageEditorCapability } from "./editor/useImageEditorCapability.js";
 import { CopyButton } from "../actions/CopyButton.js";
 import { Icon } from "../icon/Icon.js";
 // 公开详情可在已确认的管理员会话中独立加载本模块；这里只带入管理详情自身样式，
 // 完整的管理表单色契约继续等到用户明确打开编辑器时再加载。
 import "../../styles/admin/image-details.css";
-
-type AdminDetailSource = AdminImageDetailItemDto | AdminImageListItemDto;
-
-function isAdminImageListItem(item: AdminDetailSource): item is AdminImageListItemDto {
-  return "status" in item;
-}
 
 function adminImageInfoQueryOptions(imageId: string) {
   return queryOptions<ImageAdminInfoDto>({
@@ -64,7 +54,8 @@ function unresolvedValue(admin: boolean, loading: boolean, failed: boolean) {
 export function ImageAdminDetails({
   imageId,
   adminItem,
-  adminStorageLabel,
+  editTarget,
+  deletedAt,
   onItemUpdated,
   onItemRefreshRequested,
   onItemTrashCommitted,
@@ -72,8 +63,9 @@ export function ImageAdminDetails({
   onNestedDialogChange
 }: {
   imageId: string;
-  adminItem: AdminDetailSource | null;
-  adminStorageLabel?: string;
+  adminItem: ImageAdminInfoDto | null;
+  editTarget: ImageEditorTarget | null;
+  deletedAt?: string | null;
   onItemUpdated?: (item: EditableImageSnapshotDto) => void;
   onItemRefreshRequested?: (imageId: string) => void;
   onItemTrashCommitted?: (imageId: string) => void | Promise<void>;
@@ -81,15 +73,9 @@ export function ImageAdminDetails({
   onNestedDialogChange?: (open: boolean) => void;
 }) {
   const admin = Boolean(adminItem);
-  const adminListItem = adminItem && isAdminImageListItem(adminItem)
-    ? adminItem
-    : null;
+  const adminStorageLabel = adminItem?.storage_label;
   const queryClient = useQueryClient();
   const trashedImageRef = useRef<string | null>(null);
-  const knownUneditable = Boolean(
-    adminListItem?.deleted_at
-    || (adminListItem && adminListItem.status !== "ready")
-  );
 
   // 后台详情已有 Shell 确认过会话；公共详情只有在外层根据 /auth/me 的
   // 权威结果加载本模块后才可能渲染管理入口。本地 session hint 仅负责触发
@@ -134,7 +120,7 @@ export function ImageAdminDetails({
   const adminInfoOptions = adminImageInfoQueryOptions(imageId);
   const query = useQuery({
     ...adminInfoOptions,
-    enabled: accessConfirmed && expanded && (!admin || !adminStorageLabel)
+    enabled: accessConfirmed && expanded && !admin
   });
   const adminInfo = query.data;
 
@@ -149,7 +135,7 @@ export function ImageAdminDetails({
     denyAdminAccess(query.error.status === 401);
   }, [admin, denyAdminAccess, query.error]);
 
-  const canEdit = accessConfirmed && !knownUneditable && !editSuppressed;
+  const canEdit = accessConfirmed && editTarget !== null && !editSuppressed;
   const handlePreparationFailure = useCallback(
     (error: unknown) => {
       if (isImageNotEditableError(error)) {
@@ -162,12 +148,6 @@ export function ImageAdminDetails({
       }
     },
     [denyAdminAccess]
-  );
-  const editTarget = useMemo<ImageEditorTarget>(
-    () => ({
-      sources: [adminListItem ?? { id: imageId }]
-    }),
-    [adminListItem, imageId]
   );
   const editorCapability = useImageEditorCapability({
     onPreparationError: handlePreparationFailure,
@@ -192,13 +172,13 @@ export function ImageAdminDetails({
   }, [editOpen, onNestedDialogChange]);
 
   const prefetchEdit = useCallback(() => {
-    if (!canEdit) return;
+    if (!canEdit || !editTarget) return;
     editorCapability.preload(editTarget);
   }, [canEdit, editTarget, editorCapability.preload]);
 
   const openEdit = useCallback(
     (opener: HTMLElement) => {
-      if (!canEdit) return;
+      if (!canEdit || !editTarget) return;
       setEditError("");
       setEditNotice("");
       void editorCapability.open(editTarget, opener);
@@ -215,11 +195,11 @@ export function ImageAdminDetails({
   }, [editorCapability.close, onItemTrashed]);
 
   const loadAdminInfoAfterInvalidation = useCallback(async () => {
-    // 后台入口直接传入首帧存储显示名，因此平时不启用 admin-info Query。公开详情
+    // 后台入口直接传入完整管理信息，因此平时不启用 admin-info Query。公开详情
     // 在展开管理信息后会启用它；精确图片信息失效已经等待该 active Query 完成刷新，
     // 这里优先复用结果，避免随后再以同一个 key 发起第二次请求。后台保存或迁移后
     // 仍按需读取一次 updated_at 与权威存储显示名。
-    if (expanded && !adminStorageLabel) {
+    if (expanded && !admin) {
       const queryState = queryClient.getQueryState<ImageAdminInfoDto>(
         adminImageInfoQueryOptions(imageId).queryKey
       );
@@ -230,7 +210,7 @@ export function ImageAdminDetails({
       ...adminImageInfoQueryOptions(imageId),
       staleTime: 0
     });
-  }, [adminStorageLabel, expanded, imageId, queryClient]);
+  }, [admin, expanded, imageId, queryClient]);
 
   const refreshAfterSave = useCallback(
     async (commit?: ImageMetadataSaveCommit) => {
@@ -353,9 +333,7 @@ export function ImageAdminDetails({
     migratedStorageLabel ||
     adminStorageLabel ||
     adminInfo?.storage_label ||
-    (adminListItem
-      ? storageBackendLabel(adminListItem.storage_slug)
-      : fallback);
+    fallback;
   const createdAt =
     refreshedAdminInfo?.created_at ?? adminItem?.created_at ?? adminInfo?.created_at;
   const variants = refreshedAdminInfo?.variants ?? adminItem?.variants ?? adminInfo?.variants;
@@ -428,10 +406,10 @@ export function ImageAdminDetails({
             <dd>{createdAt ? formatDate(createdAt) : fallback}</dd>
             <dt>更新时间</dt>
             <dd>{updatedAt ? formatDate(updatedAt) : fallback}</dd>
-            {adminListItem?.deleted_at && (
+            {deletedAt && (
               <>
                 <dt>删除时间</dt>
-                <dd>{formatDate(adminListItem.deleted_at)}</dd>
+                <dd>{formatDate(deletedAt)}</dd>
               </>
             )}
           </dl>

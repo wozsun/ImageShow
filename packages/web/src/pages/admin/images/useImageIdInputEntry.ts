@@ -88,7 +88,7 @@ export function useImageIdInputEntry<Intent extends ImageEditorIntent>({
   const handOff = (openEditor: OpenImageEditor, items: EditableImageSnapshotDto[]) => {
     if (!session || !openerRef.current) return Promise.resolve("interrupted" as const);
     return openEditor(
-      { sources: items, intent: session.intent, fromDialog: true },
+      { items, intent: session.intent, fromDialog: true },
       openerRef.current,
       close
     );

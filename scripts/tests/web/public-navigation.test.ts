@@ -783,7 +783,7 @@ test("[Web/公开导航] 移动画廊与展映关闭筛选后，触摸残留的�
     }
   }
 });
-test("[Web/公开导航] 显示名解析后的标签条件仍受规范串预算约束", () => {
+test("[Web/公开导航] 标签链接只接受 slug 并约束规范串预算", () => {
   const tags = Array.from({ length: 32 }, (_, index) => ({
     slug: `tag-${String(index).padStart(2, "0")}${"x".repeat(26)}`,
     display_name: `n${index}`
@@ -797,7 +797,7 @@ test("[Web/公开导航] 显示名解析后的标签条件仍受规范串预算�
         prefix +
         tags
           .slice(0, count)
-          .map((tag) => tag.display_name)
+          .map((tag) => tag.slug)
           .join(",")
     });
     assert.throws(() => galleryFiltersFromSearchParams(params, tags), { name: "TagFilterError" });
@@ -808,12 +808,17 @@ test("[Web/公开导航] 显示名解析后的标签条件仍受规范串预算�
         "all:" +
         tags
           .slice(0, 30)
-          .map((tag) => tag.display_name)
+          .map((tag) => tag.slug)
           .join(",")
     }),
     tags
   );
   assert.equal(filters.tag.length, 993);
+  for (const tag of ["n0", "现场"]) {
+    const params = new URLSearchParams({ tag });
+    assert.throws(() => galleryFiltersFromSearchParams(params, tags), { name: "TagFilterError" });
+    assert.equal(params.get("tag"), tag, "无效条件仍保留在原链接中");
+  }
   assert.equal(
     imageBrowseApiSearchParams(filters, "latest", { view: "gallery" }).get("tag"),
     filters.tag

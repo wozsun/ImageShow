@@ -8,23 +8,23 @@ import { ensureThemeWithMutationLockHeld } from "../../../vocab/themes/mutations
 import type { EntityCacheKind } from "../../../vocab/cache.ts";
 import { resolveClassification } from "../../classification.ts";
 import {
-  adminImageListPresentationColumns,
-  adminImageListPresentationColumnsWithTags,
-  type ImageRecord,
-  type ImageRecordWithTags
+  ingestionImagePresentationColumns,
+  ingestionImagePresentationColumnsWithTags,
+  type IngestionImageRecord,
+  type IngestionImageRecordWithTags
 } from "../../presenter.ts";
 import type { IngestionSessionSnapshot } from "../sessions/model.ts";
 
 export async function persistIngestionImage(
   session: IngestionSessionSnapshot,
-  resolvedTags: string[]
+  tagSlugs: string[]
 ) {
   const prepared = session.prepared!;
   const commit = session.commit!;
   return withTransaction(async (client) => {
     const existing = (
-      await client.query<ImageRecordWithTags & { created_by: string }>(
-        `SELECT ${adminImageListPresentationColumnsWithTags}, created_by
+      await client.query<IngestionImageRecordWithTags & { created_by: string }>(
+        `SELECT ${ingestionImagePresentationColumnsWithTags}, created_by
          FROM metadata
         WHERE id=$1`,
         [session.image_id]
@@ -62,12 +62,12 @@ export async function persistIngestionImage(
       device: imageDevice(prepared.variants.large.width, prepared.variants.large.height),
       brightness: prepared.detected_brightness
     });
-    const inserted = await client.query<ImageRecord>(
+    const inserted = await client.query<IngestionImageRecord>(
       `INSERT INTO metadata(
          id, image_time, device, brightness, theme, storage_slug, title, description, source, original, author, created_by,
          l_width, l_height, l_byte_size, l_md5, m_width, m_height, m_byte_size, m_md5, s_width, s_height, s_byte_size, s_md5
        ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
-       RETURNING ${adminImageListPresentationColumns}, false AS purge_pending`,
+       RETURNING ${ingestionImagePresentationColumns}`,
       [
         session.image_id,
         session.image_time,
@@ -91,7 +91,7 @@ export async function persistIngestionImage(
       (await replaceImageTagAssociations(
         client,
         session.image_id,
-        resolvedTags
+        tagSlugs
       ))
         .createdTag
     ) {
@@ -102,7 +102,7 @@ export async function persistIngestionImage(
       inserted: true,
       image: {
         ...inserted.rows[0]!,
-        tags: resolvedTags
+        tags: tagSlugs
       },
       createdEntityKinds
     };

@@ -7,12 +7,9 @@ import {
   useState
 } from "react";
 import type { AdminSettings, FacetOptionDto } from "@imageshow/shared/browser";
-import { storageBackendLabel } from "../../../lib/ui/select-options.js";
+import { storageBackendDisplay } from "../../../lib/ui/select-options.js";
 import { useIngestionVocabulary } from "../../../lib/api/ingestion-vocabulary.js";
-import {
-  storageNameResolver,
-  useStorageOptions
-} from "../../../lib/api/storage-options.js";
+import { useStorageOptions } from "../../../lib/api/storage-options.js";
 import type { IngestionJob, IngestionAttributeDefaults } from "./queue/model/ingestion-job.js";
 
 import { ingestionJobNeedsDuplicateConfirmation } from "./queue/model/duplicate-match.js";
@@ -119,17 +116,14 @@ export function Ingestion({
         .filter((backend) => backend.enabled)
         .map((backend) => ({
           value: backend.slug,
-          label: backend.display_name || storageBackendLabel(backend.slug)
+          label: storageBackendDisplay(backend)
         })),
     [storageBackends]
   );
-  const resolveStorageName = useMemo(
-    () => storageNameResolver(storageBackends),
-    [storageBackends]
-  );
   const storageName = useCallback(
-    (slug: string) => resolveStorageName({ storage_slug: slug }),
-    [resolveStorageName]
+    (slug: string) =>
+      storageBackendDisplay(storageBackends.find((backend) => backend.slug === slug) ?? { slug }),
+    [storageBackends]
   );
 
   const uploadOwner = useUploadQueueOwner({

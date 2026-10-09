@@ -674,7 +674,7 @@ test("[Web/画廊] 公共详情保存为目标页建立新权威边界", () => {
   const secondBefore = beforeItems.find(({ id }) => id === secondId)!.item!;
 
   const staleAppend = dataWindow.claimRequest({ cursor: "cursor-60", kind: "append" })!;
-  const authoritativeSnapshot = editableImage(firstId, {title: "saved title",theme: "saved-theme",author: null,tags: ["saved-tag"],width: 100,height: 300,device: "pc",brightness: "dark",original: "https://example.com/saved.webp",base_url:"/images",variants:{large:{width:1600,height:900,byte_size:1024},medium:{width:1200,height:675,byte_size:800},small:{width:600,height:338,byte_size:200}}});
+  const authoritativeSnapshot = editableImage(firstId, {title: "saved title",theme: "saved-theme",author: null,tags: ["saved-tag"],width: 100,height: 300,device: "pc",brightness: "dark",original: "https://example.com/saved.webp",base_url:"/images",variants:{large:{byte_size:1024},medium:{byte_size:800},small:{byte_size:200}}});
   const refreshIntent = dataWindow.prepareImageRefresh(
     firstId,
     authoritativeSnapshot

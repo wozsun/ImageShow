@@ -2,18 +2,8 @@ import {
   getThemeVocab,
   type VocabularyReadAccess
 } from "../cache.ts";
-import { resolveVocabularySlugs, resolveTermSlugMap } from "../terms.ts";
-
-export async function resolveThemeTermMap(
-  terms: string[],
+export async function getThemeSlugs(
   access: VocabularyReadAccess = {}
-): Promise<Map<string, string>> {
-  return resolveTermSlugMap(() => getThemeVocab(access), terms);
-}
-
-export async function resolveThemeSlugs(
-  terms: string[],
-  access: VocabularyReadAccess = {}
-): Promise<string[]> {
-  return resolveVocabularySlugs(() => getThemeVocab(access), terms);
+) {
+  return new Set((await getThemeVocab(access)).map((entry) => entry.slug));
 }

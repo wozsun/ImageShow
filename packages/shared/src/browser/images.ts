@@ -1,4 +1,4 @@
-import { imageVariants, type ImageVariantsDto, type ImageVariantByteSizesDto } from "./image-variants.ts";
+import { imageVariants, type ImageVariantByteSizesDto } from "./image-variants.ts";
 import { slugMaxLength, slugPattern } from "./vocabulary.ts";
 import { type Brightness, type Device } from "./image-classification.ts";
 
@@ -77,18 +77,32 @@ export type ImageCardBaseDto = ShowImageCardDto & {
  */
 export type GalleryImageCardDto = ShowImageCardDto & Pick<ImageCardBaseDto, "theme" | "tags">;
 
-/** 标题及画廊主题、标签复用列表当前值，详情请求不负责刷新这些字段。 */
-export type PublicImageDetailDto<View extends PublicImageView = "show"> = Pick<
+type ImageDetailFieldsDto = Pick<
   ImageCardBaseDto,
-  "device" | "brightness" | "author" | "image_time"
+  "device" | "brightness" | "author" | "theme" | "tags" | "image_time"
 > & {
   description: string;
   base_url: string;
-  original_url: string | null;
   source: string | null;
-} & (View extends "show" ? Pick<ImageCardBaseDto, "theme" | "tags"> : {});
+};
 
-export type ImageDetailItemDto = PublicImageDetailDto & { id: string; title: string };
+/**
+ * 标题及画廊主题、标签复用列表当前值，详情请求不负责刷新这些字段。
+ * 原图有无只对管理员会话投影为布尔 original，访客响应不含该字段。
+ */
+export type PublicImageDetailDto<View extends PublicImageView = "show"> =
+  Omit<ImageDetailFieldsDto, "theme" | "tags"> & { original?: boolean }
+  & (View extends "show" ? Pick<ImageCardBaseDto, "theme" | "tags"> : {});
+
+type ImageDetailItemDto = ImageDetailFieldsDto & { id: string; title: string };
+
+/**
+ * Original access belongs to the authenticated site, not the storage image root.
+ * Editable data carries the raw original and details carry a boolean; both are truthy only when an original exists.
+ */
+export function imageOriginalUrl(image: { id: string; original?: string | boolean }) {
+  return image.original ? `/images/original/${encodeURIComponent(image.id)}` : null;
+}
 
 export type PublicImageListResponseDto<View extends PublicImageView = "gallery"> = {
   items: Array<View extends "show" ? ShowImageCardDto : GalleryImageCardDto>;
@@ -126,55 +140,42 @@ export type RandomImageJsonResponseDto = {
   items: RandomImageJsonItemDto[];
 };
 
-export type AdminImageListItemDto = ImageDetailItemDto & ShowImageCardDto & {
-  variants: ImageVariantsDto;
-  status: "ready" | "deleted";
-  purge_pending: boolean;
-  in_group?: boolean;
-  storage_slug: string;
-  original: string;
-  deleted_at: string | null;
+type ImageAdminStorageDto = {
+  variants: ImageVariantByteSizesDto;
+  storage_label: string;
+};
+
+export type ImageAdminInfoDto = ImageAdminStorageDto & {
   created_at: string;
   updated_at: string;
 };
 
-/**
- * Fields consumed by the shared admin detail dialog.
- *
- * List/edit-only fields remain outside this compact response.
- */
-export type AdminImageDetailItemDto = ImageDetailItemDto & ImageAdminInfoDto;
-
 /** Exact recovery payload consumed by the image metadata editor. */
-export type EditableImageSnapshotDto = {
-  id: string;
-  title: string;
-  description: string;
-  source: string | null;
-  original: string;
-  device: Device;
-  brightness: Brightness;
-  theme: string | null;
-  author: string | null;
-  tags: string[];
-  base_url: string;
-  variants: ImageVariantsDto;
-  original_url: string | null;
-  width: number;
-  height: number;
-  storage_slug: string;
+export type EditableImageSnapshotDto = Omit<ImageDetailItemDto, "image_time"> &
+  Pick<ShowImageCardDto, "width" | "height"> & ImageAdminStorageDto & {
+    original: string;
+    storage_slug: string;
+  };
+
+/** Admin detail input; it only reads whether `original` is truthy. */
+export type AdminImageDetailItemDto = ImageDetailItemDto & ImageAdminInfoDto & {
+  original: string | boolean;
+};
+
+/** Compact overview projection: the detail needs only the original flag, not the raw address. */
+export type AdminImageRecentItemDto = AdminImageDetailItemDto & { original: boolean };
+
+/** A list item is also a complete editable snapshot and admin detail. */
+export type AdminImageListItemDto = EditableImageSnapshotDto & AdminImageDetailItemDto & {
+  status: "ready" | "deleted";
+  purge_pending: boolean;
+  in_group?: boolean;
+  deleted_at: string | null;
 };
 
 export type AdminImageListResponseDto = {
   items: AdminImageListItemDto[];
   total: number;
-};
-
-export type ImageAdminInfoDto = {
-  variants: ImageVariantByteSizesDto;
-  storage_label: string;
-  created_at: string;
-  updated_at: string;
 };
 
 export type ImageUpdateItemResultDto =

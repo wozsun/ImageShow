@@ -1,9 +1,8 @@
 import {
   imageVariantUrl,
+  imageOriginalUrl,
   type AdminImageDetailItemDto,
-  type EditableImageSnapshotDto,
-  type AdminImageListItemDto,
-  type ImageDetailItemDto
+  type EditableImageSnapshotDto
 } from "@imageshow/shared/browser";
 import {
   Component,
@@ -36,6 +35,7 @@ import { ImageDescriptionSlot } from "./ImageDescriptionSlot.js";
 import { DialogFrame } from "../dialog/DialogFrame.js";
 import { DirectActivationButton } from "../actions/DirectActivationButton.js";
 import { LazyImageAdminDetails } from "./image-admin-details-loader.js";
+import type { ImageEditorTarget } from "./editor/image-editor-types.js";
 import "../../styles/image-detail.css";
 
 class ImageAdminDetailsModuleBoundary extends Component<
@@ -82,7 +82,7 @@ class ImageAdminDetailsModuleBoundary extends Component<
   }
 }
 
-function applyEditedSnapshot<T extends ImageDetailItemDto>(
+function applyEditedSnapshot<T extends { id: string }>(
   item: T,
   snapshot: EditableImageSnapshotDto | null
 ): T {
@@ -90,7 +90,7 @@ function applyEditedSnapshot<T extends ImageDetailItemDto>(
   return {
     ...item,
     ...snapshot
-  } as T;
+  };
 }
 
 type ImageDetailModalProps =
@@ -108,10 +108,11 @@ type ImageDetailModalProps =
       returnFocusRef?: RefObject<HTMLElement | null>;
     }
   | {
-      item: AdminImageDetailItemDto | AdminImageListItemDto;
+      item: AdminImageDetailItemDto;
       onClose: () => void;
       admin: true;
-      storageLabel: string;
+      editTarget: ImageEditorTarget | null;
+      deletedAt?: string | null;
       onTrashCommitted?: (imageId: string) => void | Promise<void>;
       onTrashed?: (imageId: string) => void;
       onItemUpdated?: (item: EditableImageSnapshotDto) => void;
@@ -131,7 +132,17 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const adminItem = props.admin === true
     ? applyEditedSnapshot(props.item, editedSnapshot)
     : null;
-  const adminStorageLabel = props.admin ? props.storageLabel : undefined;
+  const suppliedEditTarget = props.admin ? props.editTarget : undefined;
+  const editTarget = useMemo<ImageEditorTarget | null>(
+    () => {
+      if (!admin) return { ids: [props.item.id] };
+      if (!suppliedEditTarget) return null;
+      return suppliedEditTarget.items && currentSnapshot?.id === props.item.id
+        ? { ...suppliedEditTarget, items: [currentSnapshot] }
+        : suppliedEditTarget;
+    },
+    [admin, suppliedEditTarget, currentSnapshot, props.item.id]
+  );
   const detailLoading = !currentSnapshot && !admin && props.detailLoading === true;
   const detailError = !currentSnapshot && !admin ? (props.detailError?.trim() ?? "") : "";
   const onDetailRetry = !admin ? props.onDetailRetry : undefined;
@@ -184,7 +195,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
       : sourceAvailable
         ? "打开来源页面"
         : "暂无来源";
-  const originalHref = showAdminDetails ? (item.original_url?.trim() ?? "") : "";
+  const originalHref = showAdminDetails ? imageOriginalUrl(item) : null;
   const imageAspectRatio =
     "width" in item && "height" in item && item.width > 0 && item.height > 0
       ? `${item.width} / ${item.height}`
@@ -361,7 +372,8 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                           key={item.id}
                           imageId={item.id}
                           adminItem={adminItem}
-                          adminStorageLabel={adminStorageLabel}
+                          editTarget={editTarget}
+                          deletedAt={props.admin ? props.deletedAt : undefined}
                           onItemUpdated={handleItemUpdated}
                           onItemRefreshRequested={handleItemRefreshRequested}
                           onItemTrashCommitted={props.onTrashCommitted}

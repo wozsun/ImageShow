@@ -7,7 +7,6 @@ import { imageObjectKey } from "../../../storage/objects/image-paths.ts";
 import { ApiError } from "../../../core/api-error.ts";
 import { runWithAdvisoryLockAcquisitionSignal } from "../../../core/database/advisory-locks.ts";
 import { logger } from "../../../core/logger.ts";
-import { resolveTagSlugs } from "../../../vocab/tags/query.ts";
 import {
   invalidateEntityCountCaches,
   refreshEntityVocabularies
@@ -64,7 +63,7 @@ export async function commitIngestionSessionSnapshot(
   let databaseCommitted = false;
   const candidateGuardToken = randomUUIDv7();
   try {
-    const resolvedTags = await resolveTagSlugs(commit.metadata.tags);
+    const tagSlugs = commit.metadata.tags;
     const vocabularyLocks = vocabularyAssociationLockRequests([
       ...(commit.metadata.theme
         ? [{ entity: "theme" as const, slug: commit.metadata.theme }]
@@ -72,7 +71,7 @@ export async function commitIngestionSessionSnapshot(
       ...(commit.metadata.author
         ? [{ entity: "author" as const, slug: commit.metadata.author }]
         : []),
-      ...resolvedTags.map((slug) => ({ entity: "tag" as const, slug }))
+      ...tagSlugs.map((slug) => ({ entity: "tag" as const, slug }))
     ]);
     const attempt = await runWithAdvisoryLockAcquisitionSignal(signal, () =>
       tryWithStorageLocationReadAndAdvisoryLocks(
@@ -174,7 +173,7 @@ export async function commitIngestionSessionSnapshot(
               },
               () => {
                 combinedSignal.throwIfAborted();
-                return persistIngestionImage(session, resolvedTags);
+                return persistIngestionImage(session, tagSlugs);
               },
               combinedSignal
             );
@@ -197,7 +196,7 @@ export async function commitIngestionSessionSnapshot(
             invalidateEntityCountCaches([
               "theme",
               ...(commit.metadata.author ? ["author" as const] : []),
-              ...(resolvedTags.length ? ["tag" as const] : [])
+              ...(tagSlugs.length ? ["tag" as const] : [])
             ]),
             refreshEntityVocabularies(persisted.createdEntityKinds)
           ]);

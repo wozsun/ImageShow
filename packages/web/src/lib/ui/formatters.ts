@@ -32,10 +32,6 @@ export function formatDate(value: string) {
   return new Date(value).toLocaleString();
 }
 
-export function formatDimensions(width: number, height: number) {
-  return width > 0 && height > 0 ? `${width} x ${height}` : "未记录";
-}
-
 export function errorMessage(err: unknown): string {
   const message = (err instanceof Error ? err.message : String(err)).trim();
 

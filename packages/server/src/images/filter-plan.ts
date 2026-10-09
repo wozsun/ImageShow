@@ -3,18 +3,18 @@ import {
   devices,
   normalizeTagExpression,
   parseGalleryTagFilter,
-  resolveTagExpression,
+  assertKnownTags,
+  slugMaxLength,
+  slugPattern,
   TagFilterError,
   type TagExpression,
   type Brightness,
   type Device
 } from "@imageshow/shared/browser";
 import { appConfig } from "@imageshow/shared";
-import { resolveAuthorSlugs } from "../vocab/authors/query.ts";
 import { ApiError } from "../core/api-error.ts";
 import type { VocabularyReadAccess } from "../vocab/cache.ts";
-import { resolveTagTermMap } from "../vocab/tags/query.ts";
-import { resolveThemeSlugs } from "../vocab/themes/query.ts";
+import { getTagSlugs } from "../vocab/tags/query.ts";
 
 export type ImageSelectorGroup = {
   include: string[];
@@ -44,8 +44,6 @@ const IMAGE_FILTER_AXES = devices.flatMap((device) =>
   brightnesses.map((brightness) => ({ device, brightness }))
 );
 
-const disallowedSelectorCharacters = /[\u0000-\u001f\u007f]/u;
-
 function splitSelectors(rawValues: string[]): { include: string[]; exclude: string[] } {
   const values = [
     ...new Set(
@@ -68,9 +66,8 @@ function splitSelectors(rawValues: string[]): { include: string[]; exclude: stri
     const excluded = value.startsWith("!");
     const bare = excluded ? value.slice(1).trim() : value;
     if (
-      !bare ||
-      [...bare].length > appConfig.randomQuery.maxSelectorCharacters ||
-      disallowedSelectorCharacters.test(bare)
+      bare.length > slugMaxLength ||
+      !slugPattern.test(bare)
     ) {
       throw new ApiError(400, "validation_error", "Invalid image selector");
     }
@@ -121,31 +118,14 @@ export function createImageFilterPlan(input: {
   return { ...fields, signature: JSON.stringify(fields) };
 }
 
-async function resolveSelector(
-  raw: string | undefined,
-  noun: string,
-  resolve: (terms: string[]) => Promise<string[]>
-) {
-  if (!raw) return normalizedGroup(undefined, noun);
-  const selectors = splitSelectors([raw]);
-  return normalizedGroup(
-    {
-      include: await resolve(selectors.include),
-      exclude: await resolve(selectors.exclude)
-    },
-    noun
-  );
-}
-
-export async function resolveImageTagExpressions(
+export async function validateImageTagExpressions(
   expressions: readonly TagExpression[],
   access: VocabularyReadAccess = {}
 ) {
-  const selected = expressions.flatMap((expression) => expression?.anyOf.flat() ?? []);
-  if (!selected.length) return expressions.map(() => null);
-  const terms = await resolveTagTermMap(selected, access);
+  if (!expressions.some((expression) => expression !== null)) return;
+  const slugs = await getTagSlugs(access);
   try {
-    return expressions.map((expression) => resolveTagExpression(expression, terms));
+    for (const expression of expressions) assertKnownTags(expression, slugs);
   } catch (error) {
     if (!(error instanceof TagFilterError)) throw error;
     throw new ApiError(404, "unknown_tag", error.message, { field: "tag", value: error.term });
@@ -165,20 +145,14 @@ export async function resolveImageFilterPlan(
     if (!(error instanceof TagFilterError)) throw error;
     throw new ApiError(400, "validation_error", error.message, { field: "tag" });
   }
-  const [theme, tag, author] = await Promise.all([
-    resolveSelector(input.theme, "theme", (terms) => (
-      resolveThemeSlugs(terms, access)
-    )),
-    resolveImageTagExpressions([parsedTag], access).then(([expression]) => expression ?? null),
-    resolveSelector(input.author, "author", (terms) => (
-      resolveAuthorSlugs(terms, access)
-    ))
-  ]);
+  const theme = normalizedGroup(splitSelectors(input.theme ? [input.theme] : []), "theme");
+  const author = normalizedGroup(splitSelectors(input.author ? [input.author] : []), "author");
+  await validateImageTagExpressions([parsedTag], access);
   return createImageFilterPlan({
     devices: input.device ? [input.device] : devices,
     brightnesses: input.brightness ? [input.brightness] : brightnesses,
     theme,
-    tag,
+    tag: parsedTag,
     author
   });
 }

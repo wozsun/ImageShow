@@ -174,8 +174,8 @@ await runIntegrationScenario(async (runtime) => {
     { tags: ["matrix-empty"], match: () => false },
     { tags: ["all:matrix-a,matrix-empty"], match: () => false },
     { tags: ["matrix-a,matrix-empty"], match: (row) => Boolean(row.mask & 1) },
-    { tags: ["all:城市,matrix-a"], match: (row) => Boolean(row.mask & 1) },
-    { tags: ["A&B+C#%"], match: (row) => row.id === rows[63]!.id }
+    { tags: ["all:MATRIX-A,matrix-a"], match: (row) => Boolean(row.mask & 1) },
+    { tags: ["matrix-symbols"], match: (row) => row.id === rows[63]!.id }
   );
   for (const device of ["pc", "mb"])
     for (const brightness of ["dark", "light"]) {
@@ -557,6 +557,12 @@ await runIntegrationScenario(async (runtime) => {
         });
         assert.equal(admin.total, expected.length, label);
         assert.deepEqual(ids(admin.items), expected, label);
+      }
+      for (const [field, value] of [["tag", "城市"], ["tag", "A&B+C#%"], ["theme", "城市"], ["author", "作者甲"]]) {
+        for (const prefix of ["/api/images?view=show", "/api/gallery-stats?", "/random?mode=json"]) {
+          const response = await get(`${prefix}&${field}=${encodeURIComponent(value!)}`);
+          assert.equal(response.status, 400, `${backend}: non-slug ${field}`);
+        }
       }
       for (const tag of [
         "matrix-missing",

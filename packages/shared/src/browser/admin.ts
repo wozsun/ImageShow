@@ -1,5 +1,5 @@
 import type { LogLevel } from "./log-levels.ts";
-import type { AdminImageDetailItemDto } from "./images.ts";
+import type { AdminImageRecentItemDto } from "./images.ts";
 
 export type LogFileSummaryDto = {
   name: string;
@@ -41,7 +41,7 @@ export type AdminOverviewDto = {
   dark: number;
   light: number;
   top_themes: Array<{ theme: string; count: number }>;
-  recent: AdminImageDetailItemDto[];
+  recent: AdminImageRecentItemDto[];
   ready_image_cache: {
     state: string;
     synchronized: boolean;

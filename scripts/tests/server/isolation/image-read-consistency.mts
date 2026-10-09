@@ -591,7 +591,7 @@ await runIntegrationScenario(async (runtime) => {
     await assert.rejects(
       adminImagesReadModel.listAdminImages({
         status: "ready",
-        theme: "null",
+        tag: matrixTag,
         page: 1,
         limit: 1
       }),

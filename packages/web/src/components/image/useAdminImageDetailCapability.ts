@@ -7,11 +7,10 @@ import {
 import { loadImageAdminDetailsModule } from "./image-admin-details-loader.js";
 import { AsyncIntentFence } from "../../lib/async-intent-fence.js";
 import { createPageLifetimeModuleLoader } from "../../lib/page-lifetime-module-loader.js";
-import type { AdminImageDetailItemDto, AdminImageListItemDto } from "@imageshow/shared/browser";
+import type { AdminImageDetailItemDto } from "@imageshow/shared/browser";
 
 type ImageDetailModalModule = typeof import("./ImageDetailModal.js");
 type ImageDetailModalComponent = ImageDetailModalModule["ImageDetailModal"];
-type AdminDetailItem = AdminImageDetailItemDto | AdminImageListItemDto;
 
 const loadImageDetailModalModule = createPageLifetimeModuleLoader<ImageDetailModalModule>(
   () => import("./ImageDetailModal.js")
@@ -26,7 +25,7 @@ function loadAdminImageDetailCapability() {
   );
 }
 
-export function useAdminImageDetailCapability<T extends AdminDetailItem>(
+export function useAdminImageDetailCapability<T extends AdminImageDetailItemDto>(
   onLoadError: (error: unknown) => void
 ) {
   const [item, setItem] = useState<T | null>(null);

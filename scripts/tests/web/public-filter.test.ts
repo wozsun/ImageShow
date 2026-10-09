@@ -523,9 +523,10 @@ test("[Web/公开筛选] 草稿分组往返保留或且边界，跨组重复只�
 });
 
 test("[Web/公开筛选] 目录解析隔离未知标签，清空可恢复，组数和总预算有界", () => {
-  const draft = createPublicFilterDraft(emptyGalleryFilters, ["all:夜景,雨景", "night"]);
+  const draft = createPublicFilterDraft(emptyGalleryFilters, ["all:night,rain", "night"]);
   assert.match(resolvePublicFilterTag(draft, undefined).error!, /读取标签目录/);
   assert.equal(resolvePublicFilterTag(draft, facets).error, null);
+  assert.match(resolvePublicFilterTag(createPublicFilterDraft(emptyGalleryFilters, ["夜景"]), facets).error!, /格式无效/);
   assert.match(
     resolvePublicFilterTag(
       createPublicFilterDraft({ ...emptyGalleryFilters, tag: "missing" }),

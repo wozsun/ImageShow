@@ -59,28 +59,22 @@ export async function updateImages(
           for (let offset = 0; offset < items.length; offset += imageUpdateConcurrency) {
             const group = items.slice(offset, offset + imageUpdateConcurrency);
             const startedAt = performance.now();
-            const prepared = await Promise.all(
-              group.map(
-                async (
-                  item
-                ): Promise<
-                  | { prepared: PreparedImageUpdateItem; failed?: never }
-                  | { prepared?: never; failed: ImageUpdateItemResultDto }
-                > => {
-                  try {
-                    requestSignal.throwIfAborted();
-                    return { prepared: await prepareImageUpdateItem(item) };
-                  } catch (error) {
-                    return {
-                      failed: {
-                        id: item.id,
-                        status: "failed",
-                        ...publicItemError(error)
-                      }
-                    };
-                  }
+            const prepared = group.map(
+              (item): { prepared: PreparedImageUpdateItem; failed?: never }
+                | { prepared?: never; failed: ImageUpdateItemResultDto } => {
+                try {
+                  requestSignal.throwIfAborted();
+                  return { prepared: prepareImageUpdateItem(item) };
+                } catch (error) {
+                  return {
+                    failed: {
+                      id: item.id,
+                      status: "failed",
+                      ...publicItemError(error)
+                    }
+                  };
                 }
-              )
+              }
             );
             try {
               const groupResults = await withImageUpdateItemLocks(

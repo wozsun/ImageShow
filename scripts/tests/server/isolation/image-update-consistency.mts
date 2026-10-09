@@ -569,6 +569,14 @@ await runIntegrationScenario(async (runtime) => {
     tagClient.release();
   }
 
+  await database.pool.query("INSERT INTO tag(slug,display_name) VALUES ('different-slug','literal-label')");
+  await vocabCache.refreshEntityVocabularies(["tag"]);
+  assert.equal((await imageUpdate.updateImages([
+    { id: imageUpdateIds.third, tags: ["literal-label", "cache-repair-tag"] }
+  ])).updated, 1);
+  assert.deepEqual((await readAtomicImage(imageUpdateIds.third)).tags, ["cache-repair-tag", "literal-label"]);
+  assert.equal((await database.pool.query("SELECT count(*)::int AS count FROM tag WHERE slug='literal-label'")).rows[0].count, 1);
+
   const concurrentTags = await Promise.all([
     imageUpdate.updateImages([{ id: imageUpdateIds.third, tags: ["shared-set", "left-set"] }]),
     imageUpdate.updateImages([{ id: imageUpdateIds.fourth, tags: ["shared-set", "right-set"] }])
@@ -595,7 +603,8 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(originalThemeImage.theme, null);
   await themeMutations.createTheme("none", "普通主题");
   const themeQuery = await import("../../../../packages/server/src/vocab/themes/query.ts");
-  assert.deepEqual(await themeQuery.resolveThemeSlugs(["none", "null"]), ["none", "null"]);
+  const themeSlugs = await themeQuery.getThemeSlugs();
+  assert.ok(themeSlugs.has("none") && themeSlugs.has("null"));
   for (const theme of ["clearable", "none"]) {
     assert.equal(
       (await imageUpdate.updateImages([{ id: imageUpdateIds.first, theme }])).updated,

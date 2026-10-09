@@ -10,7 +10,6 @@ import { ImageDraftFields } from "../../form/ImageDraftFields.js";
 import { ImageThumbnailFrame } from "../ImageThumbnailFrame.js";
 import {
   formatBytes,
-  formatDimensions,
   formatImageClassification,
   shortImageId
 } from "../../../lib/ui/formatters.js";
@@ -36,7 +35,6 @@ export function ImageMetadataEditorCard({
   themes,
   allTags,
   authors,
-  storageName,
   onPatch,
   onRemove,
   onPreview
@@ -51,7 +49,6 @@ export function ImageMetadataEditorCard({
   themes: FacetOptionDto[];
   allTags: FacetOptionDto[];
   authors: FacetOptionDto[];
-  storageName: string;
   onPatch: (patch: Partial<ImageDraftDto>) => void;
   onRemove: () => void;
   onPreview: (opener: HTMLElement) => void;
@@ -116,14 +113,14 @@ export function ImageMetadataEditorCard({
               ) : null}
             </div>
             <span className="image-editor-desktop-summary">
-              {formatDimensions(item.variants.large.width, item.variants.large.height)} · {formatImageClassification(item)} ·{" "}
-              {storageName}
+              {formatImageClassification(item)} ·{" "}
+              {item.storage_label}
             </span>
             <span className="image-editor-summary-line image-editor-mobile-summary">
-              {formatDimensions(item.variants.large.width, item.variants.large.height)} · {formatImageClassification(item)}
+              {formatImageClassification(item)}
             </span>
             <span className="image-editor-summary-line image-editor-mobile-summary">
-              {item.variants.large.byte_size ? formatBytes(item.variants.large.byte_size) : "大小未记录"} · {storageName}
+              {item.variants.large.byte_size ? formatBytes(item.variants.large.byte_size) : "大小未记录"} · {item.storage_label}
             </span>
           </div>
           {(multipleItems || intent !== "edit") && (

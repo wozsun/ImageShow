@@ -68,10 +68,11 @@ await runIntegrationScenario(async (runtime) => {
   const baselineConfig = structuredClone(runtime.runtimeConfigStore.getRuntimeConfig());
   const originalFetch = globalThis.fetch;
   const originalUrl = "https://original.example.test/image.jpg";
+  const originalUrls = new Set([originalUrl]);
   let sourceRequests = 0;
   globalThis.fetch = async (url) => {
     sourceRequests++;
-    assert.equal(String(url), originalUrl, "原图探测仅使用合成响应，不访问外网");
+    assert.ok(originalUrls.has(String(url)), "原图探测仅使用合成响应，不访问外网");
     return new Response(new Uint8Array([1]), { headers: { "content-type": "image/jpeg" } });
   };
   const sessionIds: string[] = [];
@@ -150,6 +151,7 @@ await runIntegrationScenario(async (runtime) => {
     const displayed = await publicUrls.publicImageUrl(
       { id: imageIds[2]! }, "local", "large", { mode: "internal" }
     );
+    originalUrls.add(`${displayed}#original`);
     await runtime.databasePools.pool.query(
       "UPDATE metadata SET original=$2, source=$3 WHERE id=$1",
       [imageIds[0], originalUrl, "https://source.example.com/post"]
@@ -162,12 +164,8 @@ await runIntegrationScenario(async (runtime) => {
     const databaseDetails = await Promise.all(
       imageIds.map((id) => publicImages.getPublicImage(id, "show", neverAbortedSignal, true))
     );
-    assert.equal(
-      databaseDetails[0].original_url,
-      `https://images.example/images/original/${imageIds[0]}`
-    );
-    assert.equal(databaseDetails[1].original_url, null);
-    assert.equal(databaseDetails[2].original_url, null);
+    // Details carry only the original flag; an original equal to the large URL still counts.
+    assert.deepEqual(databaseDetails.map((item) => item.original), [true, false, true]);
     assert.deepEqual(
       databaseDetails.map((item) => item.source),
       [
@@ -201,6 +199,9 @@ await runIntegrationScenario(async (runtime) => {
       }
       assert.equal(sourceRequests, before, "未认证请求不得探测或获取外部原图");
     };
+    // Visitors receive no original field at all, not even false.
+    const originalProjection = (item: { original?: boolean }) =>
+      Object.hasOwn(item, "original") ? item.original : "omitted";
     const assertDetailVisibility = async () => {
       // Concurrent consumers may share a PostgreSQL row, never its identity-dependent DTO.
       const projections = await Promise.all(
@@ -209,9 +210,9 @@ await runIntegrationScenario(async (runtime) => {
         )
       );
       assert.deepEqual(
-        projections.map((item) => item.original_url),
+        projections.map(originalProjection),
         [
-          null, databaseDetails[0].original_url, null, databaseDetails[0].original_url
+          "omitted", databaseDetails[0].original, "omitted", databaseDetails[0].original
         ]
       );
       const responses = await Promise.all(
@@ -219,8 +220,8 @@ await runIntegrationScenario(async (runtime) => {
       );
       const bodies = await Promise.all(responses.map((response) => response.clone().json()));
       assert.deepEqual(
-        bodies.map((body) => body.item.original_url),
-        [null, databaseDetails[0].original_url, null]
+        bodies.map((body) => originalProjection(body.item)),
+        ["omitted", databaseDetails[0].original, "omitted"]
       );
       for (const response of responses) {
         assert.equal(response.status, 200);
@@ -250,6 +251,9 @@ await runIntegrationScenario(async (runtime) => {
         assert.equal(resource.headers.get("Cache-Control"), "private, no-cache");
         assert.equal(resource.headers.get("Vary"), "Cookie, User-Agent");
         assert.equal(await resource.text(), "");
+        const sameAddress = await resourceRequest(sessionCookie, method, imageIds[2]);
+        assert.equal(sameAddress.status, 302);
+        assert.equal(sameAddress.headers.get("Location"), `${displayed}#original`);
       }
     };
     await assertDetailVisibility();
@@ -317,21 +321,21 @@ await runIntegrationScenario(async (runtime) => {
     );
     await assertDetailVisibility();
     await runtime.redisClient.redis.del(adminSessionKey(sessionId));
-    assert.equal((await (await detailRequest(sessionCookie)).json()).item.original_url, null);
+    assert.equal(originalProjection((await (await detailRequest(sessionCookie)).json()).item), "omitted");
     await assertOriginalDenied(sessionCookie);
     const revokedId = await login();
     await runtime.databasePools.pool.query(
       "UPDATE admin_account SET role='image' WHERE username='integration-admin'"
     );
     assert.equal(
-      (await (await detailRequest(`imageshow_session=${revokedId}`)).json()).item.original_url,
-      null
+      originalProjection((await (await detailRequest(`imageshow_session=${revokedId}`)).json()).item),
+      "omitted"
     );
     await assertOriginalDenied(`imageshow_session=${revokedId}`);
     const imageAdminId = await login();
     assert.equal(
-      (await (await detailRequest(`imageshow_session=${imageAdminId}`)).json()).item.original_url,
-      databaseDetails[0].original_url
+      (await (await detailRequest(`imageshow_session=${imageAdminId}`)).json()).item.original,
+      databaseDetails[0].original
     );
     for (const method of ["GET", "HEAD"])
       assert.equal(
@@ -344,8 +348,8 @@ await runIntegrationScenario(async (runtime) => {
     const trashAdminId = await login();
     const snapshots = await adminImages.getAdminImageSnapshots(imageIds, neverAbortedSignal);
     assert.deepEqual(
-      snapshots.items.map((item) => item.original_url),
-      databaseDetails.map((item) => item.original_url)
+      snapshots.items.map((item) => item.original),
+      [originalUrl, "", `${displayed}#original`]
     );
     assert.deepEqual(
       snapshots.items.map((item) => item.source),
@@ -353,8 +357,8 @@ await runIntegrationScenario(async (runtime) => {
     );
     for (const item of adminPage.items) {
       assert.equal(
-        item.original_url,
-        databaseDetails[imageIds.indexOf(item.id)]?.original_url
+        item.original,
+        snapshots.items.find((snapshot) => snapshot.id === item.id)?.original
       );
       assert.equal(item.source, databaseDetails[imageIds.indexOf(item.id)]?.source);
     }
@@ -395,8 +399,8 @@ await runIntegrationScenario(async (runtime) => {
     });
     assert.equal(deletedPage.items.length, 1);
     assert.equal(
-      deletedPage.items[0].original_url,
-      databaseDetails[0].original_url
+      deletedPage.items[0].original,
+      originalUrl
     );
     assert.equal(deletedPage.items[0].base_url, databaseDetails[0].base_url);
     assert.equal((await detailRequest()).status, 404);
@@ -409,8 +413,8 @@ await runIntegrationScenario(async (runtime) => {
     assert.equal(
       (
         await publicImages.getPublicImage(imageIds[0], "show", neverAbortedSignal, true)
-      ).original_url,
-      databaseDetails[0].original_url
+      ).original,
+      databaseDetails[0].original
     );
   } catch (error) {
     errors.push(error);

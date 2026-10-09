@@ -15,17 +15,12 @@ import {
 } from "./external-image-proxy.ts";
 import { readImageServingRecordById } from "./record.ts";
 import {
-  displayUrlForOriginalComparison,
-  hasDistinctOriginalUrl
-} from "./original-link.ts";
-import {
   getOriginalDirectCache,
   setOriginalDirectCache
 } from "./original-direct-cache.ts";
 
 export type ExternalOriginalServingDependencies = {
   readImageServingRecordById: typeof readImageServingRecordById;
-  displayUrlForOriginalComparison: typeof displayUrlForOriginalComparison;
   supportsDirectAccess: typeof cachedOriginalSupportsDirectAccess;
   proxyExternalImage: typeof proxyExternalImage;
 };
@@ -114,7 +109,6 @@ async function cachedOriginalSupportsDirectAccess(
 
 const defaultExternalOriginalServingDependencies: ExternalOriginalServingDependencies = {
   readImageServingRecordById,
-  displayUrlForOriginalComparison,
   supportsDirectAccess: cachedOriginalSupportsDirectAccess,
   proxyExternalImage
 };
@@ -130,13 +124,6 @@ async function resolveExternalOriginal(
   const original = record?.original ?? "";
   if (!record
     || !/^https:\/\//i.test(original)) {
-    throw new ApiError(404, "not_found", "Original link not found");
-  }
-  const displayUrl = await dependencies.displayUrlForOriginalComparison(
-    record,
-    { mode: "public", signal }
-  );
-  if (!hasDistinctOriginalUrl(original, displayUrl)) {
     throw new ApiError(404, "not_found", "Original link not found");
   }
   return { url: original, updatedAt: record.updated_at };

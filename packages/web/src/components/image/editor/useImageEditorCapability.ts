@@ -32,6 +32,7 @@ type PendingImageEditor = { itemIds: string[] };
 type Preparation = {
   createdAt: number;
   key: string;
+  target: ImageEditorTarget;
   promise: Promise<PreparedImageEditor>;
   settled: boolean;
 };
@@ -67,6 +68,11 @@ export function useImageEditorCapability({
       const key = imageEditorTargetKey(target);
       if (
         preparationRef.current?.key === key &&
+        // 304 保留原对象，可复用准备结果；列表取得新对象后不能仅凭 ID
+        // 复用旧初值。ID 入口保持原有准备窗口，不因其他图片变化追加读取。
+        (!target.items || preparationRef.current.target.items?.every(
+          (item, index) => item === target.items?.[index]
+        )) &&
         (!preparationRef.current.settled ||
           Date.now() - preparationRef.current.createdAt < editorPreparationReuseMs)
       ) {
@@ -75,11 +81,12 @@ export function useImageEditorCapability({
 
       const promise = loadImageEditorCapabilityModule().then(async (module) => ({
         module,
-        ...(await module.prepareImageEditor(queryClient, target.sources))
+        ...(await module.prepareImageEditor(queryClient, target))
       }));
       const preparation = {
         createdAt: Date.now(),
         key,
+        target,
         promise,
         settled: false
       };
@@ -122,7 +129,7 @@ export function useImageEditorCapability({
       const requestFence = requestFenceRef.current;
       const requestSequence = requestFence.begin();
       const nextPending = {
-        itemIds: target.sources.map((item) => item.id)
+        itemIds: target.items ? target.items.map((item) => item.id) : target.ids
       };
       setPending(nextPending);
 
