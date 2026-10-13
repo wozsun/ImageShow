@@ -86,6 +86,7 @@ export async function replaceImageTagAssociations(
 ) {
   signal?.throwIfAborted();
   const uniqueSlugs = [...new Set(slugs)];
+  for (const slug of uniqueSlugs) assertVocabularySlug("tag", slug);
   let createdTag = false;
   if (uniqueSlugs.length) {
     const inserted = await client.query(

@@ -11,10 +11,10 @@ export function imageDevice(width: number, height: number): Device {
   return width >= height ? "pc" : "mb";
 }
 
-/** Theme and author selector for images without one, and its virtual facet slug; never stored. */
+/** Selector for images without a theme, author or tag, and the theme / author facet slug; never stored. */
 export const unsetSelector = "null";
 
-/** A storable theme or author slug: the slug format minus the reserved unset selector. */
+/** A storable theme, author or tag slug: the slug format minus the reserved unset selector. */
 export function isNamedSlug(value: string) {
   return value !== unsetSelector && value.length <= slugMaxLength && slugPattern.test(value);
 }

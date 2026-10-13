@@ -52,7 +52,7 @@ export async function selectRandomImages(
 
   const [theme, tag, author, groups] = await Promise.all([
     hasSelectors(parsed.theme) ? getThemeSlugs(database) : new Set<string>(),
-    parsed.tag ? getTagSlugs(database) : new Set<string>(),
+    parsed.tag || parsed.tagExclude.length ? getTagSlugs(database) : new Set<string>(),
     hasSelectors(parsed.author) ? getAuthorSlugs(database) : new Set<string>(),
     parsed.groups.length ? readImageGroupSlugs(database) : new Set<string>()
   ]);
@@ -78,6 +78,7 @@ export async function selectRandomImages(
         brightnesses: axes.brightnessCandidates,
         theme: query.theme,
         tag: query.tag,
+        tagExclude: query.tagExclude,
         author: query.author,
         ...(query.scoped ? { range: { groups: query.groups, ids: query.ids } } : {})
       });
@@ -115,7 +116,8 @@ export async function selectRandomImages(
 
   const axes = resolveCandidateAxes(parsed.device, parsed.brightness, userAgent);
   const hasFilters = axes.device !== "auto" || axes.brightness ||
-    hasSelectors(parsed.theme) || parsed.tag !== null || hasSelectors(parsed.author);
+    hasSelectors(parsed.theme) || parsed.tag !== null || parsed.tagExclude.length > 0 ||
+    hasSelectors(parsed.author);
   return apiErrorResponse(
     {
       status: 404,

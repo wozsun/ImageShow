@@ -85,7 +85,11 @@ function filterComponents(plan: ImageFilterPlan, idsKey?: string) {
   return {
     positive,
     tagClauses,
-    exclusions: [theme.exclude, author.exclude]
+    exclusions: [
+      theme.exclude,
+      author.exclude,
+      plan.tagExclude.map((value) => readyImageAttributeIndexKey({ kind: "tag", value }))
+    ]
   };
 }
 

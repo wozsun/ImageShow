@@ -7,7 +7,11 @@ import {
   useState,
   type KeyboardEvent
 } from "react";
-import { vocabularyDisplayNameMaxLength, type FacetOptionDto } from "@imageshow/shared/browser";
+import {
+  unsetSelector,
+  vocabularyDisplayNameMaxLength,
+  type FacetOptionDto
+} from "@imageshow/shared/browser";
 import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
 import { useFacetSearchMatcher } from "../../hooks/useFacetSearchMatcher.js";
 import { useImeInputSession } from "../../hooks/useImeInputSession.js";
@@ -253,6 +257,7 @@ export function TagInput({
   const addTag = (raw: string) => {
     const tag = parseFacetSlug(raw);
     if (tag === null
+      || tag === unsetSelector
       || selected.has(tag)) return false;
     onChange([...value, tag]);
     setText("");

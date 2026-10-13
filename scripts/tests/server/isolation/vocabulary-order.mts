@@ -86,6 +86,7 @@ await runIntegrationScenario(async (runtime) => {
   try {
     await assert.rejects(themes.createTheme("null", ""), { status: 400, code: "invalid_theme" });
     await assert.rejects(authors.createAuthor("null", "", ""), { status: 400, code: "invalid_author" });
+    await assert.rejects(tags.createTag("null"), { status: 400, code: "invalid_tag" });
     const invalidThemeUpdate = await updateImages([{ id: imageId, theme: "null" }]);
     assert.equal(invalidThemeUpdate.updated, 0);
     assert.equal(invalidThemeUpdate.failed, 1);
@@ -94,6 +95,11 @@ await runIntegrationScenario(async (runtime) => {
       null
     );
     assert.equal((await pool.query("SELECT count(*)::int AS count FROM theme")).rows[0].count, 0);
+    const invalidTagUpdate = await updateImages([{ id: imageId, tags: ["null"] }]);
+    assert.equal(invalidTagUpdate.updated, 0);
+    assert.equal(invalidTagUpdate.failed, 1);
+    assert.equal((await pool.query("SELECT 1 FROM image_tag WHERE image_id=$1", [imageId])).rowCount, 0);
+    assert.equal((await pool.query("SELECT count(*)::int AS count FROM tag")).rows[0].count, 0);
     for (const entity of entities) {
       await entity.create("order-first");
       await entity.create("order-second");

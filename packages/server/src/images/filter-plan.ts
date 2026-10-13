@@ -25,6 +25,7 @@ export type ImageFilterPlan = {
   axes: Array<{ device: Device; brightness: Brightness }>;
   theme: ImageSelectorGroup;
   tag: TagExpression;
+  tagExclude: string[];
   author: ImageSelectorGroup;
   range?: { groups: string[]; ids: string[] };
   signature: string;
@@ -97,6 +98,7 @@ export function createImageFilterPlan(input: {
   brightnesses?: readonly Brightness[];
   theme?: Partial<ImageSelectorGroup>;
   tag?: TagExpression;
+  tagExclude?: readonly string[];
   author?: Partial<ImageSelectorGroup>;
   range?: { groups: readonly string[]; ids: readonly string[] };
 }): ImageFilterPlan {
@@ -109,13 +111,18 @@ export function createImageFilterPlan(input: {
   );
   const theme = normalizedGroup(input.theme, "theme");
   const tag = input.tag ? normalizeTagExpression(input.tag.anyOf) : null;
+  const tagExclude = [...new Set(input.tagExclude ?? [])].sort();
   const author = normalizedGroup(input.author, "author");
   const range = input.range ? {
     groups: [...new Set(input.range.groups)].sort(),
     ids: [...new Set(input.range.ids)].sort()
   } : undefined;
   const fields = { axes, theme, tag, author, ...(range ? { range } : {}) };
-  return { ...fields, signature: JSON.stringify(fields) };
+  return {
+    ...fields,
+    tagExclude,
+    signature: JSON.stringify({ ...fields, ...(tagExclude.length ? { tagExclude } : {}) })
+  };
 }
 
 export async function validateImageTagExpressions(
@@ -170,6 +177,7 @@ export function imageFilterPlanWithout(
       : planBrightnesses,
     theme: dimension === "theme" ? undefined : plan.theme,
     tag: dimension === "tag" ? undefined : plan.tag,
+    tagExclude: dimension === "tag" ? undefined : plan.tagExclude,
     author: dimension === "author" ? undefined : plan.author,
     range: plan.range
   });

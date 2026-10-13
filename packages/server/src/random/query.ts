@@ -8,6 +8,7 @@ import {
   randomImageSizes,
   slugMaxLength,
   slugPattern,
+  unsetSelector,
   randomFallbackDimensions,
   type RandomFallbackDimension,
   type RandomImageSize,
@@ -40,6 +41,7 @@ export type ParsedRandomQuery = {
   brightness: RandomBrightness | null;
   theme: RandomSelectorGroup;
   tag: TagExpression;
+  tagExclude: string[];
   author: RandomSelectorGroup;
 };
 
@@ -200,17 +202,40 @@ export function hasSelectors(group: RandomSelectorGroup) {
   return group.include.length > 0 || group.exclude.length > 0;
 }
 
-/** Drops blank tag terms and segments; the shared parser itself keeps rejecting them. */
-function compactTagFilterValues(values: readonly string[]): string[] {
-  return values.flatMap((value) => {
+/** Exclusions apply to the whole request, independently of the positive OR clauses. */
+function parseRandomTagFilter(values: readonly string[]) {
+  const exclude = new Set<string>();
+  let segments = 0;
+  const positive = values.flatMap((value) => {
     const raw = value.trim();
     const all = /^all:/iu.test(raw);
     const terms = (all ? raw.slice(4) : raw)
       .split(",")
       .map((term) => term.trim())
-      .filter(Boolean);
-    return terms.length ? [`${all ? "all:" : ""}${terms.join(",")}`] : [];
+      .filter((term) => term && term !== "!");
+    if (terms.length) segments += 1;
+    // Every term is validated before rejoining, so a leading included term such as
+    // `all:b` cannot turn the rejoined segment into an all: clause.
+    const included = terms.filter((term) => {
+      const excluded = term.startsWith("!");
+      const slug = (excluded ? term.slice(1) : term).trim().toLowerCase();
+      if (!slugPattern.test(slug) || slug.length > slugMaxLength) {
+        throw new TagFilterError("标签条件格式无效");
+      }
+      if (excluded) exclude.add(slug);
+      return !excluded;
+    });
+    return included.length ? [`${all ? "all:" : ""}${included.join(",")}`] : [];
   });
+  if (segments > appConfig.randomQuery.maxSelectorsPerField) {
+    throw new TagFilterError("标签条件超过段数限制");
+  }
+  const parsed = parseTagFilter(positive, "mixed");
+  const termCount = parsed.termCount + exclude.size;
+  if (termCount > appConfig.randomQuery.maxSelectorsPerField) {
+    throw new TagFilterError("标签词项去重后最多 32 个");
+  }
+  return { expression: parsed.expression, exclude: [...exclude].sort(), termCount };
 }
 
 /** Reads a positive count capped at the JSON maximum; null means the value is not a count. */
@@ -432,9 +457,9 @@ export function parseRandomQuery(
 
   const theme = parseSelectorGroup(query, "theme");
   if (theme instanceof Response) return theme;
-  let tag: ReturnType<typeof parseTagFilter>;
+  let tag: ReturnType<typeof parseRandomTagFilter>;
   try {
-    tag = parseTagFilter(compactTagFilterValues(query.getAll("tag")), "mixed");
+    tag = parseRandomTagFilter(query.getAll("tag"));
   } catch (error) {
     if (!(error instanceof TagFilterError)) throw error;
     return apiErrorResponse({ status: 400, message: error.message }, { field: "tag" });
@@ -471,6 +496,7 @@ export function parseRandomQuery(
     brightness: brightness as RandomBrightness | null,
     theme: theme.selectors,
     tag: tag.expression,
+    tagExclude: tag.exclude,
     author: author.selectors
   };
 }
@@ -538,7 +564,11 @@ export function normalizeRandomQuery(
 ): NormalizedRandomQuery {
   const ignored: RandomIgnoredSelectors = { theme: [], tag: [], author: [], group: [] };
   const theme = knownSelectorGroup(query.theme, slugs.theme, ignored.theme);
-  const tag = knownTagExpression(query.tag, slugs.tag, ignored.tag);
+  const tagSlugs = new Set([...slugs.tag, unsetSelector]);
+  const tag = knownTagExpression(query.tag, tagSlugs, ignored.tag);
+  const tagExclude = knownSelectorGroup(
+    { include: [], exclude: query.tagExclude }, tagSlugs, ignored.tag
+  ).exclude;
   const author = knownSelectorGroup(query.author, slugs.author, ignored.author);
   const groups = query.groups.filter((slug) => {
     if (slugs.groups?.has(slug)) return true;
@@ -555,6 +585,7 @@ export function normalizeRandomQuery(
     ...query,
     theme,
     tag,
+    tagExclude,
     author,
     groups,
     ignored
@@ -569,6 +600,7 @@ export function normalizeRandomQuery(
       "b": normalized.brightness ?? "",
       "t": normalized.theme,
       tag: normalized.tag,
+      ...(normalized.tagExclude.length ? { tagExclude: normalized.tagExclude } : {}),
       "a": normalized.author,
       ...(normalized.ids.length ? { "i": normalized.ids } : {}),
       ...(normalized.groups.length ? { "g": normalized.groups } : {}),

@@ -103,8 +103,14 @@ export function buildImageFilterSql(
 
   if (!omitted.has("tag") && input.plan.tag) {
     const clauses = input.plan.tag.anyOf;
-    const singletons = clauses.filter((clause) => clause.length === 1).flat();
+    const singletons = clauses.filter((clause) => clause.length === 1).flat()
+      .filter((slug) => slug !== unsetSelector);
     const predicates: string[] = [];
+    if (clauses.some((clause) => clause.length === 1 && clause[0] === unsetSelector)) {
+      predicates.push(`NOT EXISTS (
+        SELECT 1 FROM image_tag ${tagAlias} WHERE ${tagAlias}.image_id=${prefix}id
+      )`);
+    }
     if (singletons.length) {
       predicates.push(`EXISTS (
         SELECT 1
@@ -114,6 +120,8 @@ export function buildImageFilterSql(
       )`);
     }
     for (const clause of clauses.filter((clause) => clause.length > 1)) {
+      // An image cannot be untagged and carry a named tag at the same time.
+      if (clause.includes(unsetSelector)) continue;
       predicates.push(`NOT EXISTS (
         SELECT 1 FROM unnest(${bind(clause)}::text[]) AS selected_tag(slug)
         WHERE NOT EXISTS (
@@ -123,7 +131,23 @@ export function buildImageFilterSql(
         )
       )`);
     }
-    where.push(`(${predicates.join(" OR ")})`);
+    where.push(predicates.length ? `(${predicates.join(" OR ")})` : "FALSE");
+  }
+
+  if (!omitted.has("tag") && input.plan.tagExclude.length) {
+    if (input.plan.tagExclude.includes(unsetSelector)) {
+      where.push(`EXISTS (
+        SELECT 1 FROM image_tag ${tagAlias} WHERE ${tagAlias}.image_id=${prefix}id
+      )`);
+    }
+    const excludedTags = input.plan.tagExclude.filter((slug) => slug !== unsetSelector);
+    if (excludedTags.length) {
+      where.push(`NOT EXISTS (
+        SELECT 1 FROM image_tag ${tagAlias}
+        WHERE ${tagAlias}.image_id=${prefix}id
+          AND ${tagAlias}.tag_slug=ANY(${bind(excludedTags)}::text[])
+      )`);
+    }
   }
 
   if (input.plan.range) {

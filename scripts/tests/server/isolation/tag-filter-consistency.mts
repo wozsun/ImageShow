@@ -10,6 +10,8 @@ await runIntegrationScenario(async (runtime) => {
   const { registerPublicRoutes } = await import("../../../../packages/server/src/routes/public.ts");
   const { registerRandomRoutes } = await import("../../../../packages/server/src/routes/random.ts");
   const { handleApiError } = await import("../../../../packages/server/src/core/http/responses.ts");
+  const { parseRandomQuery, normalizeRandomQuery } =
+    await import("../../../../packages/server/src/random/query.ts");
 
   const coordinator =
     await import("../../../../packages/server/src/images/ready-cache/coordinator.ts");
@@ -129,7 +131,7 @@ await runIntegrationScenario(async (runtime) => {
     );
     const members = tags.filter((_tag, bit) => row.mask & (1 << bit));
     if (index === 0) members.push(...budgetTags);
-    else if (index < budgetTags.length) members.push(budgetTags[index]!);
+    else if (index < budgetTags.length && index !== 3) members.push(budgetTags[index]!);
     if (index === 63) members.push("matrix-alias", "matrix-symbols");
     for (const tag of members)
       await pool.query("INSERT INTO image_tag(image_id,tag_slug) VALUES ($1,$2)", [row.id, tag]);
@@ -146,7 +148,12 @@ await runIntegrationScenario(async (runtime) => {
     rows.filter((_row, index) => (index * 5) % 64 < 32).map((row) => row.id)
   );
   type Row = (typeof rows)[number];
-  type Case = { tags: string[]; match: (row: Row) => boolean; axis?: Record<string, string> };
+  type Case = {
+    tags: string[];
+    match: (row: Row) => boolean;
+    axis?: Record<string, string>;
+    randomOnly?: boolean;
+  };
   const cases: Case[] = [];
   for (let mask = 1; mask < 16; mask += 1) {
     const terms = tags.filter((_tag, bit) => mask & (1 << bit));
@@ -213,6 +220,39 @@ await runIntegrationScenario(async (runtime) => {
       match: (row) => Boolean(row.mask & 3) && row.author !== null && row.theme === null
     }
   );
+  cases.push(...([
+    { tags: ["null"], match: (row) => row.id === rows[3]!.id },
+    { tags: ["!null"], match: (row) => row.id !== rows[3]!.id },
+    { tags: ["NULL,matrix-a"], match: (row) => row.id === rows[3]!.id || Boolean(row.mask & 1) },
+    { tags: ["null,!matrix-a"], match: (row) => row.id === rows[3]!.id },
+    { tags: ["!null,!matrix-a"], match: (row) => row.id !== rows[3]!.id && !(row.mask & 1) },
+    { tags: ["null,!null"], match: () => false },
+    { tags: ["null,matrix-a,!null"], match: (row) => Boolean(row.mask & 1) },
+    { tags: ["all:null,null"], match: (row) => row.id === rows[3]!.id },
+    { tags: ["all:null,matrix-a"], match: () => false },
+    { tags: ["all:null,matrix-a", "matrix-b"], match: (row) => Boolean(row.mask & 2) },
+    { tags: ["!matrix-a,!matrix-b"], match: (row) => !(row.mask & 3) },
+    { tags: ["matrix-a,!matrix-b"], match: (row) => Boolean(row.mask & 1) && !(row.mask & 2) },
+    {
+      tags: ["all:matrix-a,matrix-b", "matrix-c", "!matrix-d"],
+      match: (row) => ((row.mask & 3) === 3 || Boolean(row.mask & 4)) && !(row.mask & 8)
+    },
+    {
+      tags: ["all:matrix-a,matrix-b,!matrix-d", "matrix-c,!MATRIX-D"],
+      match: (row) => ((row.mask & 3) === 3 || Boolean(row.mask & 4)) && !(row.mask & 8)
+    },
+    { tags: ["matrix-a,!matrix-a"], match: () => false },
+    { tags: ["matrix-a,matrix-b,!matrix-a"], match: (row) => Boolean(row.mask & 2) && !(row.mask & 1) },
+    { tags: ["!matrix-missing"], match: () => true },
+    { tags: ["!matrix-empty"], match: () => true },
+    {
+      tags: ["matrix-a,!matrix-b,!matrix-missing"],
+      axis: { device: "pc", brightness: "dark", theme: "!matrix-city", author: "!matrix-bob" },
+      match: (row) => Boolean(row.mask & 1) && !(row.mask & 2) && row.device === "pc" &&
+        row.brightness === "dark" && row.theme !== "matrix-city" && row.author !== "matrix-bob"
+    }
+  ] satisfies Case[]).map((entry) => ({ ...entry, randomOnly: true })));
+  const seededExclusions = new Map<string, string[]>();
   const statsGroups = [
     ["matrix-a,matrix-b"],
     ["all:matrix-a"],
@@ -470,7 +510,20 @@ await runIntegrationScenario(async (runtime) => {
         const expected = ids(rows.filter(entry.match));
         const label = `${backend}: ${query}`;
         if (backend === "Redis") {
-          const plan = await resolveImageFilterPlan({ ...entry.axis, tag: entry.tags });
+          const parsed = parseRandomQuery(new URL(`http://imageshow.test/random?${query}`), "redirect");
+          assert.ok(!(parsed instanceof Response));
+          const normalized = normalizeRandomQuery(parsed, {
+            tag: new Set(allTags), theme: new Set(["matrix-city", "matrix-nature"]),
+            author: new Set(["matrix-alice", "matrix-bob"])
+          });
+          const plan = entry.randomOnly ? createImageFilterPlan({
+            devices: entry.axis?.device === "pc" ? ["pc"] : undefined,
+            brightnesses: entry.axis?.brightness === "dark" ? ["dark"] : undefined,
+            tag: normalized.tag,
+            tagExclude: normalized.tagExclude,
+            theme: normalized.theme,
+            author: normalized.author
+          }) : await resolveImageFilterPlan({ ...entry.axis, tag: entry.tags });
           // Prior stats reads may still be publishing attribute indexes; require
           // a real Redis hit after that bounded warm-up, never accept fallback.
           const sampled = await pollUntil(
@@ -516,6 +569,19 @@ await runIntegrationScenario(async (runtime) => {
         assert.equal(scoped.status, scopedExpected.length ? 200 : 404, `${label}: id scope`);
         if (scopedExpected.length) {
           assert.deepEqual(ids((await scoped.json()).items), scopedExpected, `${label}: id scope`);
+        }
+        if (entry.randomOnly) {
+          if (expected.length) {
+            const seededPath = `${randomPath.replace("limit=200", "limit=7")}&seed=tag-exclusion-contract`;
+            const seeded = await get(seededPath);
+            assert.equal(seeded.status, 200, label);
+            const selected = (await seeded.json()).items.map((item: { id: string }) => item.id);
+            if (backend === "PostgreSQL") seededExclusions.set(query.toString(), selected);
+            else assert.deepEqual(selected, seededExclusions.get(query.toString()), `${label}: seed across stores`);
+            const repeated = await get(seededPath);
+            assert.deepEqual((await repeated.json()).items.map((item: { id: string }) => item.id), selected);
+          }
+          continue;
         }
         for (const view of ["show", "gallery"]) {
           const response = await get(`/api/images?view=${view}&limit=800&${query}`);
@@ -594,6 +660,26 @@ await runIntegrationScenario(async (runtime) => {
           assert.deepEqual(body.details, { ignored: { tag: ["matrix-missing"] } }, label);
         }
       }
+      for (const include of ["matrix-a", "matrix-missing"]) {
+        const response = await get(`/random?device=all&mode=json&limit=200&tag=${include},!matrix-a&fallback=tag`);
+        assert.equal(response.status, 200, `${backend}: fallback retains exclusions`);
+        const body = await response.json();
+        assert.deepEqual(body.fallback, ["tag"]);
+        assert.deepEqual(ids(body.items), ids(rows.filter((row) => !(row.mask & 1))));
+      }
+      const exclusionOnly = await get("/random?device=all&mode=json&limit=200&tag=!matrix-a&fallback=tag");
+      assert.equal(exclusionOnly.status, 200);
+      assert.deepEqual((await exclusionOnly.json()).fallback, []);
+      for (const include of ["null", "all:null,matrix-a"]) {
+        const response = await get(`/random?device=all&mode=json&limit=200&tag=${include},!null&fallback=tag`);
+        assert.equal(response.status, 200, `${backend}: null fallback preserves !null`);
+        const body = await response.json();
+        assert.deepEqual(body.fallback, ["tag"]);
+        assert.deepEqual(ids(body.items), ids(rows.filter((row) => row.id !== rows[3]!.id)));
+      }
+      assert.equal((await get(`/random?device=all&mode=json&id=${rows[3]!.id}&tag=!null&fallback=all`)).status, 404);
+      const excludedScope = await get(`/random?device=all&mode=json&id=${rows[4]!.id}&tag=!matrix-a&fallback=all`);
+      assert.equal(excludedScope.status, 404, `${backend}: fallback cannot remove exclusions or scope`);
       const facets = await (await get("/api/gallery-facets")).json();
       assert.ok(facets.tags.some((tag: { slug: string }) => tag.slug === "matrix-empty"));
       const desktopStats = await getPublicGalleryStats({ device: "pc" }, neverAbortedSignal);
@@ -614,10 +700,15 @@ await runIntegrationScenario(async (runtime) => {
       assert.equal(sampled.cached, true, `warm source ${slug}`);
     }
     for (const entry of [
-      { tags: [budgetTags.join(",")], expected: rows.slice(0, 9) },
+      { tags: [budgetTags.join(",")], exclude: [], expected: rows.slice(0, 9).filter((_row, index) => index !== 3) },
       {
         tags: [`all:${budgetTags.join(",")}`, "matrix-c"],
+        exclude: [],
         expected: rows.filter((row, index) => index === 0 || Boolean(row.mask & 4))
+      },
+      {
+        tags: [], exclude: budgetTags,
+        expected: [rows[3]!, ...rows.slice(9)]
       }
     ]) {
       const base = await resolveImageFilterPlan({});
@@ -626,11 +717,13 @@ await runIntegrationScenario(async (runtime) => {
         brightnesses: base.axes.map((axis) => axis.brightness),
         theme: base.theme,
         author: base.author,
-        tag: parseTagFilter(entry.tags, "mixed").expression
+        tag: parseTagFilter(entry.tags, "mixed").expression,
+        tagExclude: entry.exclude
       });
       assert.equal((await sampleReadyImages(plan, 200, new Set(), neverAbortedSignal)).cached, false);
       const query = new URLSearchParams({ device: "all", mode: "json", limit: "200" });
       entry.tags.forEach((tag) => query.append("tag", tag));
+      entry.exclude.forEach((tag) => query.append("tag", `!${tag}`));
       const response = await get(`/random?${query}`);
       assert.equal(response.status, 200, await response.clone().text());
       assert.deepEqual(ids((await response.json()).items), ids(entry.expected));
@@ -638,6 +731,20 @@ await runIntegrationScenario(async (runtime) => {
     // Warm derived intersections must follow real mutation boundaries immediately.
     const path = "/api/images?view=gallery&limit=800&tag=all:matrix-a,matrix-b";
     const changed = rows[0]!;
+    const exclusionPath = "/random?device=all&mode=json&limit=200&tag=!matrix-a";
+    const assertExclusionMembership = async (present: boolean) => {
+      const response = await get(exclusionPath);
+      assert.equal(response.status, 200);
+      assert.equal(ids((await response.json()).items).includes(changed.id), present);
+    };
+    await assertExclusionMembership(true);
+    const assertTagPresence = async (tag: string, present: boolean) => {
+      const response = await get(`/random?device=all&mode=json&limit=200&tag=${tag}`);
+      assert.equal(response.status, 200);
+      assert.equal(ids((await response.json()).items).includes(changed.id), present);
+    };
+    await assertTagPresence("null", false);
+    await assertTagPresence("!null", true);
     const before = await get(path);
     assert.equal((await before.json()).items.length, 16);
     assert.equal(
@@ -645,12 +752,20 @@ await runIntegrationScenario(async (runtime) => {
       1
     );
     assert.equal((await (await get(path)).json()).items.length, 17);
+    await assertExclusionMembership(false);
     assert.equal((await moveImagesToTrash([changed.id])).trashed, 1);
     assert.equal((await (await get(path)).json()).items.length, 16);
+    await assertExclusionMembership(false);
+    await assertTagPresence("!null", false);
     assert.equal((await restoreImages([changed.id])).restored, 1);
     assert.equal((await (await get(path)).json()).items.length, 17);
+    await assertExclusionMembership(false);
+    await assertTagPresence("!null", true);
     assert.equal((await updateImages([{ id: changed.id, tags: [] }])).updated, 1);
     assert.equal((await (await get(path)).json()).items.length, 16);
+    await assertExclusionMembership(true);
+    await assertTagPresence("null", true);
+    await assertTagPresence("!null", false);
     const assertMembership = async (present: boolean) => {
       const stats = await getPublicGalleryStats({}, neverAbortedSignal);
       for (const field of ["themes", "tags", "authors"] as const) {

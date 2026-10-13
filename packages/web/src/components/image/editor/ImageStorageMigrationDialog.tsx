@@ -210,8 +210,13 @@ export function ImageStorageMigrationDialog({
                 存储后端列表加载失败，请关闭弹窗后重试。
               </p>
             )}
+            {!isLoading && !isError && options.length === 1 && (
+              <p className="notice-line">
+                当前只有一个已启用的存储后端。若要迁往其他位置，请先在“存储管理”中配置并启用目标后端；停用后端上的图片仍可迁入当前目标，已在目标后端的图片会跳过。
+              </p>
+            )}
             <p className="notice-line">
-              迁移会复制对象与缩略图到目标后端、更新引用，并删除源副本；目标为对象存储时需先在设置页配置好该后端。
+              迁移会复制对象与缩略图到目标后端、更新引用，并删除源副本。
             </p>
             {error && (
               <p className="admin-error" role="alert" title={error}>

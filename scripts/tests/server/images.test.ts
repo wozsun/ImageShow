@@ -233,11 +233,13 @@ test("[Server/图片] 完成结果统一分类图片与存储配置断连并保�
   });
 });
 
-test("[Server/图片] null 保留给未设置主题与作者，写入以 JSON null 表示未设置且不限制标签", async () => {
+test("[Server/图片] null 保留给空值筛选，主题作者用 JSON null、标签用空数组清空", async () => {
   const { imageAuthorInput, imageThemeInput } =
     await import("../../../packages/server/src/images/metadata-named-slugs.ts");
   const { themeCreateInput, tagCreateInput, authorSlugInput } =
     await import("../../../packages/server/src/routes/validation/vocabulary.ts");
+  const { normalizedImageTagSlugsSchema } =
+    await import("../../../packages/server/src/images/metadata-tags.ts");
   for (const input of [imageThemeInput, imageAuthorInput]) {
     assert.equal(input.parse(null), null);
     assert.equal(input.parse(" Portrait "), "portrait");
@@ -248,10 +250,13 @@ test("[Server/图片] null 保留给未设置主题与作者，写入以 JSON nu
   for (const slug of ["null", " NULL "]) {
     assert.equal(themeCreateInput.safeParse({ slug }).success, false);
     assert.equal(authorSlugInput.safeParse(slug).success, false);
+    assert.equal(tagCreateInput.safeParse({ slug }).success, false);
+    assert.equal(normalizedImageTagSlugsSchema.safeParse([slug]).success, false);
   }
   assert.equal(themeCreateInput.parse({ slug: "none" }).slug, "none");
   assert.equal(authorSlugInput.parse("none"), "none");
-  assert.equal(tagCreateInput.parse({ slug: "null" }).slug, "null");
+  assert.equal(tagCreateInput.parse({ slug: "none" }).slug, "none");
+  assert.deepEqual(normalizedImageTagSlugsSchema.parse([]), []);
 });
 
 test("[Server/图片] 存储输入归一化 slug 并补齐缺省 S3 设置", () => {
@@ -2299,10 +2304,33 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
   assert.equal(blank.size, "medium");
   assert.equal(blank.limit, 1);
   assert.deepEqual(parseQuery("tag=all:a,,b&tag=c,").tag, { anyOf: [["a", "b"], ["c"]] });
+  const tagExclusion = parseQuery("tag=all:live,!BLOCKED&tag=other,!blocked&tag=!");
+  assert.deepEqual(tagExclusion.tag, { anyOf: [["live"], ["other"]] });
+  assert.deepEqual(tagExclusion.tagExclude, ["blocked"]);
+  assert.equal(signatureOf("tag=live,!unknown-tag").signature, signatureOf("tag=live").signature);
+  assert.equal(signatureOf("tag=!unknown-tag").signature, signatureOf("").signature);
+  assert.notEqual(signatureOf("tag=!live").signature, signatureOf("").signature);
+  assert.equal(signatureOf("tag=!LIVE,!live").signature, signatureOf("tag=!live").signature);
+  assert.deepEqual(signatureOf("tag=!unknown-tag").ignored.tag, ["unknown-tag"]);
+  assert.deepEqual(signatureOf("tag=null").tag, { anyOf: [["null"]] });
+  assert.deepEqual(signatureOf("tag=!null").tagExclude, ["null"]);
+  assert.deepEqual(signatureOf("tag=null,!null").ignored.tag, []);
+  assert.notEqual(signatureOf("tag=!null").signature, signatureOf("").signature);
+  assert.equal(parseQuery("tag=all:!,").tag, null);
+  const tagTerms = Array.from({ length: 32 }, (_, index) => `tag-${index}`);
+  assert.equal(parseQuery(`tag=${tagTerms.map((term) => `!${term}`).join(",")}`).tagExclude.length, 32);
+  assert.equal(parseQuery(`tag=${Array(40).fill("!live").join(",")}`).tagExclude.length, 1);
   assert.deepEqual(parseQuery(`id=${imageId}&device=&theme=&tag=`).ids, [imageId]);
 
   for (const search of [
-    "tag=live&tag=!blocked",
+    "tag=live&tag=!!blocked",
+    "tag=!invalid_slug",
+    "tag=!all:live,blocked",
+    "tag=!live,all:blocked",
+    `tag=!${"a".repeat(33)}`,
+    `tag=live,${tagTerms.map((term) => `!${term}`).join(",")}`,
+    Array(33).fill("tag=!live").join("&"),
+    `theme=${tagTerms.join(",")}&author=photographer&tag=${tagTerms.map((term) => `!${term}`).join(",")}`,
     "theme=invalid_slug",
     `author=${"a".repeat(33)}`,
     "device=pc&device=mb",

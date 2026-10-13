@@ -14,7 +14,7 @@ const displayNameInput = z
   .trim()
   .max(vocabularyDisplayNameMaxLength, "显示名最长 " + vocabularyDisplayNameMaxLength + " 个字符");
 
-export const tagSlugInput = requestSlugInput;
+export const tagSlugInput = namedVocabularySlugInput("标签");
 export const tagCreateInput = z.strictObject({
   slug: tagSlugInput,
   display_name: displayNameInput.optional().default(""),

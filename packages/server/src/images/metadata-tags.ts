@@ -1,7 +1,8 @@
 import { z } from "zod";
 import {
   slugMaxLength,
-  slugPattern
+  slugPattern,
+  unsetSelector
 } from "@imageshow/shared/browser";
 
 const imageTagSlugSchema = z
@@ -10,7 +11,8 @@ const imageTagSlugSchema = z
   .toLowerCase()
   .min(1, "标识 slug 不能为空")
   .max(slugMaxLength, "标识 slug 最长 " + slugMaxLength + " 个字符")
-  .regex(slugPattern, "标识 slug 只能包含小写字母、数字、连字符，且不能以连字符开头或结尾");
+  .regex(slugPattern, "标识 slug 只能包含小写字母、数字、连字符，且不能以连字符开头或结尾")
+  .refine((value) => value !== unsetSelector, "null 是未设置标签的保留值，不能用作标签标识");
 
 type NormalizedImageTagSlugs = string[];
 

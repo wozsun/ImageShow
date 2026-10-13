@@ -45,7 +45,7 @@ curl "https://img.example.com/random?mode=json&limit=3"
 - 主题、标签、作者和分组只接受标识（slug，如 `city-night`）。显示名仅用于界面展示，不能作为筛选参数。
 - 不存在的主题、标签、作者不匹配任何图片：`theme=a,missing-theme` 只返回主题 a 的图片，排除不存在的标识没有效果；要包含的标识全部不存在且未允许对应维度回退时返回 404，错误详情的 `ignored` 列出这些标识。
 - `theme=null` 只选没有主题的图片，`theme=!null` 只选有主题的图片；`author=null`、`author=!null` 同理，按有无作者筛选。`null` 可与其他标识混写，如 `author=photographer,null` 为该作者或没有作者的图片。
-- 参数值为空或只有空白（如 `device=`）时视为未填写，`seed`、`id` 和 `group` 除外；除 `seed` 外，参数值和列表项的首尾空白会被忽略，逗号分隔的列表会忽略空项，如 `theme=a,`；`theme`、`author` 还会忽略空的排除项，如 `theme=a,!`。
+- 参数值为空或只有空白（如 `device=`）时视为未填写，`seed`、`id` 和 `group` 除外；除 `seed` 外，参数值和列表项的首尾空白会被忽略，逗号分隔的列表会忽略空项，如 `theme=a,`；`theme`、`tag`、`author` 还会忽略空的排除项，如 `tag=a,!`。
 - `device`、`brightness`、`fallback`、`seed`、`mode`、`size`、`limit` 只取一个值。重复出现时，取值相同（不区分大小写，`seed` 除外）或其余几次为空，按一次处理，如 `size=small&size=small`、`device=&device=pc`；取值不同返回 400。`fallback` 比较时忽略空格和空项，但顺序不同算作不同取值。
 - 参数名必须小写；不认识的参数会返回 400。
 
@@ -70,8 +70,22 @@ curl "https://img.example.com/random?mode=json&limit=3"
 | `tag=all:city,night` | 同时有「city」和「night」 |
 | `tag=all:city,night&tag=rain` | （「city」和「night」）或「rain」 |
 | `tag=all:city,night&tag=all:forest,fog` | （「city」和「night」）或（「forest」和「fog」） |
+| `tag=!night,!rain` | 没有「night」，也没有「rain」；包括无标签图片 |
+| `tag=city,!night` | 有「city」，且没有「night」 |
+| `tag=all:city,rain&tag=!night` | 同时有「city」和「rain」，且没有「night」 |
+| `tag=city&tag=forest&tag=!night` | 有「city」或「forest」，且没有「night」 |
+| `tag=null` | 没有任何标签 |
+| `tag=!null` | 至少有一个标签 |
+| `tag=city,null` | 有「city」或没有任何标签 |
+| `tag=!null,!night` | 至少有一个标签，且没有「night」 |
 
-`tag=a,b` 也可以写成 `tag=a&tag=b`。多个 `tag` 参数之间总是“或”，标签条件与其他参数是“且”的关系。不传 `tag` 时也包括没有标签的图片。`all:` 组里有不存在的标签时，这一组不会命中，其他组照常生效。
+`tag=a,b` 也可以写成 `tag=a&tag=b`。多个包含条件之间为“或”，`all:` 组内的包含项为“且”；所有 `!` 排除项对整个请求生效，命中任一排除标签的图片都不会被选中。排除项可以与包含项写在同一参数中，也可单独写成重复参数；即使写在 `all:` 组内，排除项仍对整个请求生效，例如 `tag=all:city,rain,!night` 等同于 `tag=all:city,rain&tag=!night`。`all:` 只能写在参数值开头，排除项写在它之后或单独的 `tag` 参数中。标签条件与其他参数是“且”的关系。
+
+不传包含条件时，从满足其余筛选的图片中排除指定标签，包括没有标签的图片。排除不存在的标签没有效果；`all:` 包含组里有不存在的标签时，这一组不会命中，其他包含组照常生效。同一标签可以同时包含和排除，例如 `tag=city,!city` 默认返回 404；`tag=city,forest,!city` 仍可选到有「forest」且没有「city」的图片。
+
+`null` 是保留的空值选择器，不能用作标签标识。`all:null,city` 要求同时无标签且有「city」，因此这一组不会命中；其他包含组仍照常生效。`tag=null,!null` 默认返回 404。`fallback=tag` 可以放宽 `null` 包含条件，但始终保留 `!null`，不会选到无标签图片。
+
+这些排除及空值写法只用于随机接口，可直接编辑随机图 URL；画廊与展映的标签筛选不支持这些写法。
 
 ## 零匹配回退
 
@@ -81,7 +95,7 @@ curl "https://img.example.com/random?mode=json&limit=3"
 
 按列表顺序累加放宽，每放宽一项重新选图，有结果即停止，数量不足 `limit` 时也不会继续补齐。未实际限制的维度直接跳过；缺省 / 自动设备在识别出访问设备时也是限制，`device=all` 或无法识别设备时不算限制。
 
-主题和作者只去掉包含条件，所有 `!` 排除条件仍有效；标签表达式整体去掉。未知的包含标识也可以随对应维度放宽。指定图片范围始终保留，范围为空仍返回 404。400、429、503、缓存不可用和近期图片重复本身不触发回退。
+主题、作者和标签只去掉包含条件，所有 `!` 排除条件仍有效；只有排除项时，该维度没有可放宽的条件。例如 `tag=city,!night&fallback=tag` 在没有匹配图片时可选其他标签或无标签图片，但始终排除「night」。未知的包含标识也可以随对应维度放宽。指定图片范围始终保留，范围为空仍返回 404。400、429、503、缓存不可用和近期图片重复本身不触发回退。
 
 例如 `/random?theme=city&brightness=dark&fallback=brightness,theme` 先找暗色城市图片，再找不限明暗的城市图片，仍无匹配才移除主题条件；写成 `fallback=theme,brightness` 则先找不限主题的暗色图片。JSON 的 `fallback` 始终列出实际放宽的维度（按应用顺序），没有放宽时为 `[]`；跳转与代理只返回图片，不增加响应头。固定 `seed` 同时考虑有效筛选与实际放宽的维度集合，与放宽的先后无关。
 
@@ -257,7 +271,8 @@ const { items } = await response.json();
 
 参数限制：
 
-- 查询串最多 4096 字节；`device`、`brightness`、`seed`、`mode`、`size`、`limit` 不能以不同的值重复。
-- `limit` 不能为 0；`tag` 不支持排除写法。
+- 查询串最多 4096 字节；`device`、`brightness`、`fallback`、`seed`、`mode`、`size`、`limit` 不能以不同的值重复。
+- `limit` 不能为 0。
 - `theme`、`tag`、`author` 每类最多 32 项，合计最多 64 项；标识与 `group` 使用同一格式，最长 32 字符，由小写字母、数字和连字符组成，首尾必须为字母或数字。格式非法返回 400。
+- 标签的包含词项按同组重复项与完全相同组去重，排除标签单独去重，两者合计计入标签的 32 项及总计的 64 项限制；同时包含和排除同一标签计为两项。`tag` 最多接受 32 个非空参数段。
 - `id` 与 `group` 各最多 32 项；`seed` 最多 128 字符。

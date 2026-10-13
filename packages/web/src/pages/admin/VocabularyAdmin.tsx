@@ -9,7 +9,6 @@ import {
   type AdminSettings,
   type AdminPermission,
   adminApiBasePath,
-  slugPattern,
   type TagDto,
   type ThemeDto
 } from "@imageshow/shared/browser";
@@ -182,13 +181,10 @@ function VocabularyAdminContent({
     setConfirmDelete(null);
   }, [canDelete]);
 
-  // Themes and authors reserve the unset selector; tags accept any slug.
-  const reservesUnset = kind !== "tags";
-  const slugValid = reservesUnset ? isNamedSlug(slug) : slugPattern.test(slug);
-  const slugInvalid = slug.length > 0 && !slugValid;
+  const slugInvalid = slug.length > 0 && !isNamedSlug(slug);
   const slugError = !slugInvalid
     ? createError
-    : reservesUnset && slug === unsetSelector
+    : slug === unsetSelector
       ? `null 是未设置${copy.noun}的保留值，不能用作${copy.noun}标识`
       : slugFormatHint;
   const externalBusy = Boolean(mutation) || createAction.pending;

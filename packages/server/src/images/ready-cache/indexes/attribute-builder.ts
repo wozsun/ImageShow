@@ -46,7 +46,7 @@ function attributeSourceQuery(
 ) {
   const commonColumns = `m.id::text AS id,
     (extract(epoch FROM m.image_time) * 1000000)::bigint::text AS sort_score`;
-  if (spec.kind === "tag" || spec.kind === "group") {
+  if ((spec.kind === "tag" && spec.value !== unsetSelector) || spec.kind === "group") {
     const table = spec.kind === "tag" ? "image_tag" : "image_group_member";
     const slugColumn = spec.kind === "tag" ? "tag_slug" : "group_slug";
     return {
@@ -70,6 +70,8 @@ function attributeSourceQuery(
   if (spec.kind === "axis") {
     conditions.push(`m.device=${bind(spec.device)}`);
     conditions.push(`m.brightness=${bind(spec.brightness)}`);
+  } else if (spec.kind === "tag") {
+    conditions.push("NOT EXISTS (SELECT 1 FROM image_tag it WHERE it.image_id=m.id)");
   } else {
     conditions.push(
       (spec.kind === "theme" || spec.kind === "author") && spec.value === unsetSelector
@@ -155,7 +157,7 @@ async function buildAttributeIndexSource(
       }
       const last = rows.at(-1)!;
       const nextCursor =
-        (spec.kind === "tag" || spec.kind === "group")
+        ((spec.kind === "tag" && spec.value !== unsetSelector) || spec.kind === "group")
           ? { id: last.id }
           : {
               id: last.id,

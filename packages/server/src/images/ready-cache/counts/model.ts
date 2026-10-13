@@ -262,6 +262,7 @@ export function isUnfilteredReadyImagePlan(plan: ImageFilterPlan) {
     plan.theme.include.length === 0 &&
     plan.theme.exclude.length === 0 &&
     plan.tag === null &&
+    plan.tagExclude.length === 0 &&
     plan.author.include.length === 0 &&
     plan.author.exclude.length === 0
   );

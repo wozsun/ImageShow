@@ -41,8 +41,8 @@ export function assertVocabularySlug(
   entity: VocabularyEntity,
   slug: string
 ) {
-  if (entity !== "tag" && slug === unsetSelector) {
-    const noun = entity === "theme" ? "主题" : "作者";
+  if (slug === unsetSelector) {
+    const noun = { theme: "主题", author: "作者", tag: "标签" }[entity];
     throw new ApiError(
       400,
       `invalid_${entity}`,
