@@ -266,13 +266,24 @@ export type ImageRestoreResponseDto = {
 
 export type ImagePurgeRequestDto = { scope: "selected"; ids: string[] } | { scope: "all" };
 
+/** Receipt for the committed deletion intent; progress arrives on the event stream. */
 export type ImagePurgeResponseDto = {
   requested: number;
   queued: number;
   already_queued: number;
-  deleted: number;
-  remaining: number;
   ignored: number;
+};
+
+export const trashPurgeEventsPath = "/api/admin/images/purge/events";
+
+/**
+ * Every permanent deletion that still has its image: `pending` is waiting or
+ * running, `failed` waits for a retry or for maintenance. The stream ends after
+ * the first state without pending work.
+ */
+export type TrashPurgeProgressDto = {
+  pending: number;
+  failed: number;
 };
 
 export const imageTitleMaxLength = 80;

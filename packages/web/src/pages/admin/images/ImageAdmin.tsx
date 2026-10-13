@@ -59,6 +59,7 @@ import { workspaceScrollContainer } from "../../../lib/ui/workspace-scroll.js";
 import {
   imageAdminConfirmationCopy,
   useImageAdminOperations,
+  type ConfirmedPurgeProgress,
   type ImageAdminView
 } from "./useImageAdminOperations.js";
 import { useImageAdminSelection } from "./useImageAdminSelection.js";
@@ -78,6 +79,11 @@ const viewOptions = [
   { value: "ready", label: "图库" },
   { value: "deleted", label: "回收站" }
 ] as const;
+
+function purgeProgressDisplay({ total, pending }: ConfirmedPurgeProgress) {
+  const value = total - pending;
+  return { value, max: total, label: `已删除 ${value} / ${total} 张` };
+}
 
 export function ImageAdmin() {
   return (
@@ -163,12 +169,16 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
     operationBusy,
     resetTransientState,
     runConfirmedAction,
+    confirmedPurgeProgress,
+    moveConfirmedPurgeToBackground,
+    backgroundPurgeProgress,
     trash,
     restore
   } = useImageAdminOperations({
     items,
     clearSelection: selection.clear,
-    invalidateData
+    invalidateData,
+    canPurge: canPurgeImage
   });
   const detailCapability = useAdminImageDetailCapability<AdminImageListItemDto>((error) => {
     reportAdminUiError("image_admin.detail_load", error);
@@ -298,9 +308,19 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
         <div className="image-admin-head-copy" data-workspace-pinned="">
           <h1>图片</h1>
           {mobileLayout && viewSwitch}
-          <p role="status">
-            {operationText ||
-              `共 ${total} 项${pageStatusSuffix}`}
+          <p
+            role="status"
+            className={!operationText && backgroundPurgeProgress ? "is-pending" : undefined}
+          >
+            {operationText
+              || (backgroundPurgeProgress ? (
+                <>
+                  正在后台永久删除
+                  {/* The count changes several times a second; the live region
+                      announces the state, not every count. */}
+                  <span aria-hidden="true">，剩余 {backgroundPurgeProgress.pending} 张</span>
+                </>
+              ) : `共 ${total} 项${pageStatusSuffix}`)}
           </p>
           <ActionFeedbackRegion
             className="image-admin-feedback-region"
@@ -606,13 +626,15 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
           busy={actionBusy}
           confirmDisabled={Boolean(confirmError)}
           requireFinalConfirmation
-          finalConfirmationLabel="确认删除"
-          finalConfirmationIcon="delete-bin-2-line"
           pendingIcon="delete-bin-5-line"
           pendingLabel="正在删除"
           successLabel="删除完成"
-          errorLabel="结果未确认"
+          errorLabel="未能确认"
           errorMessage={confirmError}
+          pendingProgress={confirmedPurgeProgress
+            ? purgeProgressDisplay(confirmedPurgeProgress)
+            : undefined}
+          onBackground={confirmedPurgeProgress ? moveConfirmedPurgeToBackground : undefined}
           onClose={() => setConfirmAction(null)}
           onConfirm={runConfirmedAction}
         />

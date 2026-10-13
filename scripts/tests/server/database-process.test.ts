@@ -47,7 +47,8 @@ test("[Server/数据库与进程] Worker 慢类型不阻塞后来任务，停止
           staleRecoveryIntervalMs: 20,
           historyCleanupIntervalMs: 30,
           taskTimeoutSeconds: 60,
-          queueSliceMaxMs: 10_000
+          queueSliceMaxMs: 10_000,
+          queueSliceMaxJobs: 1
         }
       }
     },
@@ -131,8 +132,12 @@ test("[Server/数据库与进程] Worker 慢类型不阻塞后来任务，停止
     hooks.deregister();
     Reflect.deleteProperty(globalThis, fixtureKey);
   });
+  const { wakeBackgroundJobs } = await import("../../../packages/server/src/jobs/wake.ts");
   const flush = async () => {
     await new Promise<void>((resolve) => setImmediate(resolve));
+  };
+  const flushUntil = async (done: () => boolean) => {
+    for (let turn = 0; turn < 20 && !done(); turn += 1) await flush();
   };
   worker.startBackgroundJobWorker();
   await flush();
@@ -146,9 +151,23 @@ test("[Server/数据库与进程] Worker 慢类型不阻塞后来任务，停止
   await flush();
   assert.ok(staleRecoveries > 1 && historyCleanups > 1, "定期维护也不等待慢处理器");
   assert.deepEqual(started, ["move-1", "cache-1"], "反复 tick 不增加同类型并发");
+  jobs.push({ id: "cache-2", type: "cache.rebuild" }, { id: "cache-3", type: "cache.rebuild" });
+  wakeBackgroundJobs();
+  await flushUntil(() => succeeded.includes("cache-3"));
+  assert.deepEqual(
+    started,
+    ["move-1", "cache-1", "cache-2", "cache-3"],
+    "提交后唤醒立即发现任务，用尽单轮额度且有进展时不等定期扫描续跑积压"
+  );
   worker.stopBackgroundJobWorker();
   await flush();
   assert.deepEqual(rescheduled, ["move-1"]);
+  jobs.push({ id: "cache-4", type: "cache.rebuild" });
+  wakeBackgroundJobs();
+  await flush();
+  await flush();
+  assert.equal(started.includes("cache-4"), false, "停止后的唤醒不能领取任务");
+  jobs.pop();
   assert.equal(
     await worker.drainBackgroundJobWorker(0),
     false,
@@ -165,7 +184,11 @@ test("[Server/数据库与进程] Worker 慢类型不阻塞后来任务，停止
   assert.equal(await worker.drainBackgroundJobWorker(0), false, "等待中的任务发现查询也必须排空");
   discovery.resolve([{ type: "move.cleanup", n: 1, oldest_wait_ms: 0 }]);
   assert.equal(await worker.drainBackgroundJobWorker(1_000), true);
-  assert.deepEqual(started, ["move-1", "cache-1"], "停止后晚到的发现结果不能领取任务");
+  assert.deepEqual(
+    started,
+    ["move-1", "cache-1", "cache-2", "cache-3"],
+    "停止后晚到的发现结果不能领取任务"
+  );
   assert.deepEqual(errors, []);
 });
 

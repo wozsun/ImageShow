@@ -22,12 +22,19 @@ import {
   WorkerExecutionCoordinator,
   type WorkerExecutionCompletion
 } from "./worker-execution.ts";
+import { subscribeBackgroundJobWake } from "./wake.ts";
 
 let timer: NodeJS.Timeout | undefined;
 let tickPromise: Promise<void> | null = null;
 const activeTypeSlices = new Map<BackgroundJobType, Promise<void>>();
 let lastStaleRecoveryAtMs = 0;
 let lastHistoryCleanupAtMs = 0;
+let unsubscribeWake: (() => void) | undefined;
+// A wake or continuation that arrives while discovery runs must not be lost
+// to the in-flight tick, and one arriving during a slice re-checks its type.
+let tickRequested = false;
+let tickScheduled = false;
+let wakeGeneration = 0;
 
 function jobTypeConcurrency(type: BackgroundJobType): number {
   switch (type) {
@@ -179,6 +186,8 @@ async function runWorkerTick() {
   for (const row of pending) {
     if (!executionCoordinator.isAccepting()) return;
     if (activeTypeSlices.has(row.type)) continue;
+    const sliceWakeGeneration = wakeGeneration;
+    let continueBacklog = false;
     // Keep each type's concurrency bound while subsequent ticks can discover
     // other types and run periodic maintenance during a slow handler.
     const slice = runBackgroundJobType(
@@ -186,6 +195,9 @@ async function runWorkerTick() {
       Math.min(jobTypeConcurrency(row.type), row.n)
     )
       .then((result) => {
+        // A bounded slice that made progress hands the rest of the backlog
+        // to the next turn instead of waiting for the periodic scan.
+        continueBacklog = result.budgetExhausted && result.processed > 0;
         logger.debug("worker_queue_slice", {
           type: row.type,
           backlog: row.n,
@@ -200,17 +212,39 @@ async function runWorkerTick() {
       })
       .finally(() => {
         activeTypeSlices.delete(row.type);
+        if (continueBacklog || wakeGeneration !== sliceWakeGeneration) requestTick();
       });
     activeTypeSlices.set(row.type, slice);
   }
+}
+
+function onTickError(error: unknown) {
+  logger.error("worker tick failed", error);
 }
 
 function tick() {
   if (tickPromise) return tickPromise;
   tickPromise = runWorkerTick().finally(() => {
     tickPromise = null;
+    if (tickRequested) requestTick();
   });
   return tickPromise;
+}
+
+/** Run discovery on the next turn; repeated requests coalesce into one tick. */
+function requestTick() {
+  if (!timer) return;
+  if (tickPromise) {
+    tickRequested = true;
+    return;
+  }
+  tickRequested = false;
+  if (tickScheduled) return;
+  tickScheduled = true;
+  setImmediate(() => {
+    tickScheduled = false;
+    if (timer) tick().catch(onTickError);
+  });
 }
 
 export function startBackgroundJobWorker() {
@@ -219,14 +253,19 @@ export function startBackgroundJobWorker() {
     throw new Error("Cannot restart worker before its prior scheduling drained");
   }
   executionCoordinator.start();
-  const onTickError = (error: unknown) => logger.error("worker tick failed", error);
   timer = setInterval(() => tick().catch(onTickError), appConfig.backgroundJob.tickIntervalMs);
+  unsubscribeWake = subscribeBackgroundJobWake(() => {
+    wakeGeneration += 1;
+    requestTick();
+  });
   void tick().catch(onTickError);
 }
 
 export function stopBackgroundJobWorker() {
   if (timer) clearInterval(timer);
   timer = undefined;
+  unsubscribeWake?.();
+  unsubscribeWake = undefined;
   executionCoordinator.stop();
 }
 

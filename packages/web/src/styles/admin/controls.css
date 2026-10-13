@@ -614,26 +614,63 @@ pre {
   }
 }
 
+/* 确认弹窗：标题、说明、动作由两条分界线分开，与表单弹窗的头尾一致；操作区保持紧凑，不压过说明。 */
 .confirm-dialog form {
-  width: min(520px, 100%);
+  width: min(480px, 100%);
 }
-.confirm-dialog form > footer {
-  border-top: 0;
+.confirm-dialog form > header {
+  position: relative;
+  padding: 14px 20px;
 }
 .confirm-dialog header h2 {
-  font-size: 19px;
+  font-size: 18px;
+  line-height: 1.35;
 }
-.confirm-dialog header p {
-  overflow: visible;
-  white-space: normal;
-  text-overflow: clip;
+.confirm-dialog-description {
+  margin: 0;
+  padding: 16px 20px;
+  color: var(--admin-color-text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
   overflow-wrap: anywhere;
-  font-size: 15px;
+  text-wrap: pretty;
 }
 .confirm-dialog-error {
   margin: 0;
-  padding: 0 16px 12px;
+  padding: 0 20px 16px;
   overflow-wrap: anywhere;
+}
+/* 操作区与标题栏等高：上下内边距加按钮正好等于标题行加其内边距。 */
+.confirm-dialog form > footer {
+  padding: 10px 20px;
+  gap: 10px;
+}
+.confirm-dialog form > footer button {
+  min-height: 32px;
+  padding: 5px 14px;
+  font-size: 14px;
+}
+/* 进行中的计数与标题同行，进度沿标题下的分界线填充，弹窗高度不随进度出现而改变。 */
+.confirm-dialog-progress {
+  position: absolute;
+  inset: auto 0 -1px;
+  height: 2px;
+}
+.confirm-dialog-progress-bar {
+  height: 100%;
+  background: var(--admin-color-action-primary);
+  transition: width 0.2s ease-out;
+}
+.confirm-dialog-progress-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--admin-color-text-secondary);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /*危险动作按钮（删除等）。*/
 .danger-button,
@@ -670,6 +707,9 @@ button.danger-button.is-subtle.is-armed {
 @media (prefers-reduced-motion: reduce) {
   .edit-modal form {
     animation: none;
+  }
+  .confirm-dialog-progress-bar {
+    transition: none;
   }
 }
 .account-form {

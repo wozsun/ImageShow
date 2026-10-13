@@ -1,10 +1,14 @@
-import { storageObjectKey } from "@imageshow/shared/browser";
+import {
+  adminApiBasePath,
+  storageObjectKey,
+  trashPurgeEventsPath
+} from "@imageshow/shared/browser";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 import type { BackgroundJob } from "../../../../packages/server/src/jobs/types.ts";
 import { interceptSqlQueries } from "./database-faults.mts";
 
-import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
 await runIntegrationScenario(async (runtime) => {
@@ -16,6 +20,8 @@ await runIntegrationScenario(async (runtime) => {
   const jobs = await import("../../../../packages/server/src/jobs/repository.ts");
   const registry = await import("../../../../packages/server/src/storage/backends/registry.ts");
   const trash = await import("../../../../packages/server/src/images/trash/purge.ts");
+  const trashProgress =
+    await import("../../../../packages/server/src/images/trash/purge-progress.ts");
   const trashMutations = await import("../../../../packages/server/src/images/trash/mutations.ts");
   const trashMembershipLock =
     await import("../../../../packages/server/src/images/trash/membership-lock.ts");
@@ -110,10 +116,11 @@ await runIntegrationScenario(async (runtime) => {
       return query();
     }
   );
-  const uncertainPurgePromise = trash.purgeImages({
-    scope: "selected",
-    ids: [uncertainImage]
-  }, { signal: neverAbortedSignal });
+  assert.deepEqual(
+    await trash.purgeImages({ scope: "selected", ids: [uncertainImage] }),
+    { requested: 1, queued: 1, already_queued: 0, ignored: 0 },
+    "确认请求提交删除意图后立即返回回执，不等待后台删除"
+  );
   const uncertainPurgeJob = await claimTrashPurgeJob();
   try {
     await assert.rejects(
@@ -135,16 +142,7 @@ await runIntegrationScenario(async (runtime) => {
   } finally {
     restoreDeleteResponse();
   }
-  const uncertainPurge = await uncertainPurgePromise;
   assert.equal(metadataDeleteResponseLost, true);
-  assert.deepEqual(uncertainPurge, {
-    requested: 1,
-    queued: 1,
-    already_queued: 0,
-    deleted: 1,
-    remaining: 0,
-    ignored: 0
-  });
   assert.equal(
     Number(
       (await database.pool.query(
@@ -156,152 +154,87 @@ await runIntegrationScenario(async (runtime) => {
     0
   );
 
-  const admittedCancelImage = randomUUID();
-  const admittedCancelObjectKey = storageObjectKey(admittedCancelImage);
-  const admittedCancelThumbKey = admittedCancelObjectKey;
-  const admittedCancelFull = Buffer.from("admitted-cancel-purge-full");
-  const admittedCancelThumbnail = Buffer.from("admitted-cancel-purge-thumbnail");
+  const queuedImage = randomUUID();
+  const queuedObjectKey = storageObjectKey(queuedImage);
+  const queuedThumbKey = queuedObjectKey;
+  const queuedFull = Buffer.from("queued-purge-full");
+  const queuedThumbnail = Buffer.from("queued-purge-thumbnail");
   await database.pool.query(
     `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','deleted','local','pc','dark',NULL,now(),1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
     [
-      admittedCancelImage,
-      createHash("md5").update(admittedCancelFull).digest("hex"),
-      admittedCancelThumbnail.byteLength
+      queuedImage,
+      createHash("md5").update(queuedFull).digest("hex"),
+      queuedThumbnail.byteLength
     ]
   );
   await localAccess.driver.writeBuffer(
     "large",
-    admittedCancelObjectKey,
-    admittedCancelFull,
+    queuedObjectKey,
+    queuedFull,
     "image/webp"
   );
   await localAccess.driver.writeBuffer(
     "small",
-    admittedCancelThumbKey,
-    admittedCancelThumbnail,
+    queuedThumbKey,
+    queuedThumbnail,
     "image/webp"
   );
-  const admittedCancelController = new AbortController();
-  const admittedCancelReason = new Error("injected purge cancellation after delete");
-  const originalAdmittedPurgeRemove = localAccess.driver.removeObjects.bind(localAccess.driver);
-  let admittedPurgeDeleteStarted = false;
+  const originalQueuedPurgeRemove = localAccess.driver.removeObjects.bind(localAccess.driver);
+  let queuedPurgeDeleteStarted = false;
   localAccess.driver.removeObjects = async (objects, options) => {
-    const results = await originalAdmittedPurgeRemove(objects, options);
-    if (objects.some((object) => object.key === admittedCancelObjectKey)) {
-      admittedPurgeDeleteStarted = true;
-      admittedCancelController.abort(admittedCancelReason);
+    const results = await originalQueuedPurgeRemove(objects, options);
+    if (objects.some((object) => object.key === queuedObjectKey)) {
+      queuedPurgeDeleteStarted = true;
     }
     return results;
   };
-  const admittedCancelPurge = trash
-    .purgeImages(
-      {
-        scope: "selected",
-        ids: [admittedCancelImage]
-      },
-      { signal: admittedCancelController.signal }
-    )
-    .then(
-      (value) => ({ value, error: null }),
-      (error) => ({ value: null, error })
-    );
-  const admittedCancelPurgeJob = await claimTrashPurgeJob();
+  await trash.purgeImages({ scope: "selected", ids: [queuedImage] });
+  const queuedPurgeJob = await claimTrashPurgeJob();
+  assert.deepEqual(queuedPurgeJob.payload, {});
+  assert.equal(queuedPurgeJob.target_id, queuedImage);
   assert.equal(
-    admittedPurgeDeleteStarted,
-    false,
-    "HTTP 请求等待期间不得执行对象删除"
+    (
+      await database.pool.query("SELECT idempotency_key FROM background_job WHERE id=$1", [
+        queuedPurgeJob.id
+      ])
+    ).rows[0]?.idempotency_key,
+    `trash.purge:${queuedImage}`
   );
-  assert.deepEqual(await trashMutations.restoreImages([admittedCancelImage]), {
+  assert.equal(
+    queuedPurgeDeleteStarted,
+    false,
+    "确认请求只提交意图，对象删除只由后台任务执行"
+  );
+  assert.deepEqual(await trashMutations.restoreImages([queuedImage]), {
     requested: 1,
     restored: 0,
     ignored: 1,
-    results: [{ id: admittedCancelImage, status: "ignored" }]
+    results: [{ id: queuedImage, status: "ignored" }]
   });
   try {
-    await finishTrashPurgeJob(admittedCancelPurgeJob);
+    await finishTrashPurgeJob(queuedPurgeJob);
   } finally {
-    localAccess.driver.removeObjects = originalAdmittedPurgeRemove;
+    localAccess.driver.removeObjects = originalQueuedPurgeRemove;
   }
-  assert.equal(admittedPurgeDeleteStarted, true);
-  const admittedCancelOutcome = await admittedCancelPurge;
-  assert.equal(admittedCancelOutcome.value, null);
-  assert.equal(admittedCancelOutcome.error, admittedCancelReason);
+  assert.equal(queuedPurgeDeleteStarted, true);
   assert.equal(
     Number(
       (
         await database.pool.query("SELECT count(*) FROM metadata WHERE id=$1", [
-          admittedCancelImage
+          queuedImage
         ])
       ).rows[0]?.count
     ),
     0,
-    "物理删除开始后的调度取消必须继续完成 metadata 删除"
+    "已提交的删除意图由后台任务完成 metadata 删除"
   );
   assert.equal(
-    await localAccess.driver.exists("large", admittedCancelObjectKey),
+    await localAccess.driver.exists("large", queuedObjectKey),
     false
   );
   assert.equal(
-    await localAccess.driver.exists("small", admittedCancelThumbKey),
+    await localAccess.driver.exists("small", queuedThumbKey),
     false
-  );
-  const interruptedImage = randomUUID();
-  const interruptedObjectKey = storageObjectKey(interruptedImage);
-  const interruptedThumbKey = interruptedObjectKey;
-  const interruptedFull = Buffer.from("interrupted-purge-full");
-  const interruptedThumbnail = Buffer.from("interrupted-purge-thumbnail");
-  await database.pool.query(
-    `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','deleted','local','pc','dark',NULL,now(),1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
-    [
-      interruptedImage,
-      createHash("md5").update(interruptedFull).digest("hex"),
-      interruptedThumbnail.byteLength
-    ]
-  );
-  await localAccess.driver.writeBuffer(
-    "large",
-    interruptedObjectKey,
-    interruptedFull,
-    "image/webp"
-  );
-  await localAccess.driver.writeBuffer(
-    "small",
-    interruptedThumbKey,
-    interruptedThumbnail,
-    "image/webp"
-  );
-  const interruptedController = new AbortController();
-  const interruptedReason = new Error("injected purge request interruption");
-  const interruptedRequest = trash.purgeImages(
-    { scope: "selected", ids: [interruptedImage] },
-    { signal: interruptedController.signal }
-  );
-  const interruptedContinuation = await claimTrashPurgeJob();
-  assert.deepEqual(interruptedContinuation.payload, {});
-  assert.equal(interruptedContinuation.target_id, interruptedImage);
-  assert.equal(
-    (
-      await database.pool.query("SELECT idempotency_key FROM background_job WHERE id=$1", [
-        interruptedContinuation.id
-      ])
-    ).rows[0]?.idempotency_key,
-    `trash.purge:${interruptedImage}`
-  );
-  interruptedController.abort(interruptedReason);
-  await assert.rejects(
-    interruptedRequest,
-    (error) => error === interruptedReason
-  );
-  await finishTrashPurgeJob(interruptedContinuation);
-  assert.equal(
-    Number(
-      (await database.pool.query(
-        "SELECT count(*) FROM metadata WHERE id=$1",
-        [interruptedImage]
-      ))
-        .rows[0]?.count
-    ),
-    0
   );
 
   const concurrentImage = randomUUID();
@@ -342,7 +275,7 @@ await runIntegrationScenario(async (runtime) => {
     concurrentPurgePromise = trash.purgeImages({
       scope: "selected",
       ids: [concurrentImage]
-    }, { signal: neverAbortedSignal });
+    });
     let captureIsWaiting = false;
     for (let attempt = 0; attempt < 100; attempt += 1) {
       const waiting = await database.pool.query(
@@ -359,17 +292,14 @@ await runIntegrationScenario(async (runtime) => {
     assert.equal(captureIsWaiting, true);
     await concurrentMutation.query("COMMIT");
     concurrentMutationFinished = true;
-    const concurrentContinuation = await claimTrashPurgeJob();
-    await finishTrashPurgeJob(concurrentContinuation);
-    const concurrentPurge = await concurrentPurgePromise;
-    assert.deepEqual(concurrentPurge, {
+    assert.deepEqual(await concurrentPurgePromise, {
       requested: 1,
       queued: 1,
       already_queued: 0,
-      deleted: 1,
-      remaining: 0,
       ignored: 0
     });
+    const concurrentContinuation = await claimTrashPurgeJob();
+    await finishTrashPurgeJob(concurrentContinuation);
     assert.equal(
       Number(
         (await database.pool.query(
@@ -433,13 +363,18 @@ await runIntegrationScenario(async (runtime) => {
   const oldest = await createTrashImage(3);
   const middle = await createTrashImage(2);
   const newest = await createTrashImage(1);
-  const allPurgePromise = trash.purgeImages({ scope: "all" }, { signal: neverAbortedSignal });
+  assert.deepEqual(await trash.purgeImages({ scope: "all" }), {
+    requested: 3,
+    queued: 3,
+    already_queued: 0,
+    ignored: 0
+  });
   const allPurgeJob = await claimTrashPurgeJob();
-  const duplicateRequest = trash.purgeImages(
-    { scope: "selected", ids: [middle.id, newest.id] },
-    { signal: AbortSignal.abort(new Error("duplicate request disconnected")) }
+  assert.deepEqual(
+    await trash.purgeImages({ scope: "selected", ids: [middle.id, newest.id] }),
+    { requested: 2, queued: 0, already_queued: 2, ignored: 0 },
+    "重复请求只计 already_queued"
   );
-  await assert.rejects(duplicateRequest, /duplicate request disconnected/);
   assert.deepEqual(
     (
       await database.pool.query(
@@ -462,15 +397,6 @@ await runIntegrationScenario(async (runtime) => {
   await finishTrashPurgeJob(allPurgeJob);
   await finishTrashPurgeJob(await claimTrashPurgeJob());
   await finishTrashPurgeJob(await claimTrashPurgeJob());
-  const allPurge = await allPurgePromise;
-  assert.deepEqual(allPurge, {
-    requested: 3,
-    queued: 3,
-    already_queued: 0,
-    deleted: 3,
-    remaining: 0,
-    ignored: 0
-  });
   assert.deepEqual(
     (await database.pool.query(
       "SELECT id FROM metadata WHERE id=$1",
@@ -480,39 +406,88 @@ await runIntegrationScenario(async (runtime) => {
     "scope all 只处理事务快照，不包含之后进入回收站的图片"
   );
 
-  const selectedPurgePromise = trash.purgeImages({
-    scope: "selected",
-    ids: [addedAfterCapture.id]
-  }, { signal: neverAbortedSignal });
+  await trash.purgeImages({ scope: "selected", ids: [addedAfterCapture.id] });
   await finishTrashPurgeJob(await claimTrashPurgeJob());
-  const selectedPurge = await selectedPurgePromise;
-  assert.deepEqual(selectedPurge, {
-    requested: 1,
-    queued: 1,
-    already_queued: 0,
-    deleted: 1,
-    remaining: 0,
-    ignored: 0
-  });
-  const ignoredPurge = await trash.purgeImages({
-    scope: "selected",
-    ids: [foregroundImage]
-  }, { signal: neverAbortedSignal });
-  assert.deepEqual(ignoredPurge, {
+  assert.equal(
+    (await database.pool.query("SELECT id FROM metadata WHERE id=$1", [addedAfterCapture.id])).rowCount,
+    0
+  );
+  assert.deepEqual(await trash.purgeImages({ scope: "selected", ids: [foregroundImage] }), {
     requested: 1,
     queued: 0,
     already_queued: 0,
-    deleted: 0,
-    remaining: 0,
     ignored: 1
   });
 
   const failedItem = await createTrashImage(0);
   const independentItem = await createTrashImage(0);
-  const failedPurgePromise = trash.purgeImages({
-    scope: "selected",
-    ids: [failedItem.id, independentItem.id]
-  }, { signal: neverAbortedSignal });
+  await trash.purgeImages({ scope: "selected", ids: [failedItem.id, independentItem.id] });
+  assert.deepEqual(await trashProgress.readTrashPurgeProgress(), { pending: 2, failed: 0 });
+  const { Hono } = await import("hono");
+  const { handleApiError } = await import("../../../../packages/server/src/core/http/responses.ts");
+  const { registerPublicAuthRoutes } = await import("../../../../packages/server/src/routes/auth.ts");
+  const { registerAdminImageRoutes } =
+    await import("../../../../packages/server/src/routes/admin-images.ts");
+  const { requireAdminSession } = await import("../../../../packages/server/src/users/admin-session.ts");
+  const { closeAdminSessionConnections } =
+    await import("../../../../packages/server/src/users/admin-session-connections.ts");
+  const progressApp = new Hono();
+  progressApp.onError((error, context) => handleApiError(context, error));
+  registerPublicAuthRoutes(progressApp);
+  progressApp.use(`${adminApiBasePath}/*`, requireAdminSession);
+  registerAdminImageRoutes(progressApp);
+  const loginConfig = structuredClone(runtime.runtimeConfigStore.getRuntimeConfig());
+  await runtime.runtimeConfigStore.updateRuntimeConfig({ altcha: { enabled: false } });
+  const login = await progressApp.request("http://imageshow.test/api/admin/auth/login", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      host: "imageshow.test",
+      origin: "http://imageshow.test"
+    },
+    body: JSON.stringify({ username: "integration-admin", password: "IntegrationAdmin123!" })
+  });
+  await runtime.runtimeConfigStore.replaceRuntimeConfig(loginConfig);
+  assert.equal(login.status, 200, await login.clone().text());
+  const progressSessionId =
+    /imageshow_session=([^;]+)/u.exec(login.headers.get("set-cookie") ?? "")?.[1];
+  assert.ok(progressSessionId);
+  const openProgressStream = async () => {
+    const response = await progressApp.request(`http://imageshow.test${trashPurgeEventsPath}`, {
+      headers: { cookie: `imageshow_session=${progressSessionId}` }
+    });
+    assert.equal(response.status, 200);
+    assert.ok(response.body);
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    // Reads the first event, or everything until the stream ends; a stream
+    // that stays open past the deadline reports ended: false.
+    return async (untilEnd: boolean) => {
+      let text = "";
+      const deadline = delay(5_000, null);
+      for (;;) {
+        const chunk = await Promise.race([reader.read(), deadline]);
+        if (!chunk) {
+          await reader.cancel();
+          return { text, ended: false };
+        }
+        if (chunk.done) return { text, ended: true };
+        text += decoder.decode(chunk.value, { stream: true });
+        if (!untilEnd && text.includes("\n\n")) return { text, ended: false };
+      }
+    };
+  };
+  const readFollowingStream = await openProgressStream();
+  assert.deepEqual(await readFollowingStream(false), {
+    text: 'event: progress\ndata: {"pending":2,"failed":0}\n\n',
+    ended: false
+  });
+  assert.equal(closeAdminSessionConnections([progressSessionId]), 1);
+  assert.deepEqual(
+    await readFollowingStream(true),
+    { text: "", ended: true },
+    "会话失效时关闭进度流"
+  );
   const batchJobs = [await claimTrashPurgeJob(), await claimTrashPurgeJob()];
   const failedJob = batchJobs.find((job) => job.target_id === failedItem.id);
   const independentJob = batchJobs.find((job) => job.target_id === independentItem.id);
@@ -554,14 +529,16 @@ await runIntegrationScenario(async (runtime) => {
     await jobs.markBackgroundJobFailed(failedJob, failedJobError),
     true
   );
-  assert.deepEqual(await failedPurgePromise, {
-    requested: 2,
-    queued: 2,
-    already_queued: 0,
-    deleted: 1,
-    remaining: 1,
-    ignored: 0
-  });
+  assert.deepEqual(
+    await trashProgress.readTrashPurgeProgress(),
+    { pending: 0, failed: 1 },
+    "进度只统计仍有图片的删除意图，并区分待处理与失败"
+  );
+  assert.deepEqual(
+    await (await openProgressStream())(true),
+    { text: 'event: progress\ndata: {"pending":0,"failed":1}\n\n', ended: true },
+    "没有待处理删除时只发送一次状态即结束"
+  );
   const retryingTrashCheck = await databaseCheck.checkTrash();
   assert.equal(
     retryingTrashCheck.candidates.find((item) => item.id === failedItem.id)?.object_key,
@@ -584,16 +561,11 @@ await runIntegrationScenario(async (runtime) => {
     "retrying"
   );
   assert.deepEqual(
-    await trash.purgeImages({
-      scope: "selected",
-      ids: [failedItem.id]
-    }, { signal: neverAbortedSignal }),
+    await trash.purgeImages({ scope: "selected", ids: [failedItem.id] }),
     {
       requested: 1,
       queued: 0,
       already_queued: 1,
-      deleted: 0,
-      remaining: 1,
       ignored: 0
     }
   );

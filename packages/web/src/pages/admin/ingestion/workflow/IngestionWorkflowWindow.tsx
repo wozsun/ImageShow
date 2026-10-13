@@ -668,7 +668,7 @@ export function IngestionWorkflowWindow({
                 dangerous: clearRequiresConfirmation,
                 armed: clearConfirmation.armed,
                 ariaLabel: clearConfirmation.armed
-                  ? "再次点击确认清空当前队列"
+                  ? "确认清空当前队列"
                   : clearRequiresConfirmation
                     ? "清空当前队列，需要再次点击确认"
                     : "清空当前队列",

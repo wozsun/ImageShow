@@ -11,7 +11,7 @@ export function ConfirmDialog({
   busy = false,
   confirmDisabled = false,
   requireFinalConfirmation = false,
-  finalConfirmationLabel = "再次确认",
+  finalConfirmationLabel = "确认删除",
   finalConfirmationIcon = "delete-bin-2-line",
   closeOnBackdrop = false,
   danger = true,
@@ -21,6 +21,9 @@ export function ConfirmDialog({
   successLabel = "操作成功",
   errorLabel = "操作失败",
   errorMessage = "",
+  pendingProgress,
+  backgroundLabel = "转入后台",
+  onBackground,
   returnFocusRef,
   onClose,
   onConfirm
@@ -41,6 +44,17 @@ export function ConfirmDialog({
   successLabel?: string;
   errorLabel?: string;
   errorMessage?: string;
+  /**
+   * Progress of the pending action: its label sits beside the title and the
+   * divider under the title fills, so the dialog keeps its height.
+   */
+  pendingProgress?: { value: number; max: number; label: string };
+  backgroundLabel?: string;
+  /**
+   * Lets the user leave a pending action running in the background; the
+   * caller settles onConfirm so the dialog closes normally.
+   */
+  onBackground?: () => void;
   returnFocusRef?: RefObject<HTMLElement | null>;
   onClose: () => void;
   onConfirm: () => Promise<boolean | void>;
@@ -57,6 +71,7 @@ export function ConfirmDialog({
   const displayedStatus = finalConfirmationActive
     ? "idle"
     : confirmStatus.status;
+  const progress = confirmStatus.pending ? pendingProgress : undefined;
   const confirmPresentation = {
     idle: {
       icon: finalConfirmationActive ? finalConfirmationIcon : confirmIcon,
@@ -105,23 +120,52 @@ export function ConfirmDialog({
           <header>
             <div>
               <h2>{title}</h2>
-              <p>{description}</p>
             </div>
+            {progress && (
+              <p className="confirm-dialog-progress-text" aria-hidden="true">
+                {progress.label}
+              </p>
+            )}
+            {progress && (
+              <div
+                className="confirm-dialog-progress"
+                role="progressbar"
+                aria-label={title}
+                aria-valuemin={0}
+                aria-valuemax={progress.max}
+                aria-valuenow={progress.value}
+                aria-valuetext={progress.label}
+              >
+                <div
+                  className="confirm-dialog-progress-bar"
+                  style={{
+                    width: `${progress.max ? (progress.value / progress.max) * 100 : 100}%`
+                  }}
+                />
+              </div>
+            )}
           </header>
+          <p className="confirm-dialog-description">{description}</p>
           {errorMessage && (
             <p className="confirm-dialog-error admin-error" role="alert">
               {errorMessage}
             </p>
           )}
           <footer>
-            <button
-              ref={cancelButtonRef}
-              type="button"
-              disabled={blocked}
-              onClick={() => requestClose()}
-            >
-              取消
-            </button>
+            {confirmStatus.pending && onBackground ? (
+              <button type="button" onClick={onBackground}>
+                {backgroundLabel}
+              </button>
+            ) : (
+              <button
+                ref={cancelButtonRef}
+                type="button"
+                disabled={blocked}
+                onClick={() => requestClose()}
+              >
+                取消
+              </button>
+            )}
             <AsyncActionButton
               className={[
                 danger ? "danger-button" : "button",

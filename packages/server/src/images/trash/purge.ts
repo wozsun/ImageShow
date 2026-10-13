@@ -6,7 +6,6 @@ import type {
 } from "@imageshow/shared/browser";
 import type { PoolClient } from "pg";
 import { imageObjectKey } from "../../storage/objects/image-paths.ts";
-import { abortableDelay } from "../../core/abort.ts";
 import { runWithAdvisoryLockAcquisitionSignal } from "../../core/database/advisory-locks.ts";
 import { pool } from "../../core/database/pools.ts";
 import { withTransactionOnClient } from "../../core/database/transactions.ts";
@@ -19,6 +18,8 @@ import { invalidateEntityCountCaches } from "../../vocab/cache.ts";
 import { withTrashMembershipLock } from "./membership-lock.ts";
 import { imageHasTrashPurgeJobSql } from "./purge-state.ts";
 import type { BackgroundJob } from "../../jobs/types.ts";
+import { wakeBackgroundJobs } from "../../jobs/wake.ts";
+import { notifyTrashPurgeProgress } from "./purge-progress.ts";
 
 type PurgeRow = {
   id: string;
@@ -31,16 +32,6 @@ type QueuePlan = Pick<
   "requested" | "queued" | "already_queued" | "ignored"
 > & {
   queueableIds: string[];
-  targetIds: string[];
-};
-
-type PurgeOptions = {
-  signal: AbortSignal;
-};
-
-type PurgeWaitState = {
-  remaining: number;
-  deferred: number;
 };
 
 const purgeReturnColumns = [
@@ -48,9 +39,6 @@ const purgeReturnColumns = [
   "metadata.storage_slug",
   "metadata.status"
 ].join(", ");
-
-const purgeRequestWaitMs = 30_000;
-const purgeRequestPollMs = 250;
 
 function numberField(value: unknown, field: string) {
   const parsed = Number(value);
@@ -85,12 +73,6 @@ async function selectedQueueCounts(
             COALESCE(
               array_agg(metadata.id ORDER BY requested.ordinality) FILTER (
                 WHERE metadata.status='deleted'
-              ),
-              '{}'::uuid[]
-            ) AS target_ids,
-            COALESCE(
-              array_agg(metadata.id ORDER BY requested.ordinality) FILTER (
-                WHERE metadata.status='deleted'
                   AND NOT ${imageHasTrashPurgeJobSql}
               ),
               '{}'::uuid[]
@@ -106,13 +88,11 @@ async function selectedQueueCounts(
     "selected already-queued purge count"
   );
   const queueable = numberField(row?.queueable, "selected queueable count");
-  const targetIds = uuidArrayField(row?.target_ids, "selected purge targets");
   const queueableIds = uuidArrayField(
     row?.queueable_ids,
     "selected queueable purge targets"
   );
-  if (targetIds.length !== alreadyQueued + queueable
-      || queueableIds.length !== queueable) {
+  if (queueableIds.length !== queueable) {
     throw new Error("PostgreSQL returned inconsistent selected purge targets");
   }
   return {
@@ -120,8 +100,7 @@ async function selectedQueueCounts(
     queued: 0,
     already_queued: alreadyQueued,
     ignored: requested - alreadyQueued - queueable,
-    queueableIds,
-    targetIds
+    queueableIds
   };
 }
 
@@ -135,10 +114,6 @@ async function allQueueCounts(client: PoolClient): Promise<QueuePlan> {
             count(*) FILTER (
               WHERE NOT ${imageHasTrashPurgeJobSql}
             )::int AS queueable,
-            COALESCE(
-              array_agg(id ORDER BY deleted_at, id),
-              '{}'::uuid[]
-            ) AS target_ids,
             COALESCE(
               array_agg(id ORDER BY deleted_at, id) FILTER (
                 WHERE NOT ${imageHasTrashPurgeJobSql}
@@ -155,13 +130,11 @@ async function allQueueCounts(client: PoolClient): Promise<QueuePlan> {
     "already-queued trash purge count"
   );
   const queueable = numberField(row?.queueable, "queueable trash purge count");
-  const targetIds = uuidArrayField(row?.target_ids, "trash purge targets");
   const queueableIds = uuidArrayField(
     row?.queueable_ids,
     "queueable trash purge targets"
   );
-  if (targetIds.length !== alreadyQueued + queueable
-      || queueableIds.length !== queueable) {
+  if (queueableIds.length !== queueable) {
     throw new Error("PostgreSQL returned inconsistent trash purge targets");
   }
   return {
@@ -169,8 +142,7 @@ async function allQueueCounts(client: PoolClient): Promise<QueuePlan> {
     queued: 0,
     already_queued: alreadyQueued,
     ignored: requested - alreadyQueued - queueable,
-    queueableIds,
-    targetIds
+    queueableIds
   };
 }
 
@@ -203,65 +175,13 @@ async function queueTrashPurge(
   return { ...plan, queued: inserted.rowCount };
 }
 
-async function readPurgeWaitState(ids: string[]): Promise<PurgeWaitState> {
-  if (!ids.length) return { remaining: 0, deferred: 0 };
-  const row = (
-    await pool.query(
-      `SELECT count(*)::int AS remaining,
-            count(*) FILTER (
-              WHERE NOT EXISTS (
-                SELECT 1 FROM background_job
-                 WHERE type='trash.purge'
-                   AND target_id=metadata.id::text
-                   AND status IN ('pending', 'running')
-              )
-            )::int AS deferred
-       FROM metadata
-      WHERE id=ANY($1::uuid[])`,
-      [ids]
-    )
-  ).rows[0] as Record<string, unknown> | undefined;
-  return {
-    remaining: numberField(row?.remaining, "remaining purge request count"),
-    deferred: numberField(row?.deferred, "deferred purge request count")
-  };
-}
-
-async function waitForPurgeTargets(
-  plan: QueuePlan,
-  signal: AbortSignal
-): Promise<ImagePurgeResponseDto> {
-  const deadline = Date.now() + purgeRequestWaitMs;
-  let state = await readPurgeWaitState(plan.targetIds);
-  while (state.remaining && !state.deferred && Date.now() < deadline) {
-    signal.throwIfAborted();
-    const remainingWaitMs = Math.min(
-      purgeRequestPollMs,
-      deadline - Date.now()
-    );
-    if (remainingWaitMs <= 0) break;
-    await abortableDelay(remainingWaitMs, signal);
-    state = await readPurgeWaitState(plan.targetIds);
-  }
-  return {
-    requested: plan.requested,
-    queued: plan.queued,
-    already_queued: plan.already_queued,
-    deleted: plan.targetIds.length - state.remaining,
-    remaining: state.remaining,
-    ignored: plan.ignored
-  };
-}
-
 /**
- * Persist the complete user-confirmed deletion intent, then keep the ordinary
- * confirmation request open while the sole background owner finishes that
- * exact 1...N set. A disconnect or bounded wait ending after commit never
- * cancels the durable intent.
+ * Persist the complete user-confirmed deletion intent and return its receipt.
+ * The sole background owner deletes the images; clients follow the global
+ * progress stream, and a disconnect never cancels the durable intent.
  */
 export async function purgeImages(
-  request: ImagePurgeRequestDto,
-  options: PurgeOptions
+  request: ImagePurgeRequestDto
 ): Promise<ImagePurgeResponseDto> {
   const plan = await withTrashMembershipLock((client) =>
     withTransactionOnClient(
@@ -269,7 +189,16 @@ export async function purgeImages(
       (transaction) => queueTrashPurge(transaction, request)
     )
   );
-  return waitForPurgeTargets(plan, options.signal);
+  if (plan.queued) {
+    wakeBackgroundJobs();
+    notifyTrashPurgeProgress();
+  }
+  return {
+    requested: plan.requested,
+    queued: plan.queued,
+    already_queued: plan.already_queued,
+    ignored: plan.ignored
+  };
 }
 
 async function purgeJobImage(
@@ -335,8 +264,12 @@ export async function processTrashPurgeJob(
   try {
     await purgeJobImage(job, signal);
   } finally {
-    // A lost DELETE acknowledgement may still remove every association.
-    // Empty retries also retire any list retained by a failed invalidation.
-    await invalidateEntityCountCaches(["theme", "tag", "author"]);
+    try {
+      // A lost DELETE acknowledgement may still remove every association.
+      // Empty retries also retire any list retained by a failed invalidation.
+      await invalidateEntityCountCaches(["theme", "tag", "author"]);
+    } finally {
+      notifyTrashPurgeProgress();
+    }
   }
 }

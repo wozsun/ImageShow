@@ -496,8 +496,8 @@ export function ImageMetadataEditorDialog({
                       }
                       confirmLabel={
                         multipleItems
-                          ? `再次点击确认删除这 ${activeItems.length} 张图片`
-                          : "再次点击确认删除此图片"
+                          ? `确认删除这 ${activeItems.length} 张图片`
+                          : "确认删除此图片"
                       }
                       busyLabel={
                         multipleItems

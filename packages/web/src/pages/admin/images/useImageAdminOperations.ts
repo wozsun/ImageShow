@@ -1,5 +1,9 @@
-import { useCallback, useState } from "react";
-import type { ImagePurgeRequestDto, AdminImageListItemDto } from "@imageshow/shared/browser";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type {
+  ImagePurgeRequestDto,
+  ImagePurgeResponseDto,
+  AdminImageListItemDto
+} from "@imageshow/shared/browser";
 import {
   moveImagesToTrash,
   purgeImages,
@@ -12,6 +16,8 @@ import {
 } from "../../../lib/ui/action-feedback.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import { waitForMinimumPendingDuration } from "../../../lib/ui/async-action-timing.js";
+import { openTrashPurgeProgress } from "../../../lib/api/trash-purge-progress.js";
+import { useTrashPurgeBackground } from "./useTrashPurgeBackground.js";
 
 export type ImageAdminView = "ready" | "deleted";
 
@@ -47,6 +53,10 @@ type UnknownOutcomeRefreshResult = {
 };
 
 type ConfirmedMutationStatus = "error" | "success";
+
+/** Deletion progress inside the confirmation dialog, from server-pushed state. */
+export type ConfirmedPurgeProgress = { total: number; pending: number };
+type ConfirmedPurgeExit = "background" | "detached";
 type ConfirmedMutationFeedbackTiming = "after-list-refresh" | "before-list-refresh";
 
 function withIgnoredImageCount(text: string, ignored: number) {
@@ -116,11 +126,13 @@ function unknownOutcomeFeedback(
 export function useImageAdminOperations({
   items,
   clearSelection,
-  invalidateData
+  invalidateData,
+  canPurge
 }: {
   items: AdminImageListItemDto[];
   clearSelection: () => void;
   invalidateData: () => Promise<unknown>;
+  canPurge: boolean;
 }) {
   const [operationText, setOperationText] = useState("");
   const [feedback, setFeedback] = useState<ActionFeedbackState | null>(null);
@@ -128,6 +140,9 @@ export function useImageAdminOperations({
   const [confirmError, setConfirmError] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
   const [busyIds, setBusyIds] = useState<string[]>([]);
+  const [confirmedPurgeProgress, setConfirmedPurgeProgress] =
+    useState<ConfirmedPurgeProgress | null>(null);
+  const exitConfirmedPurgeRef = useRef<((exit: ConfirmedPurgeExit) => void) | null>(null);
 
   const operationBusy = actionBusy || busyIds.length > 0;
   const setConfirmAction = useCallback((action: ImageAdminConfirmAction | null) => {
@@ -155,6 +170,61 @@ export function useImageAdminOperations({
     clearSelection();
     await invalidateData();
   }, [clearSelection, invalidateData]);
+
+  const backgroundPurge = useTrashPurgeBackground({
+    enabled: canPurge,
+    onSettled: (final) => {
+      void (async () => {
+        let refreshFailed = false;
+        try {
+          // The user may be selecting elsewhere by now; purged cards leave the
+          // selection together with the page items.
+          await invalidateData();
+        } catch {
+          refreshFailed = true;
+        }
+        const text = !final
+          ? "后台永久删除进度连接中断，请稍后刷新确认结果"
+          : final.failed
+            ? `后台永久删除已结束，回收站中有 ${final.failed} 张删除失败，将自动重试或需在检查页处理`
+            : "后台永久删除已完成";
+        showFeedback(
+          refreshFailed ? `${text}；图片列表刷新失败，请重新加载页面` : text,
+          !final || final.failed || refreshFailed ? "error" : "success"
+        );
+      })();
+    }
+  });
+
+  // Follow a committed intent inside its confirmation dialog until no deletion
+  // is pending, or until the user leaves the rest to the background.
+  const followConfirmedPurge = useCallback(
+    async (receipt: ImagePurgeResponseDto) => {
+      let total = receipt.queued + receipt.already_queued;
+      if (!total) return { final: { pending: 0, failed: 0 }, total };
+      setConfirmedPurgeProgress({ total, pending: total });
+      const exit = Promise.withResolvers<ConfirmedPurgeExit>();
+      exitConfirmedPurgeRef.current = exit.resolve;
+      const stream = openTrashPurgeProgress((progress) => {
+        total = Math.max(total, progress.pending);
+        setConfirmedPurgeProgress({ total, pending: progress.pending });
+      });
+      try {
+        const outcome = await Promise.race([stream.done, exit.promise]);
+        return typeof outcome === "string" ? outcome : { final: outcome, total };
+      } finally {
+        stream.close();
+        exitConfirmedPurgeRef.current = null;
+        setConfirmedPurgeProgress(null);
+      }
+    },
+    []
+  );
+  const moveConfirmedPurgeToBackground = useCallback(() => {
+    exitConfirmedPurgeRef.current?.("background");
+  }, []);
+  // Leaving the page stops following; the committed intent continues server side.
+  useEffect(() => () => exitConfirmedPurgeRef.current?.("detached"), []);
 
   const resetTransientState = useCallback(() => {
     setFeedback(null);
@@ -290,15 +360,28 @@ export function useImageAdminOperations({
               );
             }
           } else {
-            const result = await purgeImages(action.request);
-            text = result.remaining
-              ? `已永久删除 ${result.deleted} 张，${result.remaining} 张仍由后台继续处理${
-                  result.ignored ? `，${result.ignored} 张未处理` : ""
-                }`
-              : `已永久删除 ${result.deleted} 张${
-                  result.ignored ? `，${result.ignored} 张未处理` : ""
-                }`;
-            status = result.remaining || result.ignored ? "error" : "success";
+            const receipt = await purgeImages(action.request);
+            const followed = await followConfirmedPurge(receipt);
+            if (followed === "detached") return false;
+            if (followed === "background") {
+              // The intent is committed; refresh so the cards show it, and let
+              // the page subtitle follow the remaining deletions.
+              setOperationText("");
+              backgroundPurge.follow(true);
+              try {
+                await refresh();
+              } catch {
+                // The list query owner reports its read failure.
+              }
+              return true;
+            }
+            const { final, total } = followed;
+            text = !final
+              ? "永久删除已提交，但进度连接中断，请稍后刷新确认结果"
+              : final.failed
+                ? `永久删除已结束，回收站中有 ${final.failed} 张删除失败，将自动重试或需在检查页处理`
+                : withIgnoredImageCount(`已永久删除 ${total} 张`, receipt.ignored);
+            status = !final || final.failed || receipt.ignored ? "error" : "success";
             if (status === "error") {
               reportAdminUiError(
                 "image_admin.purge_partial",
@@ -344,6 +427,8 @@ export function useImageAdminOperations({
       }
     },
     [
+      backgroundPurge.follow,
+      followConfirmedPurge,
       items,
       operationBusy,
       presentConfirmedMutation,
@@ -374,6 +459,9 @@ export function useImageAdminOperations({
     operationBusy,
     resetTransientState,
     runConfirmedAction,
+    confirmedPurgeProgress,
+    moveConfirmedPurgeToBackground,
+    backgroundPurgeProgress: backgroundPurge.progress,
     trash,
     restore
   };

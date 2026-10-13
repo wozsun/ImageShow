@@ -9,7 +9,8 @@ import {
   type ImageStorageMigrationResponseDto,
   type ImageTrashResponseDto,
   type ImageUpdateRequestDto,
-  type ImageUpdateResponseDto
+  type ImageUpdateResponseDto,
+  trashPurgeEventsPath
 } from "@imageshow/shared/browser";
 import {
   apiSuccess,
@@ -46,6 +47,8 @@ import {
   restoreImages
 } from "../images/trash/mutations.ts";
 import { purgeImages } from "../images/trash/purge.ts";
+import { streamTrashPurgeProgress } from "../images/trash/purge-progress.ts";
+import { adminSessionOf } from "../core/http/admin-session-context.ts";
 import { requireAdminPermission } from "../users/admin-authorization.ts";
 import { listStorageBackends } from "../storage/backends/registry.ts";
 import { storageBackendLabel } from "../storage/backends/label.ts";
@@ -108,11 +111,15 @@ export function registerAdminImageRoutes(app: Hono) {
     requireAdminPermission(adminPermissions.imageTrashPurge),
     async (c) => {
       const input = parse(imagePurgeInput, await readJsonBody(c));
-      const response: ImagePurgeResponseDto = await purgeImages(input, {
-        signal: c.req.raw.signal
-      });
+      const response: ImagePurgeResponseDto = await purgeImages(input);
       return c.json(apiSuccess(response));
     }
+  );
+
+  app.get(
+    trashPurgeEventsPath,
+    requireAdminPermission(adminPermissions.imageTrashPurge),
+    (c) => streamTrashPurgeProgress(c, adminSessionOf(c))
   );
 
   app.post(

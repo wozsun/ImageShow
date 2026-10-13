@@ -297,6 +297,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.image-admin-head-copy > p.is-pending {
+  color: var(--admin-color-pending-text);
+}
 .image-admin-head-copy > .image-admin-feedback-region {
   grid-area: status;
   margin-top: 4px;

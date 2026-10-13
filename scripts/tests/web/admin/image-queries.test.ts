@@ -1114,8 +1114,6 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
                 requested: 1,
                 queued: 1,
                 already_queued: 0,
-                deleted: 1,
-                remaining: 0,
                 ignored: 0
               });
         }
@@ -1124,6 +1122,43 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
         }
         throw new Error(`unexpected ImageAdmin request: ${url.pathname}`);
       };
+      // The purge receipt returns at once; deletion progress is pushed over SSE.
+      const progressStreams: PurgeProgressEventSource[] = [];
+      class PurgeProgressEventSource {
+        static readonly CLOSED = 2;
+        readonly url: string;
+        readonly listeners = new Map<string, Set<(event: { data: string }) => void>>();
+        readyState = 1;
+
+        constructor(url: string) {
+          this.url = url;
+          progressStreams.push(this);
+        }
+
+        addEventListener(type: string, listener: (event: { data: string }) => void) {
+          const listeners = this.listeners.get(type) ?? new Set();
+          listeners.add(listener);
+          this.listeners.set(type, listeners);
+        }
+
+        close() {
+          this.readyState = PurgeProgressEventSource.CLOSED;
+        }
+
+        async push(progress: { pending: number; failed: number }) {
+          await React.act(async () => {
+            for (const listener of this.listeners.get("progress") ?? []) {
+              listener({ data: JSON.stringify(progress) });
+            }
+          });
+        }
+      }
+      const previousEventSource = Object.getOwnPropertyDescriptor(globalThis, "EventSource");
+      Object.defineProperty(globalThis, "EventSource", {
+        configurable: true,
+        writable: true,
+        value: PurgeProgressEventSource
+      });
 
       const root = createRoot(container);
       try {
@@ -1289,6 +1324,24 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
             pendingPurge.querySelector("path")?.getAttribute("d"),
             ADMIN_ICONS["delete-bin-5-line"]
           );
+          if (mode === "purge") {
+            assert.equal(progressStreams.length >= 1, true, "可永久删除时挂载即检查后台删除进度");
+            const backgroundCheck = progressStreams[0]!;
+            await backgroundCheck.push({ pending: 0, failed: 0 });
+            assert.equal(backgroundCheck.readyState, PurgeProgressEventSource.CLOSED);
+            await waitFor(
+              () => progressStreams.length === 2,
+              "purge dialog did not follow progress after the receipt"
+            );
+            const dialogProgress = progressStreams[1]!;
+            await dialogProgress.push({ pending: 1, failed: 0 });
+            const progressbar = purgeDialog.querySelector('[role="progressbar"]');
+            assert.equal(progressbar?.getAttribute("aria-valuenow"), "0");
+            assert.equal(progressbar?.getAttribute("aria-valuemax"), "1");
+            assert.ok(buttonWithText("转入后台"), "进行中的删除可以转入后台");
+            await dialogProgress.push({ pending: 0, failed: 0 });
+            assert.equal(dialogProgress.readyState, PurgeProgressEventSource.CLOSED);
+          }
         }
         if (mode === "purge-unknown") {
           const unknownMessage =
@@ -1421,11 +1474,60 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
           assert.ok(
             document.querySelector(".image-admin-feedback-region .action-feedback-success")
           );
+
+          // A deletion handed over to the background refreshes the list and
+          // reports once, even when it ends before the page stream's first state.
+          const listRequestsBeforeHandover = listRequests.length;
+          const handoverPurge = container.querySelector<HTMLButtonElement>(
+            'button[aria-label^="永久删除图片："]'
+          );
+          assert.ok(handoverPurge);
+          await click(handoverPurge);
+          await waitFor(
+            () => Boolean(document.querySelector("[data-dialog-frame] form")),
+            "handover purge confirmation did not open"
+          );
+          const handoverForm = document.querySelector<HTMLFormElement>("[data-dialog-frame] form");
+          assert.ok(handoverForm);
+          await submitForm(handoverForm);
+          await waitFor(
+            () => Boolean(handoverForm.querySelector('button[aria-label="确认删除"]')),
+            "handover purge dialog did not enter final confirmation state"
+          );
+          await submitForm(handoverForm);
+          await waitFor(
+            () => progressStreams.length === 3,
+            "handover purge dialog did not follow progress"
+          );
+          await progressStreams[2]!.push({ pending: 1, failed: 0 });
+          await click(buttonWithText("转入后台"));
+          await waitFor(
+            () => progressStreams.length === 4,
+            "handover did not start following in the background"
+          );
+          assert.equal(progressStreams[2]!.readyState, PurgeProgressEventSource.CLOSED);
+          await progressStreams[3]!.push({ pending: 0, failed: 0 });
+          await waitFor(
+            () =>
+              document
+                .querySelector(".image-admin-feedback-region .action-feedback-success")
+                ?.textContent?.includes("后台永久删除已完成") === true,
+            "handed-over purge did not report its completion"
+          );
+          assert.ok(
+            listRequests.length >= listRequestsBeforeHandover + 2,
+            "交接时与后台删除结束时各刷新一次列表"
+          );
         }
       } finally {
         await React.act(async () => root.unmount());
         client.clear();
         globalThis.fetch = previousFetch;
+        if (previousEventSource) {
+          Object.defineProperty(globalThis, "EventSource", previousEventSource);
+        } else {
+          Reflect.deleteProperty(globalThis, "EventSource");
+        }
         container.replaceChildren();
       }
     };

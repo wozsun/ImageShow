@@ -123,7 +123,15 @@ export function AdminImageCard(props: AdminImageCardProps) {
         }}
       >
         <span className="admin-image-card-thumb">
-          <ThumbnailImage src={imageVariantUrl(item, "small")} alt="" />
+          {item.purge_pending ? (
+            // The background purge removes stored files before the record, so a
+            // pending card never requests a thumbnail that may already be gone.
+            <span className="thumb-fallback" aria-hidden="true">
+              <AdminIcon name="delete-bin-6-line" />
+            </span>
+          ) : (
+            <ThumbnailImage src={imageVariantUrl(item, "small")} alt="" />
+          )}
         </span>
         <span className="admin-image-card-main">
           <strong title={title}>{title}</strong>
@@ -164,10 +172,10 @@ function StandardImageCardActions({
               confirmIcon="delete-bin-2-line"
               busyIcon="delete-bin-5-line"
               idleLabel={`删除图片：${title}`}
-              confirmLabel={`再次点击确认删除图片：${title}`}
+              confirmLabel={`确认删除图片：${title}`}
               busyLabel={`删除中：${title}`}
               idleTitle="删除"
-              confirmTitle="再次点击确认删除"
+              confirmTitle="确认删除"
               busyTitle="删除中"
               disabled={busy
                 || actionsDisabled

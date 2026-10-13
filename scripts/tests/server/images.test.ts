@@ -1,5 +1,5 @@
 import { defaultNormalizeProfile } from "@imageshow/shared/browser";
-import { storageObjectKey } from "@imageshow/shared/browser";
+import { storageObjectKey, trashPurgeEventsPath } from "@imageshow/shared/browser";
 import "../support/server-environment.ts";
 import assert from "node:assert/strict";
 
@@ -1038,6 +1038,12 @@ test("[Server/图片] 图片 1..N 路由拒绝越权、重复 ID 与错误正文
     (await purgeForbidden.json() as { code?: string }).code,
     "forbidden"
   );
+  const purgeProgressForbidden = await app.request(
+    new Request(`http://imageshow.test${trashPurgeEventsPath}`, {
+      headers: { "x-test-role": "image" }
+    })
+  );
+  assert.equal(purgeProgressForbidden.status, 403, "删除进度与永久删除使用同一权限");
   for (const invalidPurge of [
     { scope: "selected" },
     { scope: "selected", ids: [] },

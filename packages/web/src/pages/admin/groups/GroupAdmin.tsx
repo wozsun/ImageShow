@@ -150,7 +150,7 @@ function GroupAdminContent({ settings }: { settings: AdminSettings }) {
       <AdminPagination ariaLabel="分组分页" page={page} totalPages={totalPages} onPageChange={setPage} />
       {canDelete && confirmDelete && <ConfirmDialog title="删除分组"
         description={`删除分组「${confirmDelete.display_name || confirmDelete.slug}」会使指向它的外部随机链接失效，图片仍保留在图库中。此操作无法撤销。`}
-        confirmLabel="确认删除" requireFinalConfirmation finalConfirmationLabel="再次确认"
+        confirmLabel="删除" requireFinalConfirmation
         pendingIcon="delete-bin-5-line" busy={deleting} onClose={() => setConfirmDelete(null)} onConfirm={remove} />}
       <WorkspaceToolbarScrollbar />
     </section>

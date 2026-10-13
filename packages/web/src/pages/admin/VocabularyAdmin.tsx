@@ -386,9 +386,8 @@ function VocabularyAdminContent({
         <ConfirmDialog
           title={`删除${copy.noun}`}
           description={copy.deleteDescription(confirmDelete)}
-          confirmLabel="确认删除"
+          confirmLabel="删除"
           requireFinalConfirmation
-          finalConfirmationLabel="再次确认"
           pendingIcon="delete-bin-5-line"
           busy={mutation === "delete"}
           onClose={() => setConfirmDelete(null)}
