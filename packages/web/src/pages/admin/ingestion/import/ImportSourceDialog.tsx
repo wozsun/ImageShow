@@ -25,6 +25,7 @@ import {
   type ParsedImportSourceResult
 } from "./import-source-adapters.js";
 import {
+  formatWeiboParseProgress,
   importSourceLimitState,
   importSourceTextareaRows,
   type ImportSourceMode
@@ -34,6 +35,7 @@ import {
   ImportSourceResultSummary
 } from "./ImportSourceResultPanel.js";
 import { parseImportUrlInput } from "../queue/model/import-job-source.js";
+import type { WeiboImportProgress } from "../queue/ingestion-http-client.js";
 import { FieldError } from "../../../../components/form/FieldError.js";
 import "../../../../styles/admin/import-source-dialog.css";
 
@@ -74,6 +76,7 @@ export function ImportSourceDialog({
   const [mode, setMode] = useState<ImportSourceMode>(initialMode);
   const [parsedResult, setParsedResult] = useState<ParsedImportSourceResult | null>(null);
   const [parseError, setParseError] = useState("");
+  const [weiboProgress, setWeiboProgress] = useState<WeiboImportProgress | null>(null);
   const parseAction = useAsyncActionStatus({
     minimumPendingMs: 0,
     resultDurationMs: null
@@ -127,12 +130,16 @@ export function ImportSourceDialog({
     requestControllerRef.current?.abort();
     requestControllerRef.current = controller;
     setParseError("");
+    setWeiboProgress(null);
     try {
-      const result = await adapter.parse(
-        text,
-        controller.signal,
-        urlParseResult
-      );
+      const result = await adapter.parse(text, {
+        signal: controller.signal,
+        urlResult: urlParseResult,
+        // A newer parse or a closed dialog aborts this one and drops its progress.
+        onWeiboProgress: (progress) => {
+          if (!controller.signal.aborted) setWeiboProgress(progress);
+        }
+      });
       if (controller.signal.aborted) return null;
       setParsedResult(result);
       return result;
@@ -144,6 +151,7 @@ export function ImportSourceDialog({
     } finally {
       if (requestControllerRef.current === controller) {
         requestControllerRef.current = null;
+        setWeiboProgress(null);
       }
     }
   };
@@ -216,6 +224,25 @@ export function ImportSourceDialog({
     success: { icon: "check-line", label: "解析完成" },
     error: { icon: "close-line", label: "解析失败" }
   };
+
+  // While parsing, its progress takes the place the result summary uses after.
+  const parseProgressText = parseAction.pending && weiboProgress
+    ? formatWeiboParseProgress(weiboProgress)
+    : "";
+  const parseProgress = parseProgressText
+    ? (
+        <p
+          className="hint import-source-result-summary is-pending"
+          role="status"
+          title={parseProgressText}
+        >
+          {parseProgressText}
+        </p>
+      )
+    : null;
+  const resultSummary = parsedResult
+    ? <ImportSourceResultSummary result={parsedResult} />
+    : parseProgress;
 
   const inputError = parseError || (limitState.overLimit
     ? `已输入 ${limitState.count} 条，最多允许 ${limitState.maxItems} 条，请拆分后再导入`
@@ -296,7 +323,7 @@ export function ImportSourceDialog({
                 {adapter.hint(limitState.maxItems)}
               </p>
               <div
-                className={`import-source-input-region${parsedResult ? " has-result-summary" : ""}`}
+                className={`import-source-input-region${resultSummary ? " has-result-summary" : ""}`}
               >
                 <textarea
                   ref={inputRef}
@@ -311,18 +338,14 @@ export function ImportSourceDialog({
                   placeholder={adapter.presentation.placeholder}
                   rows={importSourceTextareaRows}
                 />
-                {mobileLayout && parsedResult && (
-                  <ImportSourceResultSummary result={parsedResult} />
-                )}
+                {mobileLayout && resultSummary}
               </div>
               <FieldError message={inputError} announce />
               {parsedResult && (
                 <ImportSourceResultPanel result={parsedResult} />
               )}
               <div className="import-source-actions">
-                {!mobileLayout && parsedResult && (
-                  <ImportSourceResultSummary result={parsedResult} />
-                )}
+                {!mobileLayout && resultSummary}
                 <div className="import-source-action-buttons">
                   <button type="button" onClick={() => requestClose()}>
                     取消

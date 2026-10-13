@@ -1,5 +1,5 @@
 import { unpackImageAddresses } from "@imageshow/shared/browser";
-import type { ApiErrorResponseDto, ApiValidationIssueDto } from "@imageshow/shared/browser";
+import type { ApiErrorResponseDto } from "@imageshow/shared/browser";
 
 let csrfToken = "";
 export const authExpiredEvent = "imageshow:auth-expired";
@@ -18,15 +18,6 @@ export class ApiClientError extends Error {
 
 export function isApiClientError(error: unknown): error is ApiClientError {
   return error instanceof ApiClientError;
-}
-
-/** 请求校验失败（validation_error）时服务端给出的各字段问题；其他错误返回空数组。 */
-export function apiValidationIssues(error: unknown): ApiValidationIssueDto[] {
-  if (!isApiClientError(error) || error.code !== "validation_error") return [];
-  const issues = (error.details as { issues?: unknown } | null)?.issues;
-  if (!Array.isArray(issues)) return [];
-  return issues.filter((issue): issue is ApiValidationIssueDto =>
-    typeof issue?.field === "string" && typeof issue?.message === "string");
 }
 
 export function setCsrfToken(value: string) {
@@ -52,7 +43,12 @@ function publicCacheableRequest(path: string, method: string) {
   );
 }
 
-async function fetchApi(path: string, init: RequestInit = {}) {
+/**
+ * The request half of `api()`, owning CSRF, credentials and auth expiry. It is
+ * exported for admin clients that handle the response themselves (ETag
+ * requests, event streams); others use `api()`.
+ */
+export async function fetchApi(path: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
   if (!(init.body instanceof FormData) && init.body && !headers.has("content-type"))
     headers.set("content-type", "application/json");
@@ -68,7 +64,8 @@ async function fetchApi(path: string, init: RequestInit = {}) {
   return response;
 }
 
-async function parseApiResponse<T>(response: Response): Promise<T> {
+/** The response half of `api()`: a JSON success body, or an ApiClientError. */
+export async function parseApiResponse<T>(response: Response): Promise<T> {
   if (response.status === 204) return {} as T;
   const body = await response.text();
   let data: unknown = {};
@@ -103,32 +100,4 @@ async function parseApiResponse<T>(response: Response): Promise<T> {
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return parseApiResponse<T>(await fetchApi(path, init));
-}
-
-export async function apiWithEtag<T>(
-  path: string,
-  init: RequestInit = {},
-  notModified?: Readonly<{ etag: string; data: T }>,
-  inspectResponse?: (response: Response) => void
-): Promise<Readonly<{ data: T; etag: string }>> {
-  const headers = new Headers(init.headers);
-  if (notModified?.etag) headers.set("If-None-Match", notModified.etag);
-  const response = await fetchApi(path, { ...init, headers });
-  inspectResponse?.(response);
-  const responseEtag = response.headers.get("etag") ?? "";
-  if (response.status === 304) {
-    if (!notModified) {
-      throw new ApiClientError("HTTP 304", response.status);
-    }
-    return {
-      data: notModified.data,
-      etag: responseEtag || notModified.etag
-    };
-  }
-  return {
-    data: await parseApiResponse<T>(response),
-    // A 200 representation without its own validator must not inherit the
-    // validator of the representation it replaced.
-    etag: responseEtag
-  };
 }

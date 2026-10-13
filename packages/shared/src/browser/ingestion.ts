@@ -76,6 +76,27 @@ export type WeiboImportResultDto = {
   manifest: ImportManifestResultDto;
 };
 
+/**
+ * Progress of one Weibo parse request. Its response is an SSE stream of
+ * `progress` events ending with one `result` (WeiboImportResultDto) or one
+ * `error` (ApiErrorResponseDto) event.
+ */
+export type WeiboImportProgressDto = {
+  /**
+   * queued: another parse holds the serial request turn; waiting: the request
+   * interval before the next post; fetching: reading the next post;
+   * finishing: resolving authors and building the import list.
+   */
+  stage: "queued" | "waiting" | "fetching" | "finishing";
+  /** Unique valid post links to fetch. */
+  total: number;
+  /** Posts fetched so far, failures included. */
+  processed: number;
+  failed: number;
+  /** Images found in the posts fetched so far. */
+  images: number;
+};
+
 export type IngestionVocabularyDto = {
   themes: FacetOptionDto[];
   tags: FacetOptionDto[];

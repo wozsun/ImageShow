@@ -55,6 +55,14 @@ export function useTrashPurgeBackground({
     });
   }, []);
 
+  /**
+   * The caller already settled the current global completion, so this stream
+   * settles again only for work that starts after it.
+   */
+  const acknowledgeCompletion = useCallback(() => {
+    if (followRef.current) followRef.current.followedPendingWork = false;
+  }, []);
+
   useEffect(() => {
     if (!enabled) return;
     follow();
@@ -65,5 +73,5 @@ export function useTrashPurgeBackground({
     };
   }, [enabled, follow]);
 
-  return { progress, follow };
+  return { progress, follow, acknowledgeCompletion };
 }

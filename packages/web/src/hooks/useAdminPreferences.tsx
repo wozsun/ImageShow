@@ -20,7 +20,7 @@ import {
   type AdminPreferenceValues,
   adminApiBasePath
 } from "@imageshow/shared/browser";
-import { apiWithEtag } from "../lib/api/client.js";
+import { apiWithEtag } from "../lib/api/etag-request.js";
 import { queryKeys } from "../lib/api/query-keys.js";
 import {
   assignAdminPreference,

@@ -7,6 +7,12 @@ type WeiboRequestDelayRange = {
   maxDelaySeconds: number;
 };
 
+/**
+ * Why a batch is not requesting: another batch holds the serial turn, or the
+ * request interval runs before its next request.
+ */
+type WeiboRequestWait = "queued" | "waiting";
+
 type WeiboScheduledRequest<Result> = (
   visitorCookie: string,
   signal: AbortSignal
@@ -17,6 +23,7 @@ type WeiboSchedulerBatch = {
   results: PromiseSettledResult<unknown>[];
   nextIndex: number;
   signal: AbortSignal;
+  onWait?: (wait: WeiboRequestWait) => void;
   settled: boolean;
   resolve: (results: PromiseSettledResult<unknown>[]) => void;
   reject: (error: unknown) => void;
@@ -120,7 +127,8 @@ class WeiboRequestScheduler {
 
   scheduleBatch<Result>(
     requests: readonly WeiboScheduledRequest<Result>[],
-    signal: AbortSignal
+    signal: AbortSignal,
+    onWait?: (wait: WeiboRequestWait) => void
   ): Promise<PromiseSettledResult<Result>[]> {
     signal.throwIfAborted();
     if (!requests.length) return Promise.resolve([]);
@@ -131,6 +139,7 @@ class WeiboRequestScheduler {
         results: new Array(requests.length),
         nextIndex: 0,
         signal,
+        onWait,
         settled: false,
         resolve: resolve as (results: PromiseSettledResult<unknown>[]) => void,
         reject,
@@ -148,6 +157,8 @@ class WeiboRequestScheduler {
         batch.abort();
         return;
       }
+      // A running drain serves another batch first.
+      if (this.draining || this.queue.length) onWait?.("queued");
       this.queue.push(batch);
       void this.drain();
     });
@@ -180,11 +191,13 @@ class WeiboRequestScheduler {
     return minMs + (maxMs - minMs) * sample;
   }
 
-  private async waitBeforeNextStatus(signal: AbortSignal) {
+  private async waitBeforeNextStatus(batch: WeiboSchedulerBatch) {
     if (this.lastStatusFinishedAt === undefined) return;
     const sampledDelayMs = this.sampledDelayMs();
     const elapsedMs = Math.max(0, this.now() - this.lastStatusFinishedAt);
-    await this.wait(Math.max(0, sampledDelayMs - elapsedMs), signal);
+    const delayMs = Math.max(0, sampledDelayMs - elapsedMs);
+    if (delayMs > 0) batch.onWait?.("waiting");
+    await this.wait(delayMs, batch.signal);
   }
 
   private async drain() {
@@ -205,7 +218,7 @@ class WeiboRequestScheduler {
         let visitorIdentity: string;
         try {
           visitorIdentity = await this.visitorIdentity.current(batch.signal);
-          await this.waitBeforeNextStatus(batch.signal);
+          await this.waitBeforeNextStatus(batch);
           batch.signal.throwIfAborted();
         } catch (error) {
           if (!batch.settled) this.rejectBatch(batch, error);
@@ -237,6 +250,7 @@ class WeiboRequestScheduler {
         if (batch.settled) continue;
         batch.results[requestIndex] = result!;
         if (batch.nextIndex < batch.requests.length) {
+          if (this.queue.length) batch.onWait?.("queued");
           this.queue.push(batch);
         } else {
           this.resolveBatch(batch);

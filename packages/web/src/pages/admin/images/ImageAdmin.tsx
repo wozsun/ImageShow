@@ -82,7 +82,7 @@ const viewOptions = [
 
 function purgeProgressDisplay({ total, pending }: ConfirmedPurgeProgress) {
   const value = total - pending;
-  return { value, max: total, label: `已删除 ${value} / ${total} 张` };
+  return { value, max: total, label: `已处理 ${value} / ${total} 张` };
 }
 
 export function ImageAdmin() {

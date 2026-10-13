@@ -144,6 +144,25 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
       })
     );
   }
+  // Percent-encoding lengthens a script source: the item limit applies to the
+  // stored form, so every accepted value parses again on save and startup.
+  const encodedScript = (characters: number) =>
+    `https://cdn.example.com/${"中".repeat(characters)}.js`;
+  const encodedSources = parseRuntimeConfig({
+    ...defaults,
+    site: { ...defaults.site, script_sources: [encodedScript(32)] }
+  });
+  assert.equal(encodedSources.site.script_sources[0]!.length, 315);
+  assert.deepEqual(parseRuntimeConfig(encodedSources), encodedSources, "已接受的来源再次保存时仍可解析");
+  assert.deepEqual(normalizeRuntimeConfig(encodedSources), encodedSources, "已接受的来源启动读取时原样保留");
+  assert.throws(
+    () =>
+      parseRuntimeConfig({
+        ...defaults,
+        site: { ...defaults.site, script_sources: [encodedScript(40)] }
+      }),
+    /规范化后/
+  );
   assert.equal(defaults.site.home.browse_target, "show");
   assert.deepEqual(defaults.site.show, {
     enabled: true,
@@ -522,6 +541,9 @@ test("[Server/配置] 完整环境播种严格覆盖全部已映射 RuntimeConfi
     SITE_ROBOTS_ENABLED: "false",
     SITE_RANDOM_SIZE: "small",
     SITE_ASSETS_BASE_URL: " https://ASSET.example.com:443///static//nested/// ",
+    SITE_SCRIPT_SOURCES:
+      '["https://*.CDN.example.net","https://scripts.example.com/","https://*.cdn.example.net",' +
+      '"https://static.example.org/js/./lib/../","https://cdn.example.org/资源/app.js"]',
     NORMALIZE_LARGE_MAX_SIZE_KB: "700",
     IMPORT_KEEP_ORIGINAL_LINK: '["weibo","url"]',
     WEIBO_SOURCE_ENABLED: "false",
@@ -545,6 +567,12 @@ test("[Server/配置] 完整环境播种严格覆盖全部已映射 RuntimeConfi
   assert.equal(environmentConfig.site.robots_enabled, false);
   assert.equal(environmentConfig.site.random_size, "small");
   assert.equal(environmentConfig.site.assets_base_url, "https://asset.example.com/static/nested");
+  assert.deepEqual(environmentConfig.site.script_sources, [
+    "https://*.cdn.example.net",
+    "https://scripts.example.com",
+    "https://static.example.org/js/",
+    "https://cdn.example.org/%E8%B5%84%E6%BA%90/app.js"
+  ]);
   assert.equal(environmentConfig.normalize.large.max_size_kb, 700);
   assert.deepEqual(environmentConfig.import.keep_original_link, ["weibo", "url"]);
   assert.equal(environmentConfig.weibo.source_enabled, false);
@@ -579,6 +607,25 @@ test("[Server/配置] 完整环境播种严格覆盖全部已映射 RuntimeConfi
     [
       { SITE_ASSETS_BASE_URL: "http://asset.example.com" },
       /SITE_ASSETS_BASE_URL.*site\.assets_base_url/
+    ],
+    // A script source is one CSP host source and cannot add other policy text.
+    [
+      { SITE_SCRIPT_SOURCES: '["https://cdn.example.com; script-src *"]' },
+      /SITE_SCRIPT_SOURCES.*site\.script_sources/
+    ],
+    [{ SITE_SCRIPT_SOURCES: '["http://cdn.example.com"]' }, /SITE_SCRIPT_SOURCES.*site\.script_sources/],
+    [{ SITE_SCRIPT_SOURCES: '["https://*.com"]' }, /SITE_SCRIPT_SOURCES.*site\.script_sources/],
+    [
+      { SITE_SCRIPT_SOURCES: JSON.stringify([`https://cdn.example.com/${"中".repeat(40)}.js`]) },
+      /SITE_SCRIPT_SOURCES.*site\.script_sources/
+    ],
+    [
+      { SITE_SCRIPT_SOURCES: '["https://cdn.example.com/js/app.js?v=1"]' },
+      /SITE_SCRIPT_SOURCES.*site\.script_sources/
+    ],
+    [
+      { SITE_SCRIPT_SOURCES: '["https://cdn.example.com/a,b.js"]' },
+      /SITE_SCRIPT_SOURCES.*site\.script_sources/
     ],
     [{ UPLOAD_MAX_ITEMS: " 1" }, /UPLOAD_MAX_ITEMS.*upload\.max_items/],
     [{ UPLOAD_MAX_ITEMS: "01" }, /UPLOAD_MAX_ITEMS.*upload\.max_items/],
@@ -1321,6 +1368,23 @@ const faviconLocation = async () => {
 assert.equal(await faviconLocation(), "/assets/brand/favicon.svg");
 await updateRuntimeConfig({ site: { assets_base_url: "https://asset.example.test/static" } });
 assert.equal(await faviconLocation(), "https://asset.example.test/static/brand/favicon.svg");
+await updateRuntimeConfig({
+  site: {
+    script_sources: [
+      "https://*.cdn.example.test",
+      "https://asset.example.test",
+      "https://static.example.test/lib/widget.js"
+    ]
+  }
+});
+const scriptSourcePage = await request("main.example.test", "/admin");
+assert.equal(
+  scriptSourcePage.headers.get("content-security-policy").split("; ")[0],
+  "script-src 'self' https://asset.example.test https://*.cdn.example.test https://static.example.test/lib/widget.js",
+  "页面脚本来源依次为本站、具体的静态资源 origin 与配置来源"
+);
+await scriptSourcePage.text();
+await updateRuntimeConfig({ site: { script_sources: [] } });
 assert.equal((await request("asset.example.test", "/asset/logo.svg")).status, 404);
 assert.equal((await request("asset.example.test", "/static/asset/logo.svg")).status, 404);
 await updateRuntimeConfig({ site: { icon: "/asset/sub/中文 图.png" } });

@@ -210,6 +210,13 @@ const settingsFields = {
     placeholder: "留空使用主站",
     hint: "须使用独立 Host，可带路径前缀。保存后刷新页面生效。"
   },
+  "site.script_sources": {
+    group: "addresses",
+    label: "额外脚本来源",
+    kind: "lines",
+    placeholder: "https://*.cdn.example.net\nhttps://static.example.org/js/\nhttps://cdn.example.org/lib/widget.js",
+    hint: "所有页面额外允许加载脚本的来源，静态资源公开 URL 已自动允许。每行一个 HTTPS 地址，最多 32 项；支持最左侧子域通配符，可带路径：以 / 结尾表示该目录，否则只匹配该文件。不含参数。保存后刷新页面生效。"
+  },
   "site.robots_enabled": {
     group: "visibility",
     label: "启用 robots.txt",

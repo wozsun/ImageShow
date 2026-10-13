@@ -65,8 +65,7 @@ export const appConfig = {
     cleanupRetryQueueCapacity: 100,
     cleanupRetryMaxAttempts: 8,
     tokenMaxBytes: 2 * 1024,
-    tokenPayloadMaxBytes: 1024,
-    sseAuthenticationHeartbeatSeconds: 30
+    tokenPayloadMaxBytes: 1024
   },
   derivedCacheTtlSeconds: 60 * 60,
   storageRegistry: {
@@ -98,6 +97,10 @@ export const appConfig = {
   },
 
   authentication: {
+    // Long-lived admin SSE re-validates its session and writes a keep-alive at
+    // this interval; logout closes registered streams at once. Keep it below
+    // the reverse proxy read timeout documented for deployment.
+    sseHeartbeatSeconds: 60,
     altcha: {
       // Give ordinary clients up to one minute to solve a challenge. Keep the
       // configurable work bounded so a challenge cannot run for several minutes.
@@ -107,10 +110,11 @@ export const appConfig = {
     }
   },
 
-  embedding: {
-    maxAllowedOrigins: 32,
-    maxOriginLength: 320,
-    maxSerializedOriginsLength: 4096
+  // Every configured CSP host-source list: embed ancestors and page scripts.
+  cspHostSources: {
+    maxItems: 32,
+    maxItemLength: 320,
+    maxSerializedLength: 4096
   },
 
   backgroundJob: {
@@ -168,6 +172,7 @@ export const appConfig = {
       random_size: "medium",
       random_fallback_order: ["device", "brightness", "author", "tag", "theme"] as RandomFallbackDimension[],
       assets_base_url: "",
+      script_sources: [] as string[],
       robots_enabled: false,
       icp: "",
       mps: "",

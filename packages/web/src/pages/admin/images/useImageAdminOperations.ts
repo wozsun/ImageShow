@@ -54,7 +54,10 @@ type UnknownOutcomeRefreshResult = {
 
 type ConfirmedMutationStatus = "error" | "success";
 
-/** Deletion progress inside the confirmation dialog, from server-pushed state. */
+/**
+ * Deletion progress inside the confirmation dialog, from server-pushed global
+ * state. `total - pending` is the processed count, failures included.
+ */
 export type ConfirmedPurgeProgress = { total: number; pending: number };
 type ConfirmedPurgeExit = "background" | "detached";
 type ConfirmedMutationFeedbackTiming = "after-list-refresh" | "before-list-refresh";
@@ -174,6 +177,9 @@ export function useImageAdminOperations({
   const backgroundPurge = useTrashPurgeBackground({
     enabled: canPurge,
     onSettled: (final) => {
+      // Both streams follow the same global state; a purge still followed in
+      // its dialog settles this completion once, with its own result.
+      if (exitConfirmedPurgeRef.current) return;
       void (async () => {
         let refreshFailed = false;
         try {
@@ -200,18 +206,23 @@ export function useImageAdminOperations({
   // is pending, or until the user leaves the rest to the background.
   const followConfirmedPurge = useCallback(
     async (receipt: ImagePurgeResponseDto) => {
-      let total = receipt.queued + receipt.already_queued;
-      if (!total) return { final: { pending: 0, failed: 0 }, total };
-      setConfirmedPurgeProgress({ total, pending: total });
+      const requested = receipt.queued + receipt.already_queued;
+      if (!requested) return { final: { pending: 0, failed: 0 }, requested };
+      let total = requested;
+      let pending = requested;
+      setConfirmedPurgeProgress({ total, pending });
       const exit = Promise.withResolvers<ConfirmedPurgeExit>();
       exitConfirmedPurgeRef.current = exit.resolve;
       const stream = openTrashPurgeProgress((progress) => {
-        total = Math.max(total, progress.pending);
-        setConfirmedPurgeProgress({ total, pending: progress.pending });
+        // Work joining the global queue while following (another purge or a
+        // retry) extends the total, so the processed count never goes back.
+        total += Math.max(0, progress.pending - pending);
+        pending = progress.pending;
+        setConfirmedPurgeProgress({ total, pending });
       });
       try {
         const outcome = await Promise.race([stream.done, exit.promise]);
-        return typeof outcome === "string" ? outcome : { final: outcome, total };
+        return typeof outcome === "string" ? outcome : { final: outcome, requested };
       } finally {
         stream.close();
         exitConfirmedPurgeRef.current = null;
@@ -375,12 +386,15 @@ export function useImageAdminOperations({
               }
               return true;
             }
-            const { final, total } = followed;
+            const { final, requested } = followed;
+            // Only a completion this dialog actually followed covers the
+            // background stream's; an empty receipt followed nothing.
+            if (final && requested) backgroundPurge.acknowledgeCompletion();
             text = !final
               ? "永久删除已提交，但进度连接中断，请稍后刷新确认结果"
               : final.failed
                 ? `永久删除已结束，回收站中有 ${final.failed} 张删除失败，将自动重试或需在检查页处理`
-                : withIgnoredImageCount(`已永久删除 ${total} 张`, receipt.ignored);
+                : withIgnoredImageCount(`已永久删除 ${requested} 张`, receipt.ignored);
             status = !final || final.failed || receipt.ignored ? "error" : "success";
             if (status === "error") {
               reportAdminUiError(
@@ -427,6 +441,7 @@ export function useImageAdminOperations({
       }
     },
     [
+      backgroundPurge.acknowledgeCompletion,
       backgroundPurge.follow,
       followConfirmedPurge,
       items,

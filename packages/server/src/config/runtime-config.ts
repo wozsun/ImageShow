@@ -8,6 +8,7 @@ import {
   altchaTtlSeconds,
   ingestionCommitConcurrency,
   embedAllowedOrigins,
+  siteScriptSources,
   galleryOrder,
   homeBackground,
   homeBannerLabel,
@@ -95,6 +96,7 @@ const runtimeConfigSchema = z.strictObject({
         message: fallbackOrderMessage
       }),
     assets_base_url: publicBaseUrlSchema,
+    script_sources: siteScriptSources,
     robots_enabled: z.boolean(),
     icp: siteFooterText,
     mps: siteFooterText,

@@ -20,23 +20,31 @@ const securityHeaders: Readonly<Record<string, string>> = {
   "Content-Security-Policy": "object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 };
 
-export const spaDocumentHeaders: Readonly<Record<string, string>> = {
+const siteDocumentHeaders: Readonly<Record<string, string>> = {
   ...commonSecurityHeaders,
-  "X-Frame-Options": "DENY",
-  "Content-Security-Policy":
-    "script-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+  "X-Frame-Options": "DENY"
 };
 
-function documentScriptPolicy(assetsBaseUrl: string) {
-  const assetSource = assetsBaseUrl ? ` ${new URL(assetsBaseUrl).origin}` : "";
-  return `script-src 'self'${assetSource}; worker-src 'self'; object-src 'none'; base-uri 'self'`;
+/** The script sources every page document allows, from the site configuration. */
+export type DocumentScriptSources = Readonly<{
+  assets_base_url: string;
+  /** Validated CSP host sources. */
+  script_sources: readonly string[];
+}>;
+
+function documentScriptPolicy({ assets_base_url, script_sources }: DocumentScriptSources) {
+  const sources = [
+    "'self'",
+    ...(assets_base_url ? [new URL(assets_base_url).origin] : []),
+    ...script_sources
+  ];
+  return `script-src ${[...new Set(sources)].join(" ")}; worker-src 'self'; object-src 'none'; base-uri 'self'`;
 }
 
-export function assetSpaDocumentHeaders(assetsBaseUrl: string): Readonly<Record<string, string>> {
-  if (!assetsBaseUrl) return spaDocumentHeaders;
+export function siteSpaDocumentHeaders(site: DocumentScriptSources): Readonly<Record<string, string>> {
   return {
-    ...spaDocumentHeaders,
-    "Content-Security-Policy": `${documentScriptPolicy(assetsBaseUrl)}; frame-ancestors 'none'`
+    ...siteDocumentHeaders,
+    "Content-Security-Policy": `${documentScriptPolicy(site)}; frame-ancestors 'none'`
   };
 }
 
@@ -44,14 +52,14 @@ const embedDocumentContextKey = "embedDocumentResponse";
 
 export function embedSpaDocumentHeaders(
   allowedOrigins: readonly string[],
-  assetsBaseUrl = ""
+  site: DocumentScriptSources
 ): Readonly<Record<string, string>> {
   const frameAncestors = allowedOrigins.length
     ? allowedOrigins.join(" ")
     : "'none'";
   return {
     ...commonSecurityHeaders,
-    "Content-Security-Policy": `${documentScriptPolicy(assetsBaseUrl)}; frame-ancestors ${frameAncestors}`
+    "Content-Security-Policy": `${documentScriptPolicy(site)}; frame-ancestors ${frameAncestors}`
   };
 }
 

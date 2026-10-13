@@ -71,8 +71,7 @@ import {
   readIngestionPreview,
   readIngestionStatuses
 } from "../images/ingestion/queue/session-view.ts";
-import { createWeiboImportBatchManifest } from "../images/ingestion/sources/weibo.ts";
-import { WeiboImportError } from "../images/ingestion/sources/weibo-types.ts";
+import { streamWeiboImportParse } from "../images/ingestion/sources/weibo-parse-stream.ts";
 import { adminSessionOf } from "../core/http/admin-session-context.ts";
 import { getIngestionVocabulary } from "../vocab/cache.ts";
 
@@ -255,33 +254,10 @@ export function registerIngestionRoutes(app: Hono) {
         `单批最多允许 ${maxPosts} 条微博链接`
       );
     }
-    try {
-      return c.json(
-        apiSuccess(
-          await createWeiboImportBatchManifest(input.urls, {
-            sourceEnabled: runtimeConfig.weibo.source_enabled,
-            timeZone: process.env.TZ,
-            signal: c.req.raw.signal
-          })
-        )
-      );
-    } catch (error) {
-      if (error instanceof WeiboImportError) {
-        let status: 400 | 422 | 502 = 422;
-        if (error.code === "weibo_invalid_url"
-          || error.code === "weibo_image_limit_exceeded")
-          status = 400;
-        if (
-          error.code === "weibo_visitor_failed" ||
-          error.code === "weibo_visitor_rejected" ||
-          error.code === "weibo_request_failed" ||
-          error.code === "weibo_response_too_large"
-        )
-          status = 502;
-        throw new ApiError(status, error.code, error.message);
-      }
-      throw manifestApiError(error);
-    }
+    return streamWeiboImportParse(c, adminSessionOf(c), input.urls, {
+      sourceEnabled: runtimeConfig.weibo.source_enabled,
+      timeZone: process.env.TZ
+    });
   });
 
   app.get(`${ingestionPreviewPath}/:sessionId/:imageId/full`, (c) =>

@@ -4,7 +4,7 @@ import { AsyncActionButton } from "../../../components/actions/AsyncActionButton
 import { DialogFrame } from "../../../components/dialog/DialogFrame.js";
 import { NumberInput } from "../../../components/form/NumberInput.js";
 import { FieldError } from "../../../components/form/FieldError.js";
-import { apiValidationIssues } from "../../../lib/api/client.js";
+import { apiValidationIssues } from "../../../lib/api/validation-issues.js";
 import { OverlayScrollbar } from "../../../components/layout/OverlayScrollbar.js";
 import { storageBackendDisplay, storageTypeLabel } from "../../../lib/ui/select-options.js";
 import {

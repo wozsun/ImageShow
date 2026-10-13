@@ -32,6 +32,7 @@
 | `site.random_size` | `"medium"` | `/random` 默认的图片尺寸：`large`、`medium`、`small` |
 | `site.random_fallback_order` | `["device","brightness","author","tag","theme"]` | 零匹配回退时 `all` 展开的顺序，五个维度各出现一次：`fallback=all` 按此顺序放宽全部维度，列表末尾的 `all` 按此顺序放宽其余维度；请求中写明的维度按书写顺序放宽 |
 | `site.assets_base_url` | `""` | 前端静态文件的独立地址，见[静态资源地址](#静态资源地址) |
+| `site.script_sources` | `[]` | 所有页面额外允许加载脚本的地址，JSON 数组，最多 32 个，见[静态资源地址](#静态资源地址)。静态资源地址已自动允许 |
 
 ### 首页与页脚
 
@@ -102,6 +103,17 @@ SITE_FOOTER='Powered by <a href="https://github.com/wozsun/ImageShow">ImageShow<
 - 必须是 HTTPS，域名不能与主站相同，不能带账号密码、查询参数或 `#`。可以与本地存储的图片公开地址共用一个域名。
 - 先配置好域名和反向代理（保留 Host 和路径，转发到 ImageShow），再保存设置并刷新页面，不需要重新构建。
 - 已经打开的页面仍使用旧地址，切换期间请保持旧地址可用。登录验证所需的脚本始终从主站加载。
+- 页面只允许运行本站和静态资源地址上的脚本。还需要从其他网站加载脚本（例如 CDN 分发的统计脚本）时，把地址加入 `site.script_sources`，保存后刷新页面生效，例如：
+
+  ```json
+  ["https://stats.example.com", "https://*.cdn.example.net", "https://static.example.org/js/", "https://cdn.example.org/lib/widget.js"]
+  ```
+
+  - 每项是 HTTPS 地址，可带端口，不能带参数、`#`、账号密码，不能是 IP 或 HTTP；`*.` 开头表示所有子域名（不含域名本身）。
+  - 每项最多 320 字符，路径中的中文等字符按百分号编码后的长度计算；去重后的列表以空格连接时总长最多 4096 字符。
+  - 可以带路径：以 `/` 结尾表示该目录下的所有文件，否则只允许这一个文件。使用公共 CDN 时尽量写到目录或文件，不要放行整个 CDN 域名。
+  - 脚本地址发生跳转后，浏览器只检查跳转目标的域名，不再检查路径。
+  - ImageShow 本身不加载这些脚本，这里只放行由反向代理或 CDN 插入页面的外链脚本；内联脚本仍会被拦截。放行的脚本同样在后台页面运行，能以已登录管理员的身份操作，只填写你信任的地址。
 
 ## 外部嵌入
 

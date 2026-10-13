@@ -68,6 +68,8 @@ type RuntimeSiteSettings = {
   random_size: RandomImageSize;
   random_fallback_order: RandomFallbackDimension[];
   assets_base_url: string;
+  /** Extra script sources for every page document, as CSP host sources. */
+  script_sources: string[];
   robots_enabled: boolean;
   icp: string;
   mps: string;

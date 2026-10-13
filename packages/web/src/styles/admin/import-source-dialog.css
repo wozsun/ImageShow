@@ -117,6 +117,10 @@
 .import-source-result-summary.is-warning {
   color: var(--admin-color-warning-text);
 }
+.import-source-result-summary.is-pending {
+  color: var(--admin-color-pending-text);
+  font-variant-numeric: tabular-nums;
+}
 .import-issue-preview {
   display: grid;
   gap: 8px;

@@ -11,9 +11,9 @@ import {
 import {
   ApiClientError,
   api,
-  apiWithEtag,
   clearCsrfToken
 } from "../../../../packages/web/src/lib/api/client.ts";
+import { apiWithEtag } from "../../../../packages/web/src/lib/api/etag-request.ts";
 import { invalidateImageDataAfterMetadataSave } from "../../../../packages/web/src/lib/api/query-invalidation.ts";
 import { queryKeys } from "../../../../packages/web/src/lib/api/query-keys.ts";
 
@@ -1338,6 +1338,17 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
             const progressbar = purgeDialog.querySelector('[role="progressbar"]');
             assert.equal(progressbar?.getAttribute("aria-valuenow"), "0");
             assert.equal(progressbar?.getAttribute("aria-valuemax"), "1");
+            // Work joining the global queue extends the total; the processed
+            // count never goes back, and the result counts this request only.
+            await dialogProgress.push({ pending: 3, failed: 0 });
+            assert.equal(progressbar?.getAttribute("aria-valuenow"), "0");
+            assert.equal(progressbar?.getAttribute("aria-valuemax"), "3");
+            await dialogProgress.push({ pending: 1, failed: 1 });
+            assert.equal(progressbar?.getAttribute("aria-valuenow"), "2");
+            assert.equal(progressbar?.getAttribute("aria-valuemax"), "3");
+            await dialogProgress.push({ pending: 2, failed: 0 });
+            assert.equal(progressbar?.getAttribute("aria-valuenow"), "2", "重试回到队列时已处理数不倒退");
+            assert.equal(progressbar?.getAttribute("aria-valuemax"), "4");
             assert.ok(buttonWithText("转入后台"), "进行中的删除可以转入后台");
             await dialogProgress.push({ pending: 0, failed: 0 });
             assert.equal(dialogProgress.readyState, PurgeProgressEventSource.CLOSED);
@@ -1475,48 +1486,94 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
             document.querySelector(".image-admin-feedback-region .action-feedback-success")
           );
 
+          const successFeedback = () =>
+            document.querySelector(".image-admin-feedback-region .action-feedback-success")
+              ?.textContent ?? "";
+          // Confirms a purge of the first card and returns its dialog stream.
+          const confirmPurgeInDialog = async () => {
+            const streamCount = progressStreams.length;
+            const purge = container.querySelector<HTMLButtonElement>(
+              'button[aria-label^="永久删除图片："]'
+            );
+            assert.ok(purge);
+            await click(purge);
+            await waitFor(
+              () => Boolean(document.querySelector("[data-dialog-frame] form")),
+              "purge confirmation did not open"
+            );
+            const form = document.querySelector<HTMLFormElement>("[data-dialog-frame] form");
+            assert.ok(form);
+            await submitForm(form);
+            await waitFor(
+              () => Boolean(form.querySelector('button[aria-label="确认删除"]')),
+              "purge dialog did not enter final confirmation state"
+            );
+            await submitForm(form);
+            await waitFor(
+              () => progressStreams.length === streamCount + 1,
+              "purge dialog did not follow progress"
+            );
+            return progressStreams[streamCount]!;
+          };
+          const handOverToBackground = async (dialogStream: PurgeProgressEventSource) => {
+            const streamCount = progressStreams.length;
+            await dialogStream.push({ pending: 1, failed: 0 });
+            await click(buttonWithText("转入后台"));
+            await waitFor(
+              () => progressStreams.length === streamCount + 1,
+              "handover did not start following in the background"
+            );
+            assert.equal(dialogStream.readyState, PurgeProgressEventSource.CLOSED);
+            await React.act(async () => {
+              await clock.advanceBy(600);
+            });
+            await waitFor(
+              () => !document.querySelector("[data-dialog-frame]"),
+              "handover did not close the purge dialog"
+            );
+            return progressStreams[streamCount]!;
+          };
+
           // A deletion handed over to the background refreshes the list and
           // reports once, even when it ends before the page stream's first state.
           const listRequestsBeforeHandover = listRequests.length;
-          const handoverPurge = container.querySelector<HTMLButtonElement>(
-            'button[aria-label^="永久删除图片："]'
-          );
-          assert.ok(handoverPurge);
-          await click(handoverPurge);
+          const handedOver = await handOverToBackground(await confirmPurgeInDialog());
+          await handedOver.push({ pending: 0, failed: 0 });
           await waitFor(
-            () => Boolean(document.querySelector("[data-dialog-frame] form")),
-            "handover purge confirmation did not open"
-          );
-          const handoverForm = document.querySelector<HTMLFormElement>("[data-dialog-frame] form");
-          assert.ok(handoverForm);
-          await submitForm(handoverForm);
-          await waitFor(
-            () => Boolean(handoverForm.querySelector('button[aria-label="确认删除"]')),
-            "handover purge dialog did not enter final confirmation state"
-          );
-          await submitForm(handoverForm);
-          await waitFor(
-            () => progressStreams.length === 3,
-            "handover purge dialog did not follow progress"
-          );
-          await progressStreams[2]!.push({ pending: 1, failed: 0 });
-          await click(buttonWithText("转入后台"));
-          await waitFor(
-            () => progressStreams.length === 4,
-            "handover did not start following in the background"
-          );
-          assert.equal(progressStreams[2]!.readyState, PurgeProgressEventSource.CLOSED);
-          await progressStreams[3]!.push({ pending: 0, failed: 0 });
-          await waitFor(
-            () =>
-              document
-                .querySelector(".image-admin-feedback-region .action-feedback-success")
-                ?.textContent?.includes("后台永久删除已完成") === true,
+            () => successFeedback().includes("后台永久删除已完成"),
             "handed-over purge did not report its completion"
           );
           assert.ok(
             listRequests.length >= listRequestsBeforeHandover + 2,
             "交接时与后台删除结束时各刷新一次列表"
+          );
+
+          // While a handed-over deletion still runs, a purge followed in its
+          // dialog settles their shared global completion once.
+          const background = await handOverToBackground(await confirmPurgeInDialog());
+          await background.push({ pending: 1, failed: 0 });
+          const followed = await confirmPurgeInDialog();
+          await followed.push({ pending: 2, failed: 0 });
+          const listRequestsBeforeCompletion = listRequests.length;
+          await followed.push({ pending: 0, failed: 0 });
+          await React.act(async () => {
+            await clock.advanceBy(600);
+          });
+          await waitFor(
+            () => !document.querySelector("[data-dialog-frame]")
+              && successFeedback().includes("已永久删除 1 张"),
+            "dialog purge did not settle the shared completion"
+          );
+          await background.push({ pending: 0, failed: 0 });
+          await React.act(async () => {
+            await clock.advanceBy(100);
+          });
+          assert.equal(background.readyState, PurgeProgressEventSource.CLOSED);
+          assert.match(successFeedback(), /已永久删除 1 张/u, "后台流不再覆盖同一次完成的结果");
+          assert.equal(
+            listRequests.length,
+            listRequestsBeforeCompletion + 1,
+            "同一次完成只刷新一次列表"
           );
         }
       } finally {

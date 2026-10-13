@@ -1,5 +1,8 @@
 import { appConfig } from "@imageshow/shared";
-import type { WeiboImportResultDto } from "@imageshow/shared/browser";
+import type {
+  WeiboImportProgressDto,
+  WeiboImportResultDto
+} from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../../../config/runtime-config-store.ts";
 import { resolveWeiboAuthorSlugs } from "../../../vocab/authors/query.ts";
 import { parseJsonlManifest } from "./jsonl.ts";
@@ -23,6 +26,8 @@ type WeiboManifestOptions = {
   signal: AbortSignal;
   timeZone?: string;
   sourceEnabled: boolean;
+  /** Receives a snapshot whenever a stage is entered, with the counts so far. */
+  onProgress?: (progress: WeiboImportProgressDto) => void;
 };
 
 type IndexedWeiboUrl = {
@@ -109,22 +114,45 @@ export async function createWeiboImportBatchManifest(
     }
   });
 
+  const progress: WeiboImportProgressDto = {
+    stage: "fetching",
+    total: validUrls.length,
+    processed: 0,
+    failed: 0,
+    images: 0
+  };
+  // Report a stage only once it is entered: the scheduler reports queueing
+  // and the request interval, each request its start. Completed counts ride
+  // on the next report instead of announcing the next post early.
+  const reportStage = (stage: WeiboImportProgressDto["stage"]) => {
+    progress.stage = stage;
+    options.onProgress?.({ ...progress });
+  };
+
   if (validUrls.length) {
-    let fetchedImageCount = 0;
     const fetched = await weiboRequestScheduler.scheduleBatch(
       validUrls.map(
         ({ line, parsedUrl }) =>
           async (visitorCookie: string, signal: AbortSignal): Promise<WeiboBatchExtraction> => {
-            const post = extractWeiboPost(
-              await fetchWeiboStatus(parsedUrl.identifier, visitorCookie, signal),
-              parsedUrl
-            );
-            fetchedImageCount += post.image_count;
-            assertWeiboImageCountWithinHardLimit(fetchedImageCount);
-            return { line, post };
+            reportStage("fetching");
+            try {
+              const post = extractWeiboPost(
+                await fetchWeiboStatus(parsedUrl.identifier, visitorCookie, signal),
+                parsedUrl
+              );
+              progress.images += post.image_count;
+              assertWeiboImageCountWithinHardLimit(progress.images);
+              return { line, post };
+            } catch (error) {
+              progress.failed += 1;
+              throw error;
+            } finally {
+              progress.processed += 1;
+            }
           }
       ),
-      options.signal
+      options.signal,
+      reportStage
     );
     for (const [index, result] of fetched.entries()) {
       const { line, url } = validUrls[index];
@@ -137,6 +165,7 @@ export async function createWeiboImportBatchManifest(
         });
       }
     }
+    reportStage("finishing");
   }
 
   const posts: ExtractedWeiboPost[] = [];

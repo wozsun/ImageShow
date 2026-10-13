@@ -11,12 +11,11 @@ import { siteConfigPayload } from "../config/app-settings.ts";
 import { staticResourceBaseUrl } from "../config/site-host.ts";
 import { effectiveEmbedAncestorSources } from "../config/embed-ancestors.ts";
 import {
-  assetSpaDocumentHeaders,
   embedSpaDocumentHeaders,
   markEmbedDocumentResponse,
   noStoreCacheControl,
   publicDocumentCacheControl,
-  spaDocumentHeaders
+  siteSpaDocumentHeaders
 } from "../core/http/headers.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
 import {
@@ -89,17 +88,17 @@ function spaDocumentResponse(
   representation: ContentRepresentation,
   options: {
     cacheControl?: string;
-    headers?: Readonly<Record<string, string>>;
+    headers: Readonly<Record<string, string>>;
     ifNoneMatch?: string | null;
     acceptEncoding?: string;
-  } = {}
+  }
 ) {
   const selected = encodedSpaRepresentation(representation, options.acceptEncoding);
   if (!selected) {
     return new Response(null, {
       status: 406,
       headers: {
-        ...(options.headers ?? spaDocumentHeaders),
+        ...options.headers,
         Vary: "Accept-Encoding",
         "Cache-Control": noStoreCacheControl
       }
@@ -108,7 +107,7 @@ function spaDocumentResponse(
   return contentResponse(selected, {
     cacheControl: options.cacheControl ?? publicDocumentCacheControl,
     contentType: "text/html; charset=utf-8",
-    headers: { ...(options.headers ?? spaDocumentHeaders), Vary: "Accept-Encoding" },
+    headers: { ...options.headers, Vary: "Accept-Encoding" },
     ifNoneMatch: options.ifNoneMatch
   });
 }
@@ -116,7 +115,7 @@ function spaDocumentResponse(
 async function spaHandler(c: Context) {
   const runtime = getRuntimeConfig();
   return spaDocumentResponse(spaRepresentation(runtime), {
-    headers: assetSpaDocumentHeaders(runtime.site.assets_base_url),
+    headers: siteSpaDocumentHeaders(runtime.site),
     ifNoneMatch: c.req.header("if-none-match"),
     acceptEncoding: c.req.header("accept-encoding")
   });
@@ -139,7 +138,7 @@ async function embedSpaHandler(c: Context) {
     c,
     spaDocumentResponse(spaRepresentation(runtime), {
       cacheControl: noStoreCacheControl,
-      headers: embedSpaDocumentHeaders(allowedAncestors, runtime.site.assets_base_url),
+      headers: embedSpaDocumentHeaders(allowedAncestors, runtime.site),
       ifNoneMatch: c.req.header("if-none-match"),
       acceptEncoding: c.req.header("accept-encoding")
     })

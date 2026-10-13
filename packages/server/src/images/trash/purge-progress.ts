@@ -1,15 +1,11 @@
 import type { TrashPurgeProgressDto } from "@imageshow/shared/browser";
 import type { Context } from "hono";
-import { streamSSE } from "hono/streaming";
 import { setTimeout as delay } from "node:timers/promises";
 import { raceWithAbortSignal } from "../../core/abort.ts";
 import { pool } from "../../core/database/pools.ts";
 import type { AdminSession } from "../../core/http/admin-session-context.ts";
-import { logger } from "../../core/logger.ts";
-import { registerAdminSessionConnection } from "../../users/admin-session-connections.ts";
-import { validateAdminSessionById } from "../../users/admin-session.ts";
+import { streamAdminSse } from "../../users/admin-sse.ts";
 
-const authenticationHeartbeatMs = 30_000;
 const minReadIntervalMs = 200;
 // A failed attempt settles after its handler returns, so no completion signal
 // follows the last job; an idle re-read observes that settlement.
@@ -57,77 +53,43 @@ function waitForSignal(
  * idle trash view costs a single short request.
  */
 export function streamTrashPurgeProgress(context: Context, session: AdminSession) {
-  context.header("X-Accel-Buffering", "no");
-  const response = streamSSE(context, async (stream) => {
-    const controller = new AbortController();
-    let progressed = Promise.withResolvers<void>();
-    const close = () => {
-      if (!controller.signal.aborted) controller.abort();
-      progressed.resolve();
-    };
-    const onProgress = () => progressed.resolve();
-    context.req.raw.signal.addEventListener("abort", close, { once: true });
-    stream.onAbort(close);
-    if (context.req.raw.signal.aborted) close();
-    const unregisterSession = registerAdminSessionConnection({
-      sessionId: session.id,
-      close
-    });
-    progressListeners.add(onProgress);
-    const sameSession = (current: AdminSession | null) =>
-      current?.username === session.username && current.role === session.role;
-    try {
-      let lastData = "";
-      let lastReadAt = 0;
-      let lastWriteAt = Date.now();
-      let lastAuthenticatedAt = 0;
-      while (!controller.signal.aborted) {
-        if (Date.now() - lastAuthenticatedAt >= authenticationHeartbeatMs) {
-          const current = await raceWithAbortSignal(
-            controller.signal,
-            validateAdminSessionById(session.id),
-            "Trash purge progress authentication aborted"
+  return streamAdminSse(
+    context,
+    { session, closedEvent: "trash_purge_progress_sse_closed" },
+    async ({ stream, signal, onHeartbeat }) => {
+      let progressed = Promise.withResolvers<void>();
+      const onProgress = () => progressed.resolve();
+      signal.addEventListener("abort", onProgress, { once: true });
+      progressListeners.add(onProgress);
+      onHeartbeat(() => {
+        void stream.writeSSE({ event: "ping", data: "{}" }).catch(() => undefined);
+      });
+      try {
+        let lastData = "";
+        let lastReadAt = 0;
+        while (!signal.aborted) {
+          const spacingMs = minReadIntervalMs - (Date.now() - lastReadAt);
+          if (spacingMs > 0) {
+            await delay(spacingMs, undefined, { signal });
+          }
+          progressed = Promise.withResolvers<void>();
+          lastReadAt = Date.now();
+          const progress = await raceWithAbortSignal(
+            signal,
+            readTrashPurgeProgress(),
+            "Trash purge progress read aborted"
           );
-          if (!sameSession(current)) return;
-          lastAuthenticatedAt = Date.now();
+          const data = JSON.stringify(progress);
+          if (data !== lastData) {
+            await stream.writeSSE({ event: "progress", data });
+            lastData = data;
+          }
+          if (!progress.pending) return;
+          await waitForSignal(signal, progressed.promise, idleReadIntervalMs);
         }
-        const spacingMs = minReadIntervalMs - (Date.now() - lastReadAt);
-        if (spacingMs > 0) {
-          await delay(spacingMs, undefined, { signal: controller.signal });
-        }
-        progressed = Promise.withResolvers<void>();
-        lastReadAt = Date.now();
-        const progress = await raceWithAbortSignal(
-          controller.signal,
-          readTrashPurgeProgress(),
-          "Trash purge progress read aborted"
-        );
-        const data = JSON.stringify(progress);
-        if (data !== lastData) {
-          await stream.writeSSE({ event: "progress", data });
-          lastData = data;
-          lastWriteAt = Date.now();
-        } else if (Date.now() - lastWriteAt >= authenticationHeartbeatMs) {
-          await stream.writeSSE({ event: "ping", data: "{}" });
-          lastWriteAt = Date.now();
-        }
-        if (!progress.pending) return;
-        await waitForSignal(controller.signal, progressed.promise, idleReadIntervalMs);
+      } finally {
+        progressListeners.delete(onProgress);
       }
-    } catch (error) {
-      if (!controller.signal.aborted) {
-        logger.warn("trash_purge_progress_sse_closed", {
-          owner: session.username,
-          error
-        });
-      }
-    } finally {
-      close();
-      progressListeners.delete(onProgress);
-      unregisterSession();
-      context.req.raw.signal.removeEventListener("abort", close);
     }
-  });
-  response.headers.set("Cache-Control", "no-store, no-transform");
-  return response;
+  );
 }

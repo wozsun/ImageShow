@@ -9,7 +9,7 @@ import {
   adminApiBasePath
 } from "@imageshow/shared/browser";
 import type { QueryClient } from "@tanstack/react-query";
-import { apiWithEtag } from "../../../lib/api/client.js";
+import { apiWithEtag } from "../../../lib/api/etag-request.js";
 import { queryKeys } from "../../../lib/api/query-keys.js";
 import { recordAdminImageListValidation } from "../../../lib/api/admin-image-list-validation.js";
 import type { ImageAdminFilterValues } from "./ImageAdminFilters.js";

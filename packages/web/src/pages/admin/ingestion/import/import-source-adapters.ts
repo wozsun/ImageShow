@@ -7,6 +7,7 @@ import {
   parseImportJsonl,
   parseWeiboImport,
   type JsonlManifestResult,
+  type WeiboImportProgress,
   type WeiboImportResult
 } from "../queue/ingestion-http-client.js";
 import {
@@ -41,6 +42,13 @@ export type ParsedImportSourceResult =
       result: WeiboImportResult;
     });
 
+type ImportSourceParseContext = {
+  signal: AbortSignal;
+  /** The link list the dialog already parsed for its limit check. */
+  urlResult?: ImportUrlParseResult;
+  onWeiboProgress: (progress: WeiboImportProgress) => void;
+};
+
 export type ImportSourceModeAdapter = {
   presentation: {
     heading: string;
@@ -54,8 +62,7 @@ export type ImportSourceModeAdapter = {
   hasInput: (text: string) => boolean;
   parse: (
     text: string,
-    signal: AbortSignal,
-    urlResult?: ImportUrlParseResult
+    context: ImportSourceParseContext
   ) => Promise<ParsedImportSourceResult>;
 };
 
@@ -85,7 +92,7 @@ const urlsAdapter: ImportSourceModeAdapter = {
   parseText: "解析链接",
   hint: (maxItems) => `每行一个 URL，最多 ${maxItems} 条；图片属性使用当前默认属性。`,
   hasInput: (text) => Boolean(text.trim()),
-  parse: async (text, _signal, urlResult) => {
+  parse: async (text, { urlResult }) => {
     const result = urlResult ?? parseImportUrlInput(text);
     return {
       mode: "urls",
@@ -114,7 +121,7 @@ const jsonlAdapter: ImportSourceModeAdapter = {
   parseText: "解析清单",
   hint: (maxItems) => `每行一个 JSON，最多 ${maxItems} 条；单值字段优先，标签与默认标签合并。`,
   hasInput: (text) => Boolean(text.trim()),
-  parse: async (text, signal) => {
+  parse: async (text, { signal }) => {
     const manifest = await parseImportJsonl(text, signal);
     return {
       mode: "jsonl",
@@ -140,11 +147,12 @@ const weiboAdapter: ImportSourceModeAdapter = {
   parseText: "解析微博",
   hint: (maxItems) => `每行一条公开微博链接，最多 ${maxItems} 条；默认使用微博元数据。`,
   hasInput: (text) => parseWeiboImportLines(text).length > 0,
-  parse: async (text, signal) => {
+  parse: async (text, { signal, onWeiboProgress }) => {
     const inputLines = parseWeiboImportLines(text);
     const result = await parseWeiboImport(
       inputLines.map((entry) => entry.url),
-      signal
+      signal,
+      onWeiboProgress
     );
     const normalizedResult: WeiboImportResult = {
       ...result,

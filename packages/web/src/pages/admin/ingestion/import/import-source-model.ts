@@ -1,4 +1,7 @@
-import { ingestionBatchHardLimit } from "@imageshow/shared/browser";
+import {
+  ingestionBatchHardLimit,
+  type WeiboImportProgressDto
+} from "@imageshow/shared/browser";
 import {
   parseImportUrlInput,
   type ImportUrlParseIssue,
@@ -38,6 +41,33 @@ export function urlImportIssueText(issues: ImportUrlParseIssue[]) {
   return issues
     .map((issue) => `第 ${issue.line} 行：${urlImportIssueMessage(issue)}\n${issue.raw}`)
     .join("\n\n");
+}
+
+/**
+ * Only what the server observed: no estimated percentage or countdown. The
+ * counts lead and change once per post; the frequently changing stage trails.
+ */
+export function formatWeiboParseProgress({
+  stage,
+  total,
+  processed,
+  failed,
+  images
+}: WeiboImportProgressDto) {
+  const current =
+    stage === "queued"
+      ? "排队等待其他微博解析"
+      : stage === "waiting"
+        ? "等待请求间隔"
+        : stage === "fetching" && processed < total
+          ? `正在获取第 ${processed + 1} 条`
+          : "正在整理结果";
+  return [
+    `已完成 ${processed} / ${total} 条`,
+    `已找到 ${images} 张`,
+    failed ? `${failed} 条失败` : "",
+    current
+  ].filter(Boolean).join(" · ");
 }
 
 export type WeiboImportInputLine = {

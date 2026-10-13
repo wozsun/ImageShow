@@ -37,9 +37,11 @@ import {
   type UploadIntentResultDto,
   type UploadRawResultDto,
   type WeiboImportParseErrorDto,
+  type WeiboImportProgressDto,
   type WeiboImportResultDto
 } from "@imageshow/shared/browser";
 import { api, getCsrfToken } from "../../../../lib/api/client.js";
+import { apiProgressStream } from "./progress-stream.js";
 
 // Control requests have no file body; bound unknown responses so cancellation
 // can continue through the original idempotent identity after transport loss.
@@ -53,6 +55,7 @@ export type ImportManifestParseError = ImportManifestParseErrorDto;
 export type JsonlManifestResult = ImportManifestResultDto;
 export type WeiboImportParseError = WeiboImportParseErrorDto;
 export type WeiboImportResult = WeiboImportResultDto;
+export type WeiboImportProgress = WeiboImportProgressDto;
 
 export function createUploadIntents(
   input: UploadIntentInputDto,
@@ -151,12 +154,17 @@ export function parseImportJsonl(content: string, signal?: AbortSignal) {
   });
 }
 
-export function parseWeiboImport(urls: string[], signal?: AbortSignal) {
-  return api<WeiboImportResult>(importWeiboParsePath, {
-    method: "POST",
-    body: JSON.stringify({ urls }),
-    signal
-  });
+/** The response pushes parse progress on the same request, which the signal cancels. */
+export function parseWeiboImport(
+  urls: string[],
+  signal: AbortSignal,
+  onProgress: (progress: WeiboImportProgress) => void
+) {
+  return apiProgressStream<WeiboImportResult, WeiboImportProgress>(
+    importWeiboParsePath,
+    { method: "POST", body: JSON.stringify({ urls }), signal },
+    onProgress
+  );
 }
 
 type UploadResponse = UploadRawResultDto & { ok: true };

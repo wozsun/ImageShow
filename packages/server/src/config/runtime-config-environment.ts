@@ -90,6 +90,11 @@ export const runtimeConfigEnvironmentBindings = [
     environmentVariable: "SITE_ASSETS_BASE_URL",
     valueKind: "string"
   },
+  {
+    path: "site.script_sources",
+    environmentVariable: "SITE_SCRIPT_SOURCES",
+    valueKind: "json-array"
+  },
   { path: "site.robots_enabled", environmentVariable: "SITE_ROBOTS_ENABLED", valueKind: "boolean" },
   { path: "site.icp", environmentVariable: "SITE_ICP", valueKind: "string" },
   { path: "site.mps", environmentVariable: "SITE_MPS", valueKind: "string" },

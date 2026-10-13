@@ -225,10 +225,35 @@ test("[Web/内容接入] 导入菜单键盘与来源标签保持真实 DOM 焦�
         items: [{ original: "https://example.com/image.jpg", line: 1, batch_position: 0 }],
         errors: []
       };
-      await h.respond(
-        requestIndex,
-        mode === "weibo" ? { manifest, errors: [], posts: [] } : manifest
-      );
+      if (mode === "weibo") {
+        // Weibo parsing pushes progress on the same request before its result.
+        const events = new TransformStream<string, string>();
+        const writer = events.writable.getWriter();
+        await h.React.act(async () =>
+          h.pending[requestIndex].resolve(
+            new Response(events.readable.pipeThrough(new TextEncoderStream()), {
+              headers: { "content-type": "text/event-stream" }
+            })
+          )
+        );
+        const progress = { stage: "waiting", total: 1, processed: 0, failed: 0, images: 0 };
+        await h.React.act(async () => {
+          await writer.write(`event: progress\ndata: ${JSON.stringify(progress)}\n\n`);
+        });
+        await h.flush();
+        assert.ok(
+          h.document.querySelector('.import-source-actions [role="status"]'),
+          "解析中在结果摘要的位置显示进度"
+        );
+        await h.React.act(async () => {
+          await writer.write(
+            `event: result\ndata: ${JSON.stringify({ post_count: 1, errors: [], manifest })}\n\n`
+          );
+        });
+        await h.flush();
+      } else {
+        await h.respond(requestIndex, manifest);
+      }
       assert.equal(jobs.length, 1, "自动导入只提交一次");
       assert.equal(jobs[0].storageSlug, "cos");
       assert.equal(jobs[0].draft.theme, "current");

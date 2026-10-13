@@ -84,7 +84,7 @@ export const homeBackground = z
 export const homeBannerLabel = z.string().trim().min(1).max(160);
 export const homeBannerTitle = z.string().trim().min(1).max(80);
 
-function isCspSafeEmbedHostname(hostname: string) {
+function isCspSafeHostname(hostname: string) {
   return (
     isIP(hostname) === 0 &&
     hostname.length <= 253 &&
@@ -93,8 +93,18 @@ function isCspSafeEmbedHostname(hostname: string) {
   );
 }
 
-function canonicalEmbedAncestorSource(value: string) {
-  if (!/^https:\/\/(?:\*\.)?[^\s*/?#\\@:]+(?::\d{1,5})?\/?$/i.test(value)) return null;
+const cspSourcePathPattern = /^(?:\/(?:[A-Za-z0-9\-._~!$&()+=:@]|%[0-9A-Fa-f]{2})*)+$/;
+
+/**
+ * An HTTPS origin, or a source for its subdomains with a single leftmost
+ * wildcard. With `allowPath`, a path narrows it: one ending in "/" matches a
+ * directory, any other exactly one file.
+ */
+function canonicalCspHostSource(value: string, allowPath: boolean) {
+  const pattern = allowPath
+    ? /^https:\/\/(?:\*\.)?[^\s*/?#\\@:]+(?::\d{1,5})?(?:\/[^\s*?#\\;,'"]*)?$/i
+    : /^https:\/\/(?:\*\.)?[^\s*/?#\\@:]+(?::\d{1,5})?\/?$/i;
+  if (!pattern.test(value)) return null;
   try {
     const parsed = new URL(value);
     const wildcard = /^https:\/\/\*\./i.test(value);
@@ -104,46 +114,72 @@ function canonicalEmbedAncestorSource(value: string) {
         && !hostname.includes("*")
         && hostname.includes(".")
       : !parsed.hostname.includes("*");
+    // URL parsing resolves dot segments and percent-encodes the rest; the
+    // result may hold only characters a CSP path part allows.
+    const path = parsed.pathname === "/" ? "" : parsed.pathname;
     if (
       parsed.protocol !== "https:" ||
       parsed.username ||
       parsed.password ||
-      parsed.pathname !== "/" ||
+      (path && (!allowPath || !cspSourcePathPattern.test(path))) ||
       parsed.search ||
       parsed.hash ||
       !validWildcard ||
       (parsed.port !== "" && Number(parsed.port) < 1) ||
-      !isCspSafeEmbedHostname(hostname)
+      !isCspSafeHostname(hostname)
     ) {
       return null;
     }
-    return `https://${wildcard ? "*." : ""}${hostname}${parsed.port ? `:${parsed.port}` : ""}`;
+    return `https://${wildcard ? "*." : ""}${hostname}${parsed.port ? `:${parsed.port}` : ""}${path}`;
   } catch {
     return null;
   }
 }
 
-const embedAllowedOrigin = z
-  .string()
-  .trim()
-  .min(1)
-  .max(appConfig.embedding.maxOriginLength)
-  .refine(
-    (value) => canonicalEmbedAncestorSource(value) !== null,
-    "嵌入来源必须是使用 DNS 主机名且不含路径、参数或凭据的 HTTPS origin，或使用最左侧单通配符的子域来源"
-  )
-  .transform((value) => canonicalEmbedAncestorSource(value)!);
+function cspHostSourceList(subject: string, allowPath: boolean) {
+  const maxItemLength = appConfig.cspHostSources.maxItemLength;
+  const source = z
+    .string()
+    .trim()
+    .min(1)
+    .max(maxItemLength)
+    // Canonicalization can lengthen a value (percent-encoding, punycode), so
+    // the limit also bounds what is stored: every accepted value parses again.
+    .transform((value, context) => {
+      const canonical = canonicalCspHostSource(value, allowPath);
+      if (canonical === null) {
+        context.addIssue({
+          code: "custom",
+          message: allowPath
+            ? `${subject}必须是使用 DNS 主机名且不含参数或凭据的 HTTPS 地址，可使用最左侧单通配符的子域，可带目录或文件路径`
+            : `${subject}必须是使用 DNS 主机名且不含路径、参数或凭据的 HTTPS origin，或使用最左侧单通配符的子域来源`
+        });
+        return z.NEVER;
+      }
+      if (canonical.length > maxItemLength) {
+        context.addIssue({
+          code: "custom",
+          message: `${subject}规范化后（含百分号编码）不能超过 ${maxItemLength} 个字符`
+        });
+        return z.NEVER;
+      }
+      return canonical;
+    });
+  return z
+    .array(source)
+    .max(appConfig.cspHostSources.maxItems)
+    .transform((values) => [...new Set(values)])
+    .refine(
+      (values) =>
+        values.reduce((length, value) => length + value.length, 0) + Math.max(0, values.length - 1) <=
+        appConfig.cspHostSources.maxSerializedLength,
+      `${subject}列表过长`
+    );
+}
 
-export const embedAllowedOrigins = z
-  .array(embedAllowedOrigin)
-  .max(appConfig.embedding.maxAllowedOrigins)
-  .transform((values) => [...new Set(values)])
-  .refine(
-    (values) =>
-      values.reduce((length, value) => length + value.length, 0) + Math.max(0, values.length - 1) <=
-      appConfig.embedding.maxSerializedOriginsLength,
-    "嵌入来源列表过长"
-  );
+export const embedAllowedOrigins = cspHostSourceList("嵌入来源", false);
+// Scripts may be narrowed to one directory or file of a shared host.
+export const siteScriptSources = cspHostSourceList("脚本来源", true);
 
 export const ingestionMaxFileSizeMb = z.coerce
   .number()
