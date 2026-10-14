@@ -28,6 +28,7 @@ export function AppLoadingRegion({
   );
 }
 
+// index.html 的 #root 内放着同样的结构，首次渲染前随文档显示。
 export function AppLoadingScreen() {
   return <AppLoadingRegion className="app-loading-screen" />;
 }

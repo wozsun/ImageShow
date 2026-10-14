@@ -5,9 +5,9 @@ const edges = ["top", "right", "bottom", "left"] as const;
 type Insets = Record<(typeof edges)[number], number>;
 
 /** Exchange optional layout data with the direct parent; native insets stay independent. */
-export function useEmbeddedSafeArea(enabled: boolean) {
+export function useEmbeddedSafeArea() {
   useEffect(() => {
-    if (!enabled || window.parent === window) return;
+    if (window.parent === window) return;
     const parent = window.parent;
     const root = document.documentElement;
     const bridgeId = crypto.getRandomValues(new Uint8Array(16)).toHex();
@@ -170,5 +170,5 @@ export function useEmbeddedSafeArea(enabled: boolean) {
       insets = null;
       apply();
     };
-  }, [enabled]);
+  }, []);
 }

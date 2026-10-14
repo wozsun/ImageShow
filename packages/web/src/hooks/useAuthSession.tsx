@@ -9,8 +9,10 @@ import {
   type ReactNode
 } from "react";
 import {
+  queryOptions,
   useQuery,
   useQueryClient,
+  type QueryClient,
   type UseQueryResult
 } from "@tanstack/react-query";
 import { useLocation } from "react-router";
@@ -44,6 +46,32 @@ function isAdminPath(pathname: string) {
   return pathname === adminBasePath || pathname.startsWith(`${adminBasePath}/`);
 }
 
+const authSessionQuery = queryOptions<AuthState>({
+  queryKey: queryKeys.me,
+  queryFn: ({ signal }) => readAuthSession(signal),
+  staleTime: 30_000,
+  gcTime: Number.POSITIVE_INFINITY
+});
+
+/**
+ * Starts the provider's first session read with the document instead of after
+ * the page that mounts the provider has loaded; the provider still owns it.
+ * Resolves with the session, or undefined when unread or the read failed.
+ */
+export function prefetchAuthSession(
+  client: QueryClient,
+  pathname: string
+): Promise<AuthState | undefined> {
+  if (pathname.startsWith("/embed/")) return Promise.resolve(undefined);
+  const admin = isAdminPath(pathname);
+  if (!admin && !hasSessionProbeHint()) return Promise.resolve(undefined);
+  // A public page renders before this read settles and its provider joins
+  // the read in flight, so it retries as the provider's own read would; an
+  // administrator page waits for it, and its shell reads again on failure.
+  const retry = admin ? false : client.getDefaultOptions().queries?.retry ?? 3;
+  return client.fetchQuery({ ...authSessionQuery, retry }).catch(() => undefined);
+}
+
 /**
  * Owns the only /auth/me observer and expired-session listener for normal public
  * and admin routes. Public routes probe only with a persisted session hint;
@@ -60,12 +88,9 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const adminRoute = isAdminPath(pathname);
   const [publicProbeRequested, setPublicProbeRequested] = useState(hasSessionProbeHint);
-  const query = useQuery<AuthState>({
-    queryKey: queryKeys.me,
-    queryFn: ({ signal }) => readAuthSession(signal),
+  const query = useQuery({
+    ...authSessionQuery,
     enabled: adminRoute || publicProbeRequested,
-    staleTime: 30_000,
-    gcTime: Number.POSITIVE_INFINITY,
     refetchOnWindowFocus: false
   });
   const [refreshCoordinator] = useState(() => new AuthSessionRefreshCoordinator());

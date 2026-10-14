@@ -163,6 +163,22 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
       }),
     /规范化后/
   );
+  // Public base URLs (static assets and storage backends) share the rule.
+  const encodedBase = (characters: number) => `https://cdn.example.com/${"中".repeat(characters)}`;
+  const longestBase = parseRuntimeConfig({
+    ...defaults,
+    site: { ...defaults.site, assets_base_url: encodedBase(224) }
+  });
+  assert.equal(longestBase.site.assets_base_url.length, 2040);
+  assert.deepEqual(parseRuntimeConfig(longestBase), longestBase, "已接受的公开地址再次保存时仍可解析");
+  assert.throws(
+    () =>
+      parseRuntimeConfig({
+        ...defaults,
+        site: { ...defaults.site, assets_base_url: encodedBase(225) }
+      }),
+    /规范化后/
+  );
   assert.equal(defaults.site.home.browse_target, "show");
   assert.deepEqual(defaults.site.show, {
     enabled: true,
@@ -616,10 +632,6 @@ test("[Server/配置] 完整环境播种严格覆盖全部已映射 RuntimeConfi
     [{ SITE_SCRIPT_SOURCES: '["http://cdn.example.com"]' }, /SITE_SCRIPT_SOURCES.*site\.script_sources/],
     [{ SITE_SCRIPT_SOURCES: '["https://*.com"]' }, /SITE_SCRIPT_SOURCES.*site\.script_sources/],
     [
-      { SITE_SCRIPT_SOURCES: JSON.stringify([`https://cdn.example.com/${"中".repeat(40)}.js`]) },
-      /SITE_SCRIPT_SOURCES.*site\.script_sources/
-    ],
-    [
       { SITE_SCRIPT_SOURCES: '["https://cdn.example.com/js/app.js?v=1"]' },
       /SITE_SCRIPT_SOURCES.*site\.script_sources/
     ],
@@ -989,6 +1001,7 @@ test("[Server/配置] SPA 复用已发布快照并同步配置、验证器和嵌
   ).href;
   const helperSource = `
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { brotliDecompressSync, gunzipSync } from "node:zlib";
@@ -1041,16 +1054,23 @@ const described = await first.text();
 assert.equal(first.headers.get("content-length"), String(Buffer.byteLength(described)));
 const firstEtag = first.headers.get("etag");
 assert.equal(firstEtag.length, 20);
+// Documents differ only in the page files they preload, and the administrator
+// document's loading screen keeps the bootstrap text instead of the public one.
+const withoutPreloads = (body) => body
+  .replace(/<link rel="(?:modulepreload|preload)"[^>]*>/g, "")
+  .replace(" app-public-loading", "");
 for (const path of ["/", "/home", "/show", "/gallery", "/admin", "/admin/storage"]) {
+  const page = await app.request("http://imageshow.test" + path);
+  const etag = page.headers.get("etag");
   for (const method of ["GET", "HEAD"]) {
     const cached = await app.request("http://imageshow.test" + path, {
-      method, headers: { "if-none-match": '"unrelated", ' + firstEtag.replace(/^W\\//, "") }
+      method, headers: { "if-none-match": '"unrelated", ' + etag.replace(/^W\\//, "") }
     });
     assert.equal(cached.status, 304);
-    assert.equal(cached.headers.get("etag"), firstEtag);
+    assert.equal(cached.headers.get("etag"), etag);
     assert.equal(await cached.text(), "");
   }
-  assert.equal(await html(path), described);
+  assert.equal(withoutPreloads(await page.text()), withoutPreloads(described));
 }
 assert.equal(serializations, 1, "one published snapshot serializes its inline config once across page and conditional requests");
 JSON.stringify = originalStringify;
@@ -1154,6 +1174,13 @@ for (const sequence of ["$$", "$&", "$" + String.fromCharCode(96), "$'"]) {
   });
   assert.equal(cached.status, 304);
 }
+await updateRuntimeConfig(originalConfig);
+
+// A disabled page's document preloads the page its route falls back to.
+const preloadsOf = async (path) => (await html(path)).match(/<link rel="(?:modulepreload|preload)"[^>]*>/g);
+assert.notDeepEqual(await preloadsOf("/show"), await preloadsOf("/"));
+await updateRuntimeConfig({ site: { show: { enabled: false } } });
+assert.deepEqual(await preloadsOf("/show"), await preloadsOf("/"));
 await updateRuntimeConfig(originalConfig);
 
 // A private configuration change keeps the same public representation.
@@ -1272,6 +1299,12 @@ for (const base of ["https://asset.example.test///", "https://asset.example.test
   const { document } = parseHTML(await page.text());
   const script = document.querySelector('script[type="module"][src]').getAttribute("src");
   assert.equal(script, canonical + mainPath.slice("/assets".length));
+  // Chunks resolve through the import map, which follows the same base and runs under its CSP hash.
+  const importMap = document.querySelector('script[type="importmap"]').textContent;
+  const mapped = Object.entries(JSON.parse(importMap).imports).flat();
+  assert.ok(mapped.length > 0 && mapped.every((address) => address.startsWith(canonical + "/")));
+  assert.ok(page.headers.get("content-security-policy")
+    .includes("'sha256-" + createHash("sha256").update(importMap).digest("base64") + "'"));
   assert.equal(document.querySelector('link[rel="icon"]').getAttribute("href"), canonical + "/brand/favicon.svg");
   const icon = await request(parsed.host, new URL(canonical + "/brand/favicon.svg").pathname);
   assert.equal(icon.status, 200);
@@ -1378,10 +1411,10 @@ await updateRuntimeConfig({
   }
 });
 const scriptSourcePage = await request("main.example.test", "/admin");
-assert.equal(
+assert.match(
   scriptSourcePage.headers.get("content-security-policy").split("; ")[0],
-  "script-src 'self' https://asset.example.test https://*.cdn.example.test https://static.example.test/lib/widget.js",
-  "页面脚本来源依次为本站、具体的静态资源 origin 与配置来源"
+  /^script-src 'self' https:\\/\\/asset\\.example\\.test https:\\/\\/\\*\\.cdn\\.example\\.test https:\\/\\/static\\.example\\.test\\/lib\\/widget\\.js 'sha256-[A-Za-z0-9+\\/]+=*'$/,
+  "页面脚本来源依次为本站、具体的静态资源 origin、配置来源与导入映射的哈希"
 );
 await scriptSourcePage.text();
 await updateRuntimeConfig({ site: { script_sources: [] } });

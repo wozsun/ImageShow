@@ -11,7 +11,7 @@ type ImageAdminDetailsComponent = ImageAdminDetailsModule["ImageAdminDetails"];
 type ImageAdminDetailsProps = ComponentProps<ImageAdminDetailsComponent>;
 
 export const loadImageAdminDetailsModule = createPageLifetimeModuleLoader<ImageAdminDetailsModule>(
-  () => import("./ImageAdminDetails.js")
+  () => import(/* @chunk access: image */ "./ImageAdminDetails.js")
 );
 
 const LazyImageAdminDetailsComponent: LazyExoticComponent<ImageAdminDetailsComponent> = lazy(() =>

@@ -32,7 +32,7 @@ import { WorkspaceToolbarScrollbar } from "../../../components/layout/WorkspaceT
 import "../../../styles/admin/check.css";
 
 const loadCheckMaintenanceCapability = createPageLifetimeModuleLoader(
-  () => import("./CheckMaintenanceCapability.js")
+  () => import(/* @chunk access: super */ "./CheckMaintenanceCapability.js")
 );
 const CheckStorageMaintenanceActions = lazy(() =>
   loadCheckMaintenanceCapability().then((module) => ({

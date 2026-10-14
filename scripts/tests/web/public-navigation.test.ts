@@ -11,7 +11,7 @@ import {
   showOrderFromSearchParams,
   updateImageBrowseSearchParams
 } from "../../../packages/web/src/lib/gallery/gallery-query.ts";
-import { publicHomeBrowsePath, publicRootPath } from "@imageshow/shared/browser";
+import { publicHomeBrowsePath, publicPageTarget, publicRootPath } from "@imageshow/shared/browser";
 import { buildRandomUrl } from "../../../packages/web/src/lib/gallery/random-url.ts";
 import {
   publicNavigationAutoHideDelayMs,
@@ -612,6 +612,16 @@ test("[Web/公开导航] 站点根入口保持 home、show、gallery 与关闭�
     publicHomeBrowsePath(site("home", true, false, "show", false), true),
     null
   );
+  // Routes, the startup load and document preloads open the page a path falls back to.
+  assert.equal(publicPageTarget(site("home", true), true, "/show"), "/show");
+  assert.equal(publicPageTarget(site("home", true, false), true, "/show"), "/home");
+  assert.equal(publicPageTarget(site("show", true), true, "/"), "/show");
+  assert.equal(publicPageTarget(site("home", true), true, "/missing"), "/home");
+  assert.equal(publicPageTarget(site("home", true), true, "/embed/gallery"), "/embed/gallery");
+  assert.equal(publicPageTarget(site("home", true), false, "/embed/gallery"), "/home");
+  assert.equal(publicPageTarget(site("home", true, false), true, "/embed/show"), "/home");
+  assert.equal(publicPageTarget(site("gallery", false, true, "show"), true, "/embed/home"), "/embed/show");
+  assert.equal(publicPageTarget(site("gallery", false, false, "gallery", false), true, "/show"), null);
 });
 test("[Web/公开导航] 桌面与嵌入展映三秒无点击收起，顶部 36px 唤出，导航内悬停和焦点取消计时", async (t) => {
   assert.equal(publicNavigationAutoHideDelayMs, 3000);

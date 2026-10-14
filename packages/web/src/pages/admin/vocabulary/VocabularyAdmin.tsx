@@ -14,40 +14,40 @@ import {
 } from "@imageshow/shared/browser";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
-import { api, isApiClientError } from "../../lib/api/client.js";
-import { ViewModeToggle } from "../../components/actions/ViewModeToggle.js";
-import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
-import { useActionFeedbackTarget } from "../../components/feedback/ActionFeedbackRegion.js";
-import { useWorkspaceToolbarCollapse } from "../../hooks/useWorkspaceToolbarCollapse.js";
-import { WorkspaceToolbarScrollbar } from "../../components/layout/WorkspaceToolbarScrollbar.js";
-import { WorkspaceToolbar } from "../../components/layout/WorkspaceToolbar.js";
-import { AdminPagination } from "../../components/navigation/AdminPagination.js";
-import { ConfirmDialog } from "../../components/dialog/ConfirmDialog.js";
-import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
+import { api, isApiClientError } from "../../../lib/api/client.js";
+import { ViewModeToggle } from "../../../components/actions/ViewModeToggle.js";
+import { OverlayScrollbar } from "../../../components/layout/OverlayScrollbar.js";
+import { useActionFeedbackTarget } from "../../../components/feedback/ActionFeedbackRegion.js";
+import { useWorkspaceToolbarCollapse } from "../../../hooks/useWorkspaceToolbarCollapse.js";
+import { WorkspaceToolbarScrollbar } from "../../../components/layout/WorkspaceToolbarScrollbar.js";
+import { WorkspaceToolbar } from "../../../components/layout/WorkspaceToolbar.js";
+import { AdminPagination } from "../../../components/navigation/AdminPagination.js";
+import { ConfirmDialog } from "../../../components/dialog/ConfirmDialog.js";
+import { WorkspaceHeader } from "../../../components/layout/WorkspaceHeader.js";
 import {
   VocabularyAdminItem,
   vocabularyColumnLabels,
   type VocabularyColumnId
 } from "./VocabularyAdminItem.js";
-import { slugFormatHint } from "../../components/form/slug-format.js";
-import { queryKeys } from "../../lib/api/query-keys.js";
-import { AdminSettingsBoundary } from "../../components/feedback/AdminSettingsBoundary.js";
-import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
-import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
+import { slugFormatHint } from "../../../components/form/slug-format.js";
+import { queryKeys } from "../../../lib/api/query-keys.js";
+import { AdminSettingsBoundary } from "../../../components/feedback/AdminSettingsBoundary.js";
+import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
+import { QueryErrorState } from "../../../components/feedback/QueryErrorState.js";
 import {
   invalidateVocabularyData,
   invalidateDataAfterSortOrderSave,
   invalidateImageData
-} from "../../lib/api/query-invalidation.js";
-import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
-import { useAdminPermissions } from "../../hooks/useAuthSession.js";
-import { useAdminPreference } from "../../hooks/useAdminPreferences.js";
-import { useSortOrderSave } from "../../hooks/useSortOrderSave.js";
-import { useClientPagination } from "../../hooks/useClientPagination.js";
-import { useViewModeScrollAnchor } from "../../hooks/useViewModeScrollAnchor.js";
-import { EntityCreateForm, useEntityCreateDraft } from "../../components/form/EntityCreateForm.js";
-import "../../styles/admin/entity.css";
-import "../../styles/admin/vocabulary.css";
+} from "../../../lib/api/query-invalidation.js";
+import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
+import { useAdminPermissions } from "../../../hooks/useAuthSession.js";
+import { useAdminPreference } from "../../../hooks/useAdminPreferences.js";
+import { useSortOrderSave } from "../../../hooks/useSortOrderSave.js";
+import { useClientPagination } from "../../../hooks/useClientPagination.js";
+import { useViewModeScrollAnchor } from "../../../hooks/useViewModeScrollAnchor.js";
+import { EntityCreateForm, useEntityCreateDraft } from "../../../components/form/EntityCreateForm.js";
+import "../../../styles/admin/entity.css";
+import "../../../styles/admin/vocabulary.css";
 
 type VocabularyKind = "tags" | "themes" | "authors";
 type VocabularyEntry = TagDto | ThemeDto | AuthorDto;

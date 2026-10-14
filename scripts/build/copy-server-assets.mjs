@@ -55,6 +55,11 @@ async function precompressDir(dir) {
 
 await mkdir(serverDist, { recursive: true });
 await cp(resolve(serverPackageDirectory, "schema.sql"), resolve(serverDist, "schema.sql"));
+// The server preloads each document's page files; the list stays out of public assets.
+await cp(
+  resolve(webDist, ".vite/document-preloads.json"),
+  resolve(serverDist, "document-preloads.json")
+);
 await rm(serverPublic, { recursive: true, force: true });
 await cp(webDist, serverPublic, {
   recursive: true,
@@ -98,7 +103,7 @@ await writeFile(
 );
 
 console.log(
-  "assemble-server: schema.sql -> dist, web -> dist/public; " +
+  "assemble-server: schema.sql and document preloads -> dist, web -> dist/public; " +
     `precompressed br${staticAssetCompression.brotliQuality}/` +
     `zstd${staticAssetCompression.zstdLevel}/gzip${staticAssetCompression.gzipLevel}; ` +
     "smaller-body-only; root SPA template rendered dynamically"

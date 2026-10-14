@@ -1,32 +1,32 @@
 import { useId, useRef, useState, type FormEvent, type RefObject } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type AdminUsersResponseDto, adminApiBasePath, slugPattern, type AdminUserDto } from "@imageshow/shared/browser";
-import { api, isApiClientError } from "../../lib/api/client.js";
-import { AdminIcon } from "../../components/icon/AdminIcon.js";
-import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
-import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
-import { WorkspaceScrollBody } from "../../components/layout/WorkspaceScrollBody.js";
-import { WorkspaceToolbar } from "../../components/layout/WorkspaceToolbar.js";
-import { useWorkspaceToolbarCollapse } from "../../hooks/useWorkspaceToolbarCollapse.js";
-import { WorkspaceToolbarScrollbar } from "../../components/layout/WorkspaceToolbarScrollbar.js";
-import { ConfirmDialog } from "../../components/dialog/ConfirmDialog.js";
-import { DialogFrame } from "../../components/dialog/DialogFrame.js";
-import { slugFormatHint } from "../../components/form/slug-format.js";
-import { queryKeys } from "../../lib/api/query-keys.js";
-import { copyTextToClipboard } from "../../lib/ui/clipboard.js";
-import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
-import { PasswordInput } from "../../components/form/PasswordInput.js";
-import { SlugChip } from "../../components/data-display/SlugChip.js";
-import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
+import { api, isApiClientError } from "../../../lib/api/client.js";
+import { AdminIcon } from "../../../components/icon/AdminIcon.js";
+import { AsyncActionButton } from "../../../components/actions/AsyncActionButton.js";
+import { StableButtonLabel } from "../../../components/data-display/StableButtonLabel.js";
+import { WorkspaceScrollBody } from "../../../components/layout/WorkspaceScrollBody.js";
+import { WorkspaceToolbar } from "../../../components/layout/WorkspaceToolbar.js";
+import { useWorkspaceToolbarCollapse } from "../../../hooks/useWorkspaceToolbarCollapse.js";
+import { WorkspaceToolbarScrollbar } from "../../../components/layout/WorkspaceToolbarScrollbar.js";
+import { ConfirmDialog } from "../../../components/dialog/ConfirmDialog.js";
+import { DialogFrame } from "../../../components/dialog/DialogFrame.js";
+import { slugFormatHint } from "../../../components/form/slug-format.js";
+import { queryKeys } from "../../../lib/api/query-keys.js";
+import { copyTextToClipboard } from "../../../lib/ui/clipboard.js";
+import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
+import { PasswordInput } from "../../../components/form/PasswordInput.js";
+import { SlugChip } from "../../../components/data-display/SlugChip.js";
+import { WorkspaceHeader } from "../../../components/layout/WorkspaceHeader.js";
 import {
   generateAdminPassword,
   isValidAdminPassword,
   passwordPolicyHint
-} from "../../lib/auth/password.js";
-import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
-import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
-import { FieldError } from "../../components/form/FieldError.js";
-import "../../styles/admin/entity.css";
+} from "../../../lib/auth/password.js";
+import { QueryErrorState } from "../../../components/feedback/QueryErrorState.js";
+import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
+import { FieldError } from "../../../components/form/FieldError.js";
+import "../../../styles/admin/entity.css";
 
 const generatePasswordPresentation = {
   idle: { icon: "shuffle-line", label: "生成随机密码" },

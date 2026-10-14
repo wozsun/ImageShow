@@ -3,7 +3,7 @@ import type { TrashPurgeProgressDto } from "@imageshow/shared/browser";
 import {
   openTrashPurgeProgress,
   type TrashPurgeProgressStream
-} from "../../../lib/api/trash-purge-progress.js";
+} from "./trash-purge-progress.js";
 
 type BackgroundFollow = {
   stream: TrashPurgeProgressStream;

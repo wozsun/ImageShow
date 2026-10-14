@@ -19,10 +19,10 @@ type OutgoingMessage =
   | ({ type: "pointer"; phase: PointerPhase } & PointerSample)
   | { type: "pointer"; phase: "leave" | "cancel" };
 
-/** Enabled with embedding; the direct parent connects before taking over the cursor. */
-export function useEmbeddedCursorBridge(enabled: boolean) {
+/** Runs in embedded pages; the direct parent connects before taking over the cursor. */
+export function useEmbeddedCursorBridge() {
   useEffect(() => {
-    if (!enabled || window.parent === window) return;
+    if (window.parent === window) return;
 
     const parent = window.parent;
     const bridgeId = crypto.getRandomValues(new Uint8Array(16)).toHex();
@@ -174,5 +174,5 @@ export function useEmbeddedCursorBridge(enabled: boolean) {
       connected = false;
       syncActive();
     };
-  }, [enabled]);
+  }, []);
 }

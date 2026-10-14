@@ -3,8 +3,9 @@ import { useEmbeddedCursorBridge } from "./useEmbeddedCursorBridge.js";
 import { useEmbeddedSafeArea } from "./useEmbeddedSafeArea.js";
 import "../../styles/embed-cursor.css";
 
-export function EmbeddedPageLayout({ enabled }: { enabled: boolean }) {
-  useEmbeddedCursorBridge(enabled);
-  useEmbeddedSafeArea(enabled);
+/** Wraps embedded pages; the routes render it only while embedding is enabled. */
+export function EmbeddedPageLayout() {
+  useEmbeddedCursorBridge();
+  useEmbeddedSafeArea();
   return <Outlet />;
 }

@@ -12,7 +12,7 @@ import { createPageLifetimeModuleLoader } from "../../../lib/page-lifetime-modul
 type ImageIdInputDialogModule = typeof import("./ImageIdInputDialog.js");
 
 const loadImageIdInputDialog = createPageLifetimeModuleLoader<ImageIdInputDialogModule>(
-  () => import("./ImageIdInputDialog.js")
+  () => import(/* @chunk visits: occasional */ "./ImageIdInputDialog.js")
 );
 
 /** 输入 ID 后交给图片操作窗口，两段模块一并预取。 */

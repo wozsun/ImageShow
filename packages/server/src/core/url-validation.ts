@@ -1,12 +1,15 @@
 import { isIP } from "node:net";
 import { z } from "zod";
 
+const publicBaseUrlMaxLength = 2048;
+
 export const publicBaseUrlSchema = z
   .string()
   .trim()
-  .max(2048)
+  .max(publicBaseUrlMaxLength)
   .transform((value, ctx) => {
     if (!value) return "";
+    let canonical: string;
     try {
       const url = new URL(value);
       if (
@@ -30,7 +33,7 @@ export const publicBaseUrlSchema = z
           }
           return encodeURIComponent(decoded);
         });
-      return `${url.origin}${segments.length ? `/${segments.join("/")}` : ""}`;
+      canonical = `${url.origin}${segments.length ? `/${segments.join("/")}` : ""}`;
     } catch {
       ctx.addIssue({
         code: "custom",
@@ -38,6 +41,16 @@ export const publicBaseUrlSchema = z
       });
       return z.NEVER;
     }
+    // Percent-encoding and punycode can lengthen the value, so the limit also
+    // bounds what is stored: every accepted value parses again.
+    if (canonical.length > publicBaseUrlMaxLength) {
+      ctx.addIssue({
+        code: "custom",
+        message: `公开地址规范化后（含百分号编码）不能超过 ${publicBaseUrlMaxLength} 个字符`
+      });
+      return z.NEVER;
+    }
+    return canonical;
   });
 
 export function publicUrlMatchesHost(base: URL, host: string) {

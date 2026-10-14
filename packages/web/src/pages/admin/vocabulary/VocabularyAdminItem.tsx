@@ -5,12 +5,12 @@ import {
   type AuthorMutationResponseDto,
   adminApiBasePath
 } from "@imageshow/shared/browser";
-import { api } from "../../lib/api/client.js";
-import { SaveOrDeleteButton } from "../../components/actions/SaveOrDeleteButton.js";
-import { SortOrderInput } from "../../components/actions/SortOrderInput.js";
-import type { ActionFeedbackTarget } from "../../components/feedback/ActionFeedbackRegion.js";
-import { SlugChip } from "../../components/data-display/SlugChip.js";
-import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
+import { api } from "../../../lib/api/client.js";
+import { SaveOrDeleteButton } from "../../../components/actions/SaveOrDeleteButton.js";
+import { SortOrderInput } from "../../../components/actions/SortOrderInput.js";
+import type { ActionFeedbackTarget } from "../../../components/feedback/ActionFeedbackRegion.js";
+import { SlugChip } from "../../../components/data-display/SlugChip.js";
+import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
 
 export const vocabularyColumnLabels = {
   slug: "标识",

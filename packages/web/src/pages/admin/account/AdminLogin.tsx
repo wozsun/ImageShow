@@ -15,7 +15,7 @@ import "../../../styles/admin/semantic-colors.css";
 import "../../../styles/admin/login.css";
 
 const LoginChallenge = lazy(() =>
-  import("./LoginChallenge.js").then((module) => ({
+  import(/* @chunk visits: rare */ "./LoginChallenge.js").then((module) => ({
     default: module.LoginChallenge
   }))
 );

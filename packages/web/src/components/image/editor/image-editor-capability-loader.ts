@@ -12,7 +12,7 @@ export type ImageEditorOpenResult = "opened" | "failed" | "interrupted";
 
 export const loadImageEditorCapabilityModule =
   createPageLifetimeModuleLoader<ImageEditorCapabilityModule>(
-    () => import("./image-editor-capability.js")
+    () => import(/* @chunk access: image */ "./image-editor-capability.js")
   );
 
 export function imageEditorTargetKey(target: ImageEditorTarget) {

@@ -121,6 +121,9 @@
   position: relative;
   pointer-events: auto;
 }
+.public-navigation-stack > .public-navigation-secondary.is-scroll-hidden {
+  pointer-events: none;
+}
 
 .topbar {
   z-index: 7;

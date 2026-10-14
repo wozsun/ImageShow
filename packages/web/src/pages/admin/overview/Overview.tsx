@@ -8,26 +8,26 @@ import {
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
-import { api } from "../../lib/api/client.js";
-import { ThumbnailImage } from "../../components/image/ThumbnailImage.js";
-import { queryKeys } from "../../lib/api/query-keys.js";
+import { api } from "../../../lib/api/client.js";
+import { ThumbnailImage } from "../../../components/image/ThumbnailImage.js";
+import { queryKeys } from "../../../lib/api/query-keys.js";
 import {
   readyImageProjection,
   useAdminCheckStatus
-} from "../../lib/api/ready-image-cache.js";
-import { formatBytes } from "../../lib/ui/formatters.js";
-import { preloadIntentProps } from "../../lib/ui/preload-intent.js";
-import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
-import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
-import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
-import { WorkspaceScrollBody } from "../../components/layout/WorkspaceScrollBody.js";
+} from "../../../lib/api/ready-image-cache.js";
+import { formatBytes } from "../../../lib/ui/formatters.js";
+import { preloadIntentProps } from "../../../lib/ui/preload-intent.js";
+import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
+import { QueryErrorState } from "../../../components/feedback/QueryErrorState.js";
+import { WorkspaceHeader } from "../../../components/layout/WorkspaceHeader.js";
+import { WorkspaceScrollBody } from "../../../components/layout/WorkspaceScrollBody.js";
 import {
   ActionFeedbackOutlet,
   useActionFeedbackTarget
-} from "../../components/feedback/ActionFeedbackRegion.js";
-import { createActionFeedback, type ActionFeedbackState } from "../../lib/ui/action-feedback.js";
-import { useAdminImageDetailCapability } from "../../components/image/useAdminImageDetailCapability.js";
-import "../../styles/admin/overview.css";
+} from "../../../components/feedback/ActionFeedbackRegion.js";
+import { createActionFeedback, type ActionFeedbackState } from "../../../lib/ui/action-feedback.js";
+import { useAdminImageDetailCapability } from "../../../components/image/useAdminImageDetailCapability.js";
+import "../../../styles/admin/overview.css";
 
 type OverviewMetric = {
   label: string;

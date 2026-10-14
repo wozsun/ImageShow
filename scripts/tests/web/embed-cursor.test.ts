@@ -42,14 +42,15 @@ async function createBridgeHarness(t: TestContext) {
     restoreDocument();
     restoreWindow();
   });
-  function Bridge({ enabled }: { enabled: boolean }) {
-    useEmbeddedCursorBridge(enabled);
+  // The embed layout mounts the bridge only while embedding is enabled.
+  function Bridge() {
+    useEmbeddedCursorBridge();
     return null;
   }
   const render = (enabled = true) =>
     h.render(
       h.React.createElement(h.React.StrictMode, null,
-        h.React.createElement(Bridge, { enabled }))
+        enabled ? h.React.createElement(Bridge) : null)
     );
   const ready = () => messages.filter((message) => message.data.type === "ready").at(-1)!.data;
   const dispatch = (type: string, values: Record<string, unknown> = {}) => {

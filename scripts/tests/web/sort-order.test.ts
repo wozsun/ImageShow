@@ -29,7 +29,7 @@ async function sortingPage(t: TestContext, kind: Kind) {
     }
   });
   const { VocabularyAdmin } =
-    await import("../../../packages/web/src/pages/admin/VocabularyAdmin.tsx");
+    await import("../../../packages/web/src/pages/admin/vocabulary/VocabularyAdmin.tsx");
   const { StorageSettings } =
     await import("../../../packages/web/src/pages/admin/storage/StorageSettings.tsx");
   css.deregister();

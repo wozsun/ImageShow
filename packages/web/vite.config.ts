@@ -1,9 +1,9 @@
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
-import { hash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { appConfig } from "../shared/src/app-config.ts";
+import { createChunkPlan, publishedChunkName } from "./vite-chunk-plan.ts";
 
 function webSourcePath(id: string | null) {
   if (!id) return null;
@@ -15,169 +15,22 @@ function webSourcePath(id: string | null) {
     : normalized.slice(markerIndex + marker.length);
 }
 
-type ChunkingContext = {
-  getModuleInfo(id: string): {
-    dynamicImporters: string[];
-    importers: string[];
-    isEntry: boolean;
-  } | null;
-};
-
-function entryRootIds(moduleId: string, context: ChunkingContext) {
-  const roots = new Set<string>();
-  const visited = new Set<string>();
-  const pending = [moduleId];
-  while (pending.length) {
-    const id = pending.pop();
-    if (!id || visited.has(id)) continue;
-    visited.add(id);
-    const info = context.getModuleInfo(id);
-    if (!info) continue;
-    if (info.isEntry || info.dynamicImporters.length > 0) {
-      roots.add(id.replaceAll("\\", "/"));
-    }
-    if (!info.isEntry) pending.push(...info.importers);
-  }
-  return [...roots].sort();
+function modulePath(id: string) {
+  const normalized = id.replaceAll("\\", "/");
+  const dependency = normalized.lastIndexOf("/node_modules/");
+  if (dependency >= 0) return normalized.slice(dependency + 1);
+  return webSourcePath(id);
 }
 
-function semanticOwnerLabel(root: string) {
-  const sourcePath = webSourcePath(root) ?? root.replaceAll("\\", "/");
-  if (sourcePath.endsWith("index.html")) return "app";
-  const baseName =
-    sourcePath
-      .split("/")
-      .at(-1)
-      ?.replace(/\.[^.]+$/, "") ?? "asset";
-  let label = baseName
-    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-    .replace(/([A-Z])([A-Z][a-z])/g, "$1-$2")
-    .replace(/[^A-Za-z0-9]+/g, "-")
-    .replace(/-(?:page|capability)$/i, "")
-    .replace(/^(?:web|assets?)-|-(?:js|css|chunks?|modules?)$/gi, "")
-    .replace(/^-|-$/g, "")
-    .toLowerCase();
-  if (sourcePath.startsWith("src/pages/admin/")) {
-    label = label
-      .split("-")
-      .filter((token) => token !== "admin")
-      .join("-")
-      .replace(/-settings$/, "");
-  }
-  return label || "asset";
-}
-
-function semanticOwnerCategory(root: string) {
-  const sourcePath = webSourcePath(root) ?? root.replaceAll("\\", "/");
-  if (sourcePath.endsWith("index.html")) return "app";
-  const segments = sourcePath.split("/");
-  if (segments[0] === "src" && segments.length > 2) {
-    if (["pages", "components", "lib"].includes(segments[1]!)) {
-      return segments[2]!
-        .replace(/[^A-Za-z0-9]+/g, "-")
-        .toLowerCase();
-    }
-  }
-  return semanticOwnerLabel(root);
-}
-
-const chunkResponsibilityAliases: Readonly<Record<string, string>> = {
-  "route-authenticated-shell-image": "workspace-ui",
-  "route-gallery-home-show": "public-ui",
-  "route-gallery-show": "image-view",
-  "route-image": "image-actions",
-  "route-image-show": "image-read",
-  "route-login": "password-input",
-  "capability-account-user": "password",
-  "capability-admin": "workspace-header",
-  "capability-check-check-maintenance-overview": "cache-status",
-  "capability-image-editor-ingestion": "image-fields",
-  "capability-settings-storage": "number-input",
-  "capability-storage-vocabulary": "sort-order",
-  "capability-user-vocabulary": "slug-chip"
-};
-
-const semanticChunkNameAssignments = new Map<string, Map<string, string>>();
-
-function rootSetChunkName(prefix: string, roots: string[]) {
-  const exactLabels = [...new Set(roots.map(semanticOwnerLabel))].sort();
-  const ownerLabels =
-    exactLabels.length <= 3
-      ? exactLabels
-      : [...new Set(roots.map(semanticOwnerCategory))].sort();
-  const generatedName = `${prefix}-${ownerLabels.join("-") || "shared"}`;
-  const baseName = chunkResponsibilityAliases[generatedName] ?? generatedName;
-  const rootKey = roots.join("\n");
-  let assignments = semanticChunkNameAssignments.get(baseName);
-  if (!assignments) {
-    assignments = new Map();
-    semanticChunkNameAssignments.set(baseName, assignments);
-  }
-  const existing = assignments.get(rootKey);
-  if (existing) return existing;
-  let name = baseName;
-  if (assignments.size > 0) {
-    name = `${baseName}-${hash("sha256", rootKey, "hex").slice(0, 6)}`;
-  }
-  assignments.set(rootKey, name);
-  return name;
-}
-
-function sharedChunkName(moduleId: string, context: ChunkingContext) {
-  const roots = entryRootIds(moduleId, context);
-  const home = roots.some((id) => /\/src\/pages\/home\//.test(id));
-  const show = roots.some((id) => /\/src\/pages\/show\//.test(id));
-  const gallery = roots.some((id) => /\/src\/pages\/gallery\//.test(id));
-  const hasNonPublicRoot = roots.some((id) => !/\/src\/pages\/(?:home|show|gallery)\//.test(id));
-  if (
-    roots.some((id) => id.endsWith("/index.html")) ||
-    (((home && gallery) || (home && show) || (show && gallery)) && hasNonPublicRoot)
-  ) {
-    return "app-foundation";
-  }
-  const initialRouteRoots = roots.filter(
-    (id) =>
-      /\/src\/pages\/(?:home|show|gallery)\//.test(id) ||
-      /\/src\/pages\/admin\/(?:shell\/(?:AdminShell|AuthenticatedAdminShell)|account\/(?:AdminLogin|LoginChallenge)|images\/ImageAdmin)\.tsx$/.test(
-        id
-      )
-  );
-  return initialRouteRoots.length > 0
-    ? rootSetChunkName("route", initialRouteRoots)
-    : rootSetChunkName("capability", roots);
-}
-
-const assetResponsibilityAliases: Readonly<Record<string, string>> = {
-  index: "App",
-  AccountSettings: "Account",
-  AdminLogin: "Login",
-  AdminShell: "AccessShell",
-  AuthenticatedAdminShell: "WorkspaceShell",
-  CheckMaintenanceCapability: "Maintenance",
-  CheckPage: "Check",
-  GalleryPage: "Gallery",
-  HomePage: "Home",
-  ShowPage: "Show",
-  ImageAdminDetails: "ImageDetails",
-  ImageStorageMigrationDialog: "ImageMigration",
-  ImportSourceDialog: "ImportSource",
-  LoginChallenge: "Challenge",
-  LogPage: "Logs",
-  SettingsPage: "Settings",
-  StorageSettings: "Storage",
-  UserAdmin: "Users",
-  VocabularyAdmin: "Vocabulary",
-  "image-editor-capability": "ImageEditor",
-  "gallery-responsive": "image-view",
-  "semantic-colors": "admin-colors"
-};
-
-function assetResponsibilityName(name: string) {
-  return assetResponsibilityAliases[name] ?? name;
-}
+const chunkPlan = createChunkPlan({
+  rootName: (root) =>
+    webSourcePath(root)?.endsWith("index.html")
+      ? "app"
+      : root.replaceAll("\\", "/").split("/").at(-1)!.replace(/\.[^.]+$/, "")
+});
 
 function javascriptAssetPattern(name: string) {
-  return `assets/${assetResponsibilityName(name)}-[hash].js`;
+  return `assets/${publishedChunkName(name)}-[hash].js`;
 }
 
 function staticAssetPattern(names: string[]) {
@@ -189,96 +42,47 @@ function staticAssetPattern(names: string[]) {
   const baseName = extensionIndex >= 0
     ? originalName.slice(0, extensionIndex)
     : originalName;
-  return `assets/${assetResponsibilityName(baseName)}-[hash]${extension}`;
-}
-
-const storageBackendImageMigrationModuleSuffixes = [
-  "/src/lib/api/storage-backend-image-migration.ts",
-  "/src/pages/admin/storage/StorageBackendMigrationDialog.tsx"
-];
-
-function isStorageBackendImageMigrationModule(id: string) {
-  const normalized = id.replaceAll("\\", "/");
-  return storageBackendImageMigrationModuleSuffixes.some((suffix) => normalized.endsWith(suffix));
+  return `assets/${publishedChunkName(baseName)}-[hash]${extension}`;
 }
 
 function webBuildReport(): Plugin {
   return {
     name: "imageshow-web-build-report",
     generateBundle(_options, bundle) {
-      // Reuse module information only within this complete, synchronous graph.
-      const moduleInfo = new Map<string, ReturnType<ChunkingContext["getModuleInfo"]>>();
-      const reportContext: ChunkingContext = {
-        getModuleInfo: (id) => {
-          const cached = moduleInfo.get(id);
-          if (cached !== undefined) return cached;
-          const info = this.getModuleInfo(id);
-          moduleInfo.set(id, info);
-          return info;
-        }
-      };
-      const collectedChunks = Object.values(bundle).flatMap((output) => {
+      const chunks = Object.values(bundle).flatMap((output) => {
         if (output.type !== "chunk") return [];
         const metadata = output as typeof output & {
           viteMetadata?: { importedCss?: Set<string> };
         };
         const moduleIds = Object.keys(output.modules);
-        const modules = moduleIds
-          .map(webSourcePath)
-          .filter((path): path is string => path !== null);
-        const moduleRoots = Object.fromEntries(
-          moduleIds.flatMap((id) => {
-            const path = webSourcePath(id);
-            if (!path) return [];
-            const roots = entryRootIds(id, reportContext)
-              .map(webSourcePath)
-              .filter((root): root is string => root !== null);
-            return [[path, roots]];
-          })
-        );
         return [
           {
             file: output.fileName,
             name: output.name,
-            facade: webSourcePath(output.facadeModuleId),
             isEntry: output.isEntry,
-            isDynamicEntry: output.isDynamicEntry,
             imports: output.imports,
             dynamicImports: output.dynamicImports,
             css: [...(metadata.viteMetadata?.importedCss ?? [])],
             emitted: output.code.length > 0,
-            modules,
-            moduleRoots
+            modules: moduleIds
+              .map(webSourcePath)
+              .filter((path): path is string => path !== null),
+            // Lazy roots (the entry or dynamic import targets) this chunk holds.
+            rootModules: moduleIds
+              .filter((id) => {
+                const info = this.getModuleInfo(id);
+                return Boolean(info && (info.isEntry || info.dynamicImporters.length > 0));
+              })
+              .map(modulePath)
+              .filter((path): path is string => path !== null)
+              .sort()
           }
         ];
       });
-      const dynamicImporters = new Map<string, string[]>();
-      const cssOwners = new Map<string, Array<{ file: string; facade: string | null }>>();
-      for (const chunk of collectedChunks) {
-        for (const file of chunk.css) {
-          const owners = cssOwners.get(file) ?? [];
-          owners.push({ file: chunk.file, facade: chunk.facade });
-          cssOwners.set(file, owners);
-        }
-        for (const target of chunk.dynamicImports) {
-          const importers = dynamicImporters.get(target) ?? [];
-          importers.push(chunk.file);
-          dynamicImporters.set(target, importers);
-        }
-      }
-      const chunks = collectedChunks.map((chunk) => ({
-        ...chunk,
-        dynamicImporters: [...new Set(dynamicImporters.get(chunk.file) ?? [])].sort()
-      }));
-      const styles = [...cssOwners.keys()]
-        .sort().map((file) => ({
-        file,
-        owners: cssOwners.get(file)!
-      }));
       this.emitFile({
         type: "asset",
         fileName: ".vite/web-build-report.json",
-        source: JSON.stringify({ chunks, styles }, null, 2)
+        source: JSON.stringify({ chunks }, null, 2)
       });
     }
   };
@@ -304,49 +108,31 @@ const target = resolveProxyTarget();
 export default defineConfig({
   // Relative imports let one immutable build run behind any configured asset URL.
   base: "./",
-  plugins: [react(), webBuildReport()],
+  plugins: [react(), ...chunkPlan.plugins, webBuildReport()],
   build: {
     outDir: "dist",
     emptyOutDir: true,
+    // The show page carries its renderer; chunk sizes follow the plan above.
+    chunkSizeWarningLimit: 1024,
+    // Chunks import each other by stable names mapped to the current files in
+    // the document, so a release changes only the files whose content changed.
+    chunkImportMap: true,
     rolldownOptions: {
+      // The chunk plan spends seconds weighing merges on purpose.
+      checks: { bundlerTimings: false },
       output: {
-        // 独立 facade 使用简洁的 PascalCase 职责名，合并与共享块使用
-        // kebab-case 职责名；内容哈希独立负责缓存失效，不按字符数截断。
+        // 懒加载根的块用根的文件名，共用块为 common（访客也会加载）或 shared（只有管理员加载），
+        // 内容哈希区分同名文件并负责缓存失效。
         entryFileNames: ({ name }) => javascriptAssetPattern(name),
         chunkFileNames: ({ name }) => javascriptAssetPattern(name),
         assetFileNames: ({ names }) => staticAssetPattern(names),
 
         codeSplitting: {
-          // 页面与能力按实际入口根集合拆分；小块只在实测证明与目标页面必然
-          // 同行且完整线路字节下降时显式合并，不把体积阈值当成产物门禁。
           groups: [
             {
-              name: "query-vendor",
-              test: /[\\/]node_modules[\\/]@tanstack[\\/](?:react-query|query-core)[\\/]/,
-              priority: 5
-            },
-            {
-              name: "react-vendor",
-              test: /[\\/]node_modules[\\/](?:react-router|react-dom|react|scheduler)[\\/]/,
-              priority: 4
-            },
-            {
-              name: "storage-migration",
-              test: isStorageBackendImageMigrationModule,
-              priority: 3,
-              minShareCount: 2,
-              includeDependenciesRecursively: false
-            },
-            {
-              name: sharedChunkName,
-              debugName: "shared-modules",
-              test: (id) =>
-                !id.endsWith(".css") &&
-                ((/[\\/]packages[\\/]web[\\/]src[\\/]/.test(id) &&
-                  !/[\\/]packages[\\/]web[\\/]src[\\/]pages[\\/]/.test(id)) ||
-                  /[\\/]packages[\\/]shared[\\/]dist[\\/]browser(?:[\\/]|\.js$)/.test(id)),
+              name: (id) => chunkPlan.chunkOf(id),
+              debugName: "chunk-plan",
               priority: 1,
-              minShareCount: 2,
               includeDependenciesRecursively: false
             }
           ]

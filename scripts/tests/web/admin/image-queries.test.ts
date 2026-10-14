@@ -166,6 +166,18 @@ test("[Web/后台] 后台模块预加载只响应可执行意图并复用页面�
   assert.deepEqual(await firstLoad, { page: "site" });
   assert.strictEqual(loadModule(), firstLoad);
 
+  // The startup load and the page share one public route request, so a failed
+  // first load surfaces instead of a second import without its styles.
+  let startupImports = 0;
+  const startupLoader = createPublicRouteModuleLoader(() => {
+    startupImports += 1;
+    return Promise.reject(new Error("startup load failed"));
+  });
+  const startupLoad = startupLoader.module();
+  await assert.rejects(startupLoad, /startup load failed/);
+  assert.strictEqual(startupLoader.module(), startupLoad);
+  assert.equal(startupImports, 1);
+
   let retryImportCount = 0;
   const attempts: Array<{
     resolve: (value: { page: string }) => void;
@@ -195,7 +207,7 @@ test("[Web/后台] 后台模块预加载只响应可执行意图并复用页面�
     });
     retryableLoader.preload();
     retryableLoader.preload();
-    void retryableLoader.load();
+    void retryableLoader.module();
     assert.equal(retryImportCount, 1);
     attempts[0]!.reject(new Error("passive preload failed"));
     await new Promise<void>((resolve) => setImmediate(resolve));
@@ -236,7 +248,7 @@ test("[Web/后台] 后台模块预加载只响应可执行意图并复用页面�
     completedFailureLoader.preload();
     rejectCompletedPreload(new Error("completed passive preload failed"));
     await new Promise<void>((resolve) => setImmediate(resolve));
-    const recovery = completedFailureLoader.load();
+    const recovery = completedFailureLoader.module();
     assert.ok(recovery instanceof Promise);
     assert.equal(documentReloads, 1);
     assert.equal(

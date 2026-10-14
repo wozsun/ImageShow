@@ -103,14 +103,15 @@ test("[Web/公开视口] 嵌入安全区校验父窗口、实例、来源和尺�
     restoreDocument();
     restoreCrypto();
   });
-  function Bridge({ enabled }: { enabled: boolean }) {
-    useEmbeddedSafeArea(enabled);
+  // The embed layout mounts the bridge only while embedding is enabled.
+  function Bridge() {
+    useEmbeddedSafeArea();
     return null;
   }
   const render = (enabled: boolean) =>
     h.render(
       h.React.createElement(h.React.StrictMode, null,
-        h.React.createElement(Bridge, { enabled }))
+        enabled ? h.React.createElement(Bridge) : null)
     );
   await render(false);
   assert.equal(messages.length, 0);
@@ -234,14 +235,15 @@ test("[Web/公开视口] 原生安全区按订阅上报、合并变化，断开�
     restoreWindow();
     restoreDocument();
   });
-  function Bridge({ enabled }: { enabled: boolean }) {
-    useEmbeddedSafeArea(enabled);
+  // The embed layout mounts the bridge only while embedding is enabled.
+  function Bridge() {
+    useEmbeddedSafeArea();
     return null;
   }
   const render = (enabled: boolean) =>
     h.render(
       h.React.createElement(h.React.StrictMode, null,
-        h.React.createElement(Bridge, { enabled }))
+        enabled ? h.React.createElement(Bridge) : null)
     );
   await render(true);
   let ready = messages.at(-1)!.data;

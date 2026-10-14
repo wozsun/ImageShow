@@ -8,7 +8,7 @@ import {
   type RuntimeConfig
 } from "../../../packages/shared/src/browser.ts";
 import type { StorageBackendAdminDto } from "@imageshow/shared/browser";
-import type { VocabularyColumnId } from "../../../packages/web/src/pages/admin/VocabularyAdminItem.tsx";
+import type { VocabularyColumnId } from "../../../packages/web/src/pages/admin/vocabulary/VocabularyAdminItem.tsx";
 import { ApiClientError } from "../../../packages/web/src/lib/api/client.ts";
 import { invalidateImageDataAfterMetadataSave } from "../../../packages/web/src/lib/api/query-invalidation.ts";
 import { queryKeys } from "../../../packages/web/src/lib/api/query-keys.ts";
@@ -230,7 +230,7 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
     const { SiteHead } = await import("../../../packages/web/src/components/layout/SiteHead.tsx");
     const { AdminShell } =
       await import("../../../packages/web/src/pages/admin/shell/AdminShell.tsx");
-    const { AuthSessionProvider, useAuthSessionQuery } =
+    const { AuthSessionProvider, prefetchAuthSession, useAuthSessionQuery } =
       await import("../../../packages/web/src/hooks/useAuthSession.tsx");
     const container = document.getElementById("root");
     assert.ok(container);
@@ -395,6 +395,18 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
     assert.equal(localStorage.getItem("site_session_hint"), null);
     await React.act(async () => authRoot.unmount());
     authClient.clear();
+
+    // A public page's provider joins the startup session read in flight, so
+    // that read retries like the provider's own.
+    scenario = "admin-auth";
+    localStorage.setItem("site_session_hint", "1");
+    const retryClient = new QueryClient({
+      defaultOptions: { queries: { retry: 1, retryDelay: 0 } }
+    });
+    requestedPaths.length = 0;
+    assert.equal(await prefetchAuthSession(retryClient, "/gallery"), undefined);
+    assert.deepEqual(requestedPaths, ["/api/admin/auth/me", "/api/admin/auth/me"]);
+    retryClient.clear();
   } finally {
     for (const [key, descriptor] of previousGlobals) {
       if (descriptor) {
@@ -1785,7 +1797,7 @@ test("[Web/后台表单] 日志等级保存隔离旧读取，跨文件缓存采�
         : next(url, context);
     }
   });
-  const { LogPage } = await import("../../../packages/web/src/pages/admin/LogPage.tsx").finally(
+  const { LogPage } = await import("../../../packages/web/src/pages/admin/logs/LogPage.tsx").finally(
     () => hooks.deregister()
   );
   const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
@@ -2277,7 +2289,7 @@ for (const kind of ["user", "storage"] as const) {
     });
     const Component = await (
       kind === "user"
-        ? import("../../../packages/web/src/pages/admin/UserAdmin.tsx").then(
+        ? import("../../../packages/web/src/pages/admin/users/UserAdmin.tsx").then(
             (module) => module.UserAdmin
           )
         : import("../../../packages/web/src/pages/admin/storage/StorageSettings.tsx").then(
@@ -2391,7 +2403,7 @@ test("[Web/后台表单] 词条两种视图按字段保护 dirty，clean 跟随�
   const h = await createConfigStreamHarness(t);
   const clock = installControlledClock(t, h.window);
   const { VocabularyAdminItem } =
-    await import("../../../packages/web/src/pages/admin/VocabularyAdminItem.tsx");
+    await import("../../../packages/web/src/pages/admin/vocabulary/VocabularyAdminItem.tsx");
   const { useActionFeedbackTarget } =
     await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
   // 词条的排序输入把提示投递到所在页面的反馈目标；本用例不触发排序提示，由宿主提供稳定目标。
@@ -2472,7 +2484,7 @@ test("[Web/后台表单] 词条两种视图按字段保护 dirty，clean 跟随�
 test("[Web/后台表单] 词条图标在视图切换中保留保存状态、失败草稿与删除权限", async (t) => {
   const h = await createConfigStreamHarness(t);
   const clock = installControlledClock(t, h.window);
-  const { VocabularyAdminItem } = await import("../../../packages/web/src/pages/admin/VocabularyAdminItem.tsx");
+  const { VocabularyAdminItem } = await import("../../../packages/web/src/pages/admin/vocabulary/VocabularyAdminItem.tsx");
   const { useActionFeedbackTarget } =
     await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
   function Item(props: Omit<Parameters<typeof VocabularyAdminItem>[0], "sortFeedbackTarget">) {

@@ -30,6 +30,11 @@
   color: var(--public-color-loading-text);
 }
 
+/* 页面文档自带的加载屏在颜色域确定之前显示；公开页文档带此类，取公开页的加载文字颜色。 */
+.app-loading-screen.app-public-loading .app-loading-text {
+  color: var(--public-color-loading-text);
+}
+
 .app-loading-reserved-dots {
   visibility: hidden;
 }

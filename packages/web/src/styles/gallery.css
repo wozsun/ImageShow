@@ -83,9 +83,6 @@ body:has(.gallery-page) {
 .gallery-toolbar-spacer {
   height: var(--gallery-toolbar-height);
 }
-.gallery-toolbar.is-scroll-hidden {
-  pointer-events: none;
-}
 .public-toolbar-leading {
   display: flex;
   align-items: center;

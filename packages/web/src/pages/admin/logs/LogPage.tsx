@@ -7,28 +7,28 @@ import {
   type LogLevel,
   adminApiBasePath
 } from "@imageshow/shared/browser";
-import { api, isApiClientError } from "../../lib/api/client.js";
-import { SelectMenu } from "../../components/form/SelectMenu.js";
-import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
-import { queryKeys } from "../../lib/api/query-keys.js";
-import { formatBytes, formatDate } from "../../lib/ui/formatters.js";
-import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
-import { waitForMinimumPendingDuration } from "../../lib/ui/async-action-timing.js";
-import type { SelectOption } from "../../lib/ui/select-options.js";
+import { api, isApiClientError } from "../../../lib/api/client.js";
+import { SelectMenu } from "../../../components/form/SelectMenu.js";
+import { AsyncActionButton } from "../../../components/actions/AsyncActionButton.js";
+import { queryKeys } from "../../../lib/api/query-keys.js";
+import { formatBytes, formatDate } from "../../../lib/ui/formatters.js";
+import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
+import { waitForMinimumPendingDuration } from "../../../lib/ui/async-action-timing.js";
+import type { SelectOption } from "../../../lib/ui/select-options.js";
 import {
   createActionFeedback,
   type ActionFeedbackState
-} from "../../lib/ui/action-feedback.js";
+} from "../../../lib/ui/action-feedback.js";
 import {
   ActionFeedbackOutlet,
   useActionFeedbackTarget
-} from "../../components/feedback/ActionFeedbackRegion.js";
-import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
-import { useWorkspaceToolbarCollapse } from "../../hooks/useWorkspaceToolbarCollapse.js";
-import { WorkspaceToolbarScrollbar } from "../../components/layout/WorkspaceToolbarScrollbar.js";
-import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
-import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
-import "../../styles/admin/logs.css";
+} from "../../../components/feedback/ActionFeedbackRegion.js";
+import { OverlayScrollbar } from "../../../components/layout/OverlayScrollbar.js";
+import { useWorkspaceToolbarCollapse } from "../../../hooks/useWorkspaceToolbarCollapse.js";
+import { WorkspaceToolbarScrollbar } from "../../../components/layout/WorkspaceToolbarScrollbar.js";
+import { WorkspaceHeader } from "../../../components/layout/WorkspaceHeader.js";
+import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
+import "../../../styles/admin/logs.css";
 
 const logLevelOptions: SelectOption[] = logLevels.map((level) => ({
   value: level,

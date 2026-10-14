@@ -116,6 +116,10 @@ export async function verifyStaticCompression() {
       );
     }
     await writeFile(resolve(directory, "packages/server/schema.sql"), "SELECT 1;\n");
+    await writeFile(
+      resolve(input, ".vite/document-preloads.json"),
+      JSON.stringify({ schemaVersion: 1, documents: {} })
+    );
     const template = "<html><title>dynamic template</title></html>";
     await writeFile(resolve(input, "index.html"), template);
     for (const file of ["assets/app.js", "assets/help.html", "assets/nested/index.html"])

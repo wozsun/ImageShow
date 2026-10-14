@@ -1,9 +1,9 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { adminApiBasePath, type ImageGroupListResponseDto, type ImageGroupAddResponseDto } from "@imageshow/shared/browser";
-import { api } from "./client.js";
-import { requestWithDeadline } from "./request-deadline.js";
-import { readRequestRetryOptions } from "./read-request-retry.js";
-import { queryKeys } from "./query-keys.js";
+import { api } from "../../../lib/api/client.js";
+import { requestWithDeadline } from "../../../lib/api/request-deadline.js";
+import { readRequestRetryOptions } from "../../../lib/api/read-request-retry.js";
+import { queryKeys } from "../../../lib/api/query-keys.js";
 
 export const imageGroupsQuery = {
   queryKey: queryKeys.groups,

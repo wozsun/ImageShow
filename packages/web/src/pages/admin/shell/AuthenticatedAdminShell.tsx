@@ -1,4 +1,4 @@
-import { lazy, Suspense, useLayoutEffect, useRef, useState } from "react";
+import { Suspense, useLayoutEffect, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router";
 import {
   adminPermissions,
@@ -7,6 +7,7 @@ import {
   type AdminRole,
   adminBasePath
 } from "@imageshow/shared/browser";
+import { moduleComponent } from "../../../lib/page-lifetime-module-loader.js";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { OverlayScrollbar } from "../../../components/layout/OverlayScrollbar.js";
 import { MobileNavigation } from "../../../components/navigation/MobileNavigation.js";
@@ -23,7 +24,11 @@ import {
   reconcileAdminColorSchemeCycle,
   type AdminColorSchemeCycle
 } from "../../../lib/ui/color-scheme.js";
-import { adminRouteModuleLoaders } from "./admin-route-modules.js";
+import {
+  adminRouteModuleLoaders,
+  adminRoutesFor,
+  type AdminRoute
+} from "./admin-route-modules.js";
 import {
   AdminNavigationLinks,
   AdminSiteNavigation,
@@ -34,57 +39,48 @@ import { AdminBrand } from "./AdminBrand.js";
 import "../../../styles/admin/semantic-colors.css";
 import "../../../styles/admin-core.css";
 
-const Overview = lazy(() =>
-  adminRouteModuleLoaders.overview().then((module) => ({
-    default: module.Overview
-  }))
-);
-const ImageAdmin = lazy(() =>
-  adminRouteModuleLoaders.images().then((module) => ({
-    default: module.ImageAdmin
-  }))
-);
-const GroupDetail = lazy(() =>
-  adminRouteModuleLoaders.groupDetail().then((module) => ({ default: module.GroupDetail }))
-);
-const GroupAdmin = lazy(() =>
-  adminRouteModuleLoaders.groups().then((module) => ({ default: module.GroupAdmin }))
-);
-const VocabularyAdmin = lazy(() =>
-  adminRouteModuleLoaders.vocabulary().then((module) => ({
-    default: module.VocabularyAdmin
-  }))
-);
-const AccountSettings = lazy(() =>
-  adminRouteModuleLoaders.account().then((module) => ({
-    default: module.AccountSettings
-  }))
-);
-const SettingsPage = lazy(() =>
-  adminRouteModuleLoaders.settings().then((module) => ({
-    default: module.SettingsPage
-  }))
-);
-const StorageSettings = lazy(() =>
-  adminRouteModuleLoaders.storage().then((module) => ({
-    default: module.StorageSettings
-  }))
-);
-const UserAdmin = lazy(() =>
-  adminRouteModuleLoaders.users().then((module) => ({
-    default: module.UserAdmin
-  }))
-);
-const CheckPage = lazy(() =>
-  adminRouteModuleLoaders.check().then((module) => ({
-    default: module.CheckPage
-  }))
-);
-const LogPage = lazy(() =>
-  adminRouteModuleLoaders.logs().then((module) => ({
-    default: module.LogPage
-  }))
-);
+// 登录前外壳经工作区取得当前页面，页面表不进入登录页。
+export { loadAdminRouteModule } from "./admin-route-modules.js";
+
+const pages = adminRouteModuleLoaders;
+const Overview = moduleComponent(pages.overview, (module) => module.Overview);
+const ImageAdmin = moduleComponent(pages.images, (module) => module.ImageAdmin);
+const GroupDetail = moduleComponent(pages.groupDetail, (module) => module.GroupDetail);
+const GroupAdmin = moduleComponent(pages.groups, (module) => module.GroupAdmin);
+const VocabularyAdmin = moduleComponent(pages.vocabulary, (module) => module.VocabularyAdmin);
+const AccountSettings = moduleComponent(pages.account, (module) => module.AccountSettings);
+const SettingsPage = moduleComponent(pages.settings, (module) => module.SettingsPage);
+const StorageSettings = moduleComponent(pages.storage, (module) => module.StorageSettings);
+const UserAdmin = moduleComponent(pages.users, (module) => module.UserAdmin);
+const CheckPage = moduleComponent(pages.check, (module) => module.CheckPage);
+const LogPage = moduleComponent(pages.logs, (module) => module.LogPage);
+
+function adminPage(route: AdminRoute, canManageStorage: boolean) {
+  switch (route.module) {
+    case "overview":
+      return <Overview canManageStorage={canManageStorage} />;
+    case "images":
+      return <ImageAdmin />;
+    case "groupDetail":
+      return <GroupDetail />;
+    case "groups":
+      return <GroupAdmin />;
+    case "vocabulary":
+      return <VocabularyAdmin key={route.path} kind={route.path} />;
+    case "account":
+      return <AccountSettings />;
+    case "settings":
+      return <SettingsPage />;
+    case "storage":
+      return <StorageSettings />;
+    case "users":
+      return <UserAdmin />;
+    case "check":
+      return <CheckPage />;
+    case "logs":
+      return <LogPage />;
+  }
+}
 
 type AuthenticatedAdminShellProps = {
   role: AdminRole;
@@ -116,11 +112,7 @@ function AuthenticatedAdminLayout({
   const navScrollRef = useRef<HTMLDivElement | null>(null);
   const [colorScheme, setColorScheme] = useAdminPreference("color_scheme");
   const [colorSchemeCycle, setColorSchemeCycle] = useState<AdminColorSchemeCycle | null>(null);
-  const canManageSettings = permissions.includes(adminPermissions.settingsManage);
   const canManageStorage = permissions.includes(adminPermissions.storageManage);
-  const canManageUsers = permissions.includes(adminPermissions.usersManage);
-  const canManageLogs = permissions.includes(adminPermissions.logsManage);
-  const overviewPage = <Overview canManageStorage={canManageStorage} />;
   const navigation = adminNavigationForPermissions(role, permissions);
 
   const resolvedColorScheme = useAdminColorScheme(colorScheme);
@@ -203,20 +195,15 @@ function AuthenticatedAdminLayout({
         <RouteLoadBoundary resetKey={routeLocation.pathname}>
           <Suspense fallback={<div className="center">加载中</div>}>
             <Routes>
-              <Route index element={overviewPage} />
-              <Route path="overview" element={overviewPage} />
-              <Route path="images" element={<ImageAdmin />} />
-              <Route path="groups/:slug" element={<GroupDetail />} />
-            <Route path="groups" element={<GroupAdmin />} />
-              <Route path="tags" element={<VocabularyAdmin key="tags" kind="tags" />} />
-              <Route path="themes" element={<VocabularyAdmin key="themes" kind="themes" />} />
-              <Route path="authors" element={<VocabularyAdmin key="authors" kind="authors" />} />
-              <Route path="account" element={<AccountSettings />} />
-              {canManageSettings && <Route path="settings" element={<SettingsPage />} />}
-              {canManageStorage && <Route path="storage" element={<StorageSettings />} />}
-              {canManageUsers && <Route path="users" element={<UserAdmin />} />}
-              <Route path="check" element={<CheckPage />} />
-              {canManageLogs && <Route path="logs" element={<LogPage />} />}
+              {adminRoutesFor(permissions).map((route) => route.path ? (
+                <Route
+                  key={route.path}
+                  path={route.path}
+                  element={adminPage(route, canManageStorage)}
+                />
+              ) : (
+                <Route key="index" index element={adminPage(route, canManageStorage)} />
+              ))}
               <Route path="*" element={<Navigate to={adminBasePath} replace />} />
             </Routes>
           </Suspense>

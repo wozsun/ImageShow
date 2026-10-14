@@ -694,7 +694,10 @@ button.active,
   padding: 8px;
   display: grid;
   gap: 4px;
-  color: var(--color-public-navigation-text);
+  /* The admin shell styles its menu controls itself and sets this alias for
+     the menu's own text; elsewhere the public token applies, read here so
+     page-level overrides still reach it. */
+  color: var(--color-navigation-text, var(--color-public-navigation-text));
   background: var(--public-color-navigation-surface-solid);
   border: 1px solid var(--public-color-border-default);
   border-radius: 8px;

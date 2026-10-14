@@ -25,3 +25,10 @@
     rgba(201, 209, 217, 0.42)
   );
 }
+
+/* The shared mobile menu's own text follows the admin navigation in the
+   admin domain, whichever public styles the page has loaded as well; the
+   admin shell styles the menu's controls and links directly. */
+:root[data-ui-context="admin"] {
+  --color-navigation-text: var(--admin-color-navigation-text);
+}

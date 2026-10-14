@@ -1,9 +1,13 @@
-import { lazy, useLayoutEffect } from "react";
+import { useLayoutEffect } from "react";
 import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, clearCsrfToken } from "../../../lib/api/client.js";
 import { adminApiBasePath, adminBasePath } from "@imageshow/shared/browser";
-import { clearSessionProbeHint } from "../../../lib/api/auth-session.js";
+import { clearSessionProbeHint, type AuthState } from "../../../lib/api/auth-session.js";
+import {
+  createPageLifetimeModuleLoader,
+  moduleComponent
+} from "../../../lib/page-lifetime-module-loader.js";
 import { useAuthSessionQuery } from "../../../hooks/useAuthSession.js";
 import { QueryErrorState } from "../../../components/feedback/QueryErrorState.js";
 import { AppLoadingScreen } from "../../../components/feedback/AppLoadingScreen.js";
@@ -28,16 +32,31 @@ function loadAdminCacheModule() {
   return adminCacheModulePromise;
 }
 
-const AdminLogin = lazy(() =>
-  import("../account/AdminLogin.js").then((module) => ({
-    default: module.AdminLogin
-  }))
+const adminLoginModule = createPageLifetimeModuleLoader(() => import("../account/AdminLogin.js"));
+const authenticatedAdminShellModule = createPageLifetimeModuleLoader(
+  () => import(/* @chunk access: image */ "./AuthenticatedAdminShell.js")
 );
-const AuthenticatedAdminShell = lazy(() =>
-  import("./AuthenticatedAdminShell.js").then((module) => ({
-    default: module.AuthenticatedAdminShell
-  }))
+const AdminLogin = moduleComponent(adminLoginModule, (module) => module.AdminLogin);
+const AuthenticatedAdminShell = moduleComponent(
+  authenticatedAdminShellModule,
+  (module) => module.AuthenticatedAdminShell
 );
+
+/**
+ * 首屏渲染前加载本次会话首先显示的内容：未登录为登录页，已登录为工作区及当前
+ * 地址的页面，渲染时不再先出现加载屏。当前页面由工作区按权限选出，登录确认前
+ * 不下载任何登录后的代码；会话读取失败时不加载，由外壳显示错误。
+ */
+export function loadInitialAdminPage(
+  pathname: string,
+  auth: AuthState | undefined
+): Promise<unknown> | undefined {
+  if (!auth) return undefined;
+  if (!auth.authenticated) return adminLoginModule();
+  return authenticatedAdminShellModule().then(({ loadAdminRouteModule }) =>
+    loadAdminRouteModule(pathname, auth.permissions)
+  );
+}
 
 export function AdminShell({ siteHeaderName }: { siteHeaderName: string }) {
   const navigate = useNavigate();

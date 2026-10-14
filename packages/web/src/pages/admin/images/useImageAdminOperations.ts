@@ -16,7 +16,7 @@ import {
 } from "../../../lib/ui/action-feedback.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import { waitForMinimumPendingDuration } from "../../../lib/ui/async-action-timing.js";
-import { openTrashPurgeProgress } from "../../../lib/api/trash-purge-progress.js";
+import { openTrashPurgeProgress } from "./trash-purge-progress.js";
 import { useTrashPurgeBackground } from "./useTrashPurgeBackground.js";
 
 export type ImageAdminView = "ready" | "deleted";

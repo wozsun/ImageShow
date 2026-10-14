@@ -5,7 +5,7 @@ import {
   type AdminSettings, type ImageGroupDto, type ImageGroupListResponseDto
 } from "@imageshow/shared/browser";
 import { api, isApiClientError } from "../../../lib/api/client.js";
-import { imageGroupsQuery } from "../../../lib/api/groups.js";
+import { imageGroupsQuery } from "./group-requests.js";
 import { queryKeys } from "../../../lib/api/query-keys.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import { ViewModeToggle } from "../../../components/actions/ViewModeToggle.js";

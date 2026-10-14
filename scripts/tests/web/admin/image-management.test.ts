@@ -35,7 +35,7 @@ test("[Web/后台] 概览渲染当前、历史与未知 Redis 占用且重建结
     }
   });
   const { Overview } =
-    await import("../../../../packages/web/src/pages/admin/Overview.tsx").finally(() =>
+    await import("../../../../packages/web/src/pages/admin/overview/Overview.tsx").finally(() =>
       cssHooks.deregister()
     );
   const { ActionFeedbackProvider } =
@@ -845,7 +845,7 @@ test("[Web/后台] 作者列表空闲时保存采用权威 DTO，新建前置且
     const { ActionFeedbackProvider } =
       await import("../../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
     const { VocabularyAdmin } =
-      await import("../../../../packages/web/src/pages/admin/VocabularyAdmin.tsx");
+      await import("../../../../packages/web/src/pages/admin/vocabulary/VocabularyAdmin.tsx");
     const { AdminPreferencesProvider } =
       await import("../../../../packages/web/src/hooks/useAdminPreferences.tsx");
     const client = new QueryClient({

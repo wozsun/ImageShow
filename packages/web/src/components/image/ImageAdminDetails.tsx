@@ -397,7 +397,7 @@ export function ImageAdminDetails({
               <CopyButton value={imageId} ariaLabel="复制图片 ID" />
             </dt>
             <dd className="image-detail-admin-uuid">{imageId}</dd>
-            <dt>存储</dt>
+            <dt>存储信息</dt>
             <dd title={variantSizeTitle}>
               {storage}
               {totalBytes !== null && <> · {formatBytes(totalBytes)}</>}

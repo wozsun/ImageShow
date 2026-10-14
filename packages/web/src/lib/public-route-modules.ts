@@ -9,6 +9,7 @@ import {
   useContext,
   type ReactNode
 } from "react";
+import { fulfilledForSuspense, readableBySuspense } from "./page-lifetime-module-loader.js";
 
 /**
  * Reuses a public route request while it is pending or fulfilled, and records
@@ -16,6 +17,7 @@ import {
  */
 export function createPublicRouteModuleLoader<T>(importModule: () => Promise<T>) {
   let loadedModule: T | undefined;
+  let rendered: Promise<T> | undefined;
   let pending: { passive: boolean; promise: Promise<T> } | undefined;
   let passivePreloadFailed = false;
 
@@ -38,25 +40,36 @@ export function createPublicRouteModuleLoader<T>(importModule: () => Promise<T>)
     return nextPromise;
   };
 
+  const load = () => {
+    if (passivePreloadFailed) {
+      // A native module import failure is cached for the whole document, so
+      // retrying the same specifier from the page component cannot recover it. Keep
+      // the recovery at the loader boundary as well as on intent links:
+      // programmatic and otherwise unbound SPA entries then receive the same
+      // fresh document module map after the router commits their target URL.
+      window.location.reload();
+      return new Promise<T>(() => undefined);
+    }
+    if (!pending?.passive) return start(false);
+    return pending.promise.catch(() => {
+      // Native module maps retain a failed import for this document. The
+      // router has already committed the target URL, so a single reload
+      // gives normal navigation a fresh module map without looping.
+      window.location.reload();
+      return new Promise<T>(() => undefined);
+    });
+  };
+
   return {
-    load: () => {
-      if (passivePreloadFailed) {
-        // A native module import failure is cached for the whole document, so
-        // retrying the same specifier from React.lazy cannot recover it. Keep
-        // the recovery at the loader boundary as well as on intent links:
-        // programmatic and otherwise unbound SPA entries then receive the same
-        // fresh document module map after the router commits their target URL.
-        window.location.reload();
-        return new Promise<T>(() => undefined);
-      }
-      if (!pending?.passive) return start(false);
-      return pending.promise.catch(() => {
-        // Native module maps retain a failed import for this document. The
-        // router has already committed the target URL, so a single reload
-        // gives normal navigation a fresh module map without looping.
-        window.location.reload();
-        return new Promise<T>(() => undefined);
-      });
+    // The one request the startup load and the page component share; it
+    // keeps a failure, since Vite skips style files it already requested and
+    // a second import could render the page without them. A module loaded
+    // before the first render is read without a loading screen.
+    module: () => {
+      rendered ??= loadedModule === undefined
+        ? readableBySuspense(load())
+        : fulfilledForSuspense(loadedModule);
+      return rendered;
     },
     preload: () => {
       void start(true).catch(() => undefined);

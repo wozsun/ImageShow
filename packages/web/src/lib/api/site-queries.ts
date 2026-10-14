@@ -33,6 +33,11 @@ const inlinedSiteConfig: SiteConfig | undefined = (() => {
   }
 })();
 
+/** The configuration the server inlined into the document, if any. */
+export function initialSiteConfig() {
+  return inlinedSiteConfig;
+}
+
 export function useSiteConfig() {
   return useQuery<SiteConfig>({
     queryKey: queryKeys.siteConfig,

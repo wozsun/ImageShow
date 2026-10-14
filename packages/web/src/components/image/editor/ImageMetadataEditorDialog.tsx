@@ -52,7 +52,7 @@ type ImageStorageMigrationDialogModule = typeof import("./ImageStorageMigrationD
 
 const loadImageStorageMigrationDialog =
   createPageLifetimeModuleLoader<ImageStorageMigrationDialogModule>(
-    () => import("./ImageStorageMigrationDialog.js")
+    () => import(/* @chunk access: super */ "./ImageStorageMigrationDialog.js")
   );
 const preloadImageStorageMigrationDialog = () => {
   void loadImageStorageMigrationDialog().catch(() => undefined);

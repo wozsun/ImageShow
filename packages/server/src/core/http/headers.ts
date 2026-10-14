@@ -32,19 +32,28 @@ export type DocumentScriptSources = Readonly<{
   script_sources: readonly string[];
 }>;
 
-function documentScriptPolicy({ assets_base_url, script_sources }: DocumentScriptSources) {
+// Inline scripts the document runs, such as its import map, are allowed by
+// the SHA-256 (base64) of their text.
+function documentScriptPolicy(
+  { assets_base_url, script_sources }: DocumentScriptSources,
+  inlineScriptHashes: readonly string[]
+) {
   const sources = [
     "'self'",
     ...(assets_base_url ? [new URL(assets_base_url).origin] : []),
-    ...script_sources
+    ...script_sources,
+    ...inlineScriptHashes.map((hash) => `'sha256-${hash}'`)
   ];
   return `script-src ${[...new Set(sources)].join(" ")}; worker-src 'self'; object-src 'none'; base-uri 'self'`;
 }
 
-export function siteSpaDocumentHeaders(site: DocumentScriptSources): Readonly<Record<string, string>> {
+export function siteSpaDocumentHeaders(
+  site: DocumentScriptSources,
+  inlineScriptHashes: readonly string[]
+): Readonly<Record<string, string>> {
   return {
     ...siteDocumentHeaders,
-    "Content-Security-Policy": `${documentScriptPolicy(site)}; frame-ancestors 'none'`
+    "Content-Security-Policy": `${documentScriptPolicy(site, inlineScriptHashes)}; frame-ancestors 'none'`
   };
 }
 
@@ -52,14 +61,15 @@ const embedDocumentContextKey = "embedDocumentResponse";
 
 export function embedSpaDocumentHeaders(
   allowedOrigins: readonly string[],
-  site: DocumentScriptSources
+  site: DocumentScriptSources,
+  inlineScriptHashes: readonly string[]
 ): Readonly<Record<string, string>> {
   const frameAncestors = allowedOrigins.length
     ? allowedOrigins.join(" ")
     : "'none'";
   return {
     ...commonSecurityHeaders,
-    "Content-Security-Policy": `${documentScriptPolicy(site)}; frame-ancestors ${frameAncestors}`
+    "Content-Security-Policy": `${documentScriptPolicy(site, inlineScriptHashes)}; frame-ancestors ${frameAncestors}`
   };
 }
 

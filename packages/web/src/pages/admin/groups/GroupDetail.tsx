@@ -23,7 +23,7 @@ import { useImageEditorCapability } from "../../../components/image/editor/useIm
 import { useAdminPreference } from "../../../hooks/useAdminPreferences.js";
 import { mobileViewportMediaQuery, useMediaQuery } from "../../../hooks/useMediaQuery.js";
 import { useWorkspaceToolbarCollapse } from "../../../hooks/useWorkspaceToolbarCollapse.js";
-import { addImageGroupMembers, imageGroupsQuery, refreshImageGroup, removeImageGroupMembers } from "../../../lib/api/groups.js";
+import { addImageGroupMembers, imageGroupsQuery, refreshImageGroup, removeImageGroupMembers } from "./group-requests.js";
 import { isApiClientError } from "../../../lib/api/client.js";
 import { queryKeys } from "../../../lib/api/query-keys.js";
 import { useIngestionVocabulary } from "../../../lib/api/ingestion-vocabulary.js";

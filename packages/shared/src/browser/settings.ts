@@ -116,6 +116,26 @@ export function publicHomeBrowsePath(
   return null;
 }
 
+/**
+ * The public page a path shows under the enable and fallback rules: the path
+ * itself, the page it redirects to, or null when no public page is enabled.
+ * The root path and unknown paths show the root page. The routes, the
+ * startup load and the server's document preloads all follow it.
+ */
+export function publicPageTarget(
+  site: PublicPageAvailability & { home: Pick<SiteHomeSettings, "enabled" | "browse_target"> },
+  embedEnabled: boolean,
+  path: string
+): PublicPagePath | `/embed/${SiteRoot}` | null {
+  const rootPath = publicRootPath(site);
+  const page = /^\/(home|show|gallery)$/.exec(path)?.[1] as SiteRoot | undefined;
+  if (page) return publicPageEnabled(site, page) ? `/${page}` : rootPath;
+  const embedded = /^\/embed\/(home|show|gallery)$/.exec(path)?.[1] as SiteRoot | undefined;
+  if (!embedded || !embedEnabled) return rootPath;
+  if (publicPageEnabled(site, embedded)) return `/embed/${embedded}`;
+  return embedded === "home" ? publicHomeBrowsePath(site, true) ?? rootPath : rootPath;
+}
+
 type EmbedSettings = {
   enabled: boolean;
   allowed_origins: string[];
