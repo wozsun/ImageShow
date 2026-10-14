@@ -50,12 +50,9 @@ export function SiteHead() {
     const description = ensureMeta("description");
     description.content = site.description;
 
-    let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
-    if (!link) {
-      link = document.createElement("link");
-      link.rel = "icon";
-      document.head.appendChild(link);
-    }
+    // 只更新文档自带的图标：嵌入文档不带图标（标签页属于父页面），这里也不补上。
+    const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    if (!link) return;
     link.type = site.icon.endsWith(".svg") ? "image/svg+xml" : "";
     link.href = site.icon;
   }, [site?.title, site?.description, site?.icon]);

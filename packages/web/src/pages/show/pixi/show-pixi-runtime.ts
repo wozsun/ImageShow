@@ -1,10 +1,16 @@
 import "pixi.js/unsafe-eval";
 import {
   AccessibilitySystem,
-  Application,
+  Container,
   extensions,
+  isWebGLSupported,
   loadEnvironmentExtensions,
-  type Ticker
+  Ticker,
+  UPDATE_PRIORITY,
+  WebGLRenderer,
+  type DestroyOptions,
+  type RendererDestroyOptions,
+  type WebGLOptions
 } from "pixi.js";
 import type { ShowOrder } from "@imageshow/shared/browser";
 import { reducedMotionQuery } from "../../../lib/ui/reduced-motion.js";
@@ -103,8 +109,58 @@ export function showPixiTextureCacheOptions(
   };
 }
 
+/** The parts of a Pixi application the runtime drives. */
+type ShowPixiApplication = {
+  readonly renderer: WebGLRenderer;
+  readonly canvas: HTMLCanvasElement;
+  readonly stage: Container;
+  readonly ticker: Ticker;
+  start(): void;
+  stop(): void;
+  destroy(rendererOptions: RendererDestroyOptions, stageOptions: DestroyOptions): void;
+};
+
+/**
+ * The stage draws through WebGL only. Pixi's Application picks a renderer at
+ * runtime and so brings the WebGPU and canvas renderers into the page's code;
+ * creating the WebGL renderer directly leaves them out. The ticker renders
+ * after the frame's other listeners, as Application's ticker plugin does.
+ */
+async function createShowPixiApplication(options: Partial<WebGLOptions>): Promise<ShowPixiApplication> {
+  // Like Pixi's automatic choice, check support before creating a renderer:
+  // one whose context cannot be created keeps its scheduler on the global
+  // ticker, and destroying it as a whole fails on the missing context.
+  if (!isWebGLSupported()) throw new Error("WebGL is not supported");
+  const renderer = new WebGLRenderer();
+  try {
+    await renderer.init(options);
+  } catch (error) {
+    renderer.scheduler?.destroy();
+    throw error;
+  }
+  const stage = new Container();
+  const ticker = new Ticker();
+  const render = () => renderer.render({ container: stage });
+  ticker.add(render, undefined, UPDATE_PRIORITY.LOW);
+  ticker.start();
+  return {
+    renderer,
+    canvas: renderer.canvas,
+    stage,
+    ticker,
+    start: () => ticker.start(),
+    stop: () => ticker.stop(),
+    destroy(rendererOptions, stageOptions) {
+      ticker.remove(render);
+      ticker.destroy();
+      stage.destroy(stageOptions);
+      renderer.destroy(rendererOptions);
+    }
+  };
+}
+
 export class ShowPixiRuntime {
-  readonly app: Application;
+  readonly app: ShowPixiApplication;
   readonly #host: HTMLElement;
   readonly #textureCache: ShowPixiTextureCache;
   readonly #resizeObserver: ResizeObserver;
@@ -152,15 +208,11 @@ export class ShowPixiRuntime {
     // The bounded React proxy list owns keyboard and screen-reader access.
     // Remove Pixi's separate mobile activation button before systems initialize.
     extensions.remove(AccessibilitySystem);
-    const app = new Application();
     const width = Math.max(1, host.clientWidth || window.innerWidth);
     const height = Math.max(1, host.clientHeight || window.innerHeight);
-    await app.init({
+    const app = await createShowPixiApplication({
       width,
       height,
-      autoStart: true,
-      sharedTicker: false,
-      preference: "webgl",
       preferWebGLVersion: 2,
       powerPreference: "high-performance",
       antialias: true,
@@ -173,7 +225,7 @@ export class ShowPixiRuntime {
 
   private constructor(
     host: HTMLElement,
-    app: Application,
+    app: ShowPixiApplication,
     options: ShowPixiRuntimeOptions
   ) {
     const { signal } = this.#listenerController;
@@ -194,13 +246,10 @@ export class ShowPixiRuntime {
     this.#speed = options.speed;
     this.#statsElement = options.statsElement;
     const initialWidth = host.clientWidth || window.innerWidth;
-    const renderer = app.renderer as typeof app.renderer & {
-      gl?: WebGLRenderingContext | WebGL2RenderingContext;
-    };
     this.#textureCache = new ShowPixiTextureCache(
       showPixiTextureCacheOptions(
         initialWidth,
-        renderer.gl instanceof WebGL2RenderingContext
+        app.renderer.gl instanceof WebGL2RenderingContext
       )
     );
     app.canvas.className = "show-pixi-canvas";
@@ -610,10 +659,7 @@ export class ShowPixiRuntime {
 
   #contextExtension() {
     if (this.#contextLossExtension) return this.#contextLossExtension;
-    const renderer = this.app.renderer as typeof this.app.renderer & {
-      gl?: WebGLRenderingContext | WebGL2RenderingContext;
-    };
-    this.#contextLossExtension = renderer.gl?.getExtension("WEBGL_lose_context") ?? null;
+    this.#contextLossExtension = this.app.renderer.gl?.getExtension("WEBGL_lose_context") ?? null;
     return this.#contextLossExtension;
   }
 

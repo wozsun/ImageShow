@@ -1228,7 +1228,7 @@ for (const path of [
   const response = await app.request("http://imageshow.test" + path);
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("location"), null);
-  assert.ok(response.headers.get("cache-control")?.includes("no-store"));
+  assert.equal(response.headers.get("cache-control"), rootShow.headers.get("cache-control"));
   assert.ok(response.headers.get("content-security-policy")?.includes("frame-ancestors"));
   assert.ok(response.headers.get("content-security-policy")?.includes("frame-ancestors 'self'"));
   assert.ok(response.headers.get("content-security-policy")?.includes("https://portal.example.com"));
@@ -1244,8 +1244,9 @@ await updateRuntimeConfig({ embed: { allowed_origins: ["https://other.example.co
 const newEmbed = await app.request("http://imageshow.test/embed/show", {
   headers: { "if-none-match": oldEmbed.headers.get("etag"), "accept-encoding": "br" }
 });
-assert.equal(newEmbed.status, 304);
-assert.equal(newEmbed.headers.get("content-encoding"), null);
+// The policy belongs to the document's validator: a changed list sends the document anew.
+assert.equal(newEmbed.status, 200);
+assert.notEqual(newEmbed.headers.get("etag"), oldEmbed.headers.get("etag"));
 assert.ok(newEmbed.headers.get("content-security-policy").includes("https://other.example.com"));
 assert.ok(!newEmbed.headers.get("content-security-policy").includes("https://portal.example.com"));
 await updateRuntimeConfig({ embed: { enabled: false } });

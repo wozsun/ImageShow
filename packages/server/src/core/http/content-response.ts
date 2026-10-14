@@ -17,27 +17,33 @@ type ContentResponseOptions = {
 /**
  * Build one stable semantic representation before compression chooses a wire
  * encoding. The weak validator therefore remains valid for identity, gzip and
- * Brotli variants without reading or cloning a response stream.
+ * Brotli variants without reading or cloning a response stream. `metadata`
+ * carries response headers that vary apart from the body, so the validator
+ * changes with them too.
  */
-export function createContentRepresentation(body: string): ContentRepresentation {
+export function createContentRepresentation(body: string, metadata = ""): ContentRepresentation {
   return {
     body,
     byteLength: Buffer.byteLength(body, "utf8"),
-    etag: `W/"${entityTagDigest(body)}"`
+    etag: `W/"${entityTagDigest(metadata ? `${metadata}\n${body}` : body)}"`
   };
 }
 
 /** One published source snapshot and its response; never retain source history. */
-export function createContentSnapshot<T extends object>(render: (snapshot: T) => string) {
-  let cached: { source: T; representation: ContentRepresentation } | undefined;
+export function createContentSnapshot<T extends object>(
+  render: (snapshot: T) => string,
+  metadata?: (snapshot: T) => string
+) {
+  let cached: { source: T; metadata: string; representation: ContentRepresentation } | undefined;
   return (source: T): ContentRepresentation => {
     if (cached?.source === source) return cached.representation;
     const body = render(source);
+    const meta = metadata?.(source) ?? "";
     const representation =
-      cached?.representation.body === body
+      cached?.representation.body === body && cached.metadata === meta
         ? cached.representation
-        : createContentRepresentation(body);
-    cached = { source, representation };
+        : createContentRepresentation(body, meta);
+    cached = { source, metadata: meta, representation };
     return representation;
   };
 }

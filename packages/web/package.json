@@ -1,6 +1,6 @@
 {
   "name": "@imageshow/web",
-  "version": "6.8.9",
+  "version": "6.8.10",
   "private": true,
   "type": "module",
   "scripts": {
@@ -17,8 +17,8 @@
     "altcha": "^3.3.0",
     "pinyin-pro": "^3.29.5",
     "pixi.js": "^8.22.0",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "react-router": "^8.4.0"
   },
   "devDependencies": {

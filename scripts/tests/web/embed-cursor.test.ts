@@ -103,12 +103,15 @@ async function createBridgeHarness(t: TestContext) {
 }
 
 test("[Web/嵌入光标] 随嵌入启用，握手校验父窗口、来源、版本和实例，独立页面保持原生光标", async (t) => {
+  // Safari before 18.2, within the supported range, has no Uint8Array.prototype.toHex.
+  t.after(installProperties(Uint8Array.prototype, { toHex: undefined }));
   const h = await createBridgeHarness(t);
   await h.render(false);
   assert.equal(h.messages.length, 0);
   await h.render();
   assert.equal(h.active(), false);
   assert.deepEqual(Object.keys(h.ready()).sort(), ["bridgeId", "channel", "type", "version"]);
+  assert.match(String(h.ready().bridgeId), /^[0-9a-f]{32}$/);
   assert.equal(h.ready().channel, channel);
   h.mouse("pointermove");
   assert.deepEqual(h.events(), []);

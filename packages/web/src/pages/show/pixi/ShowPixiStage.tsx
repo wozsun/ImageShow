@@ -9,6 +9,7 @@ import {
   type ReactNode,
   type Ref
 } from "react";
+import { Link } from "react-router";
 import type { ShowOrder } from "@imageshow/shared/browser";
 import { PublicStarfield } from "../../../components/layout/PublicStarfield.js";
 import type { ShowImage } from "../show-layout.js";
@@ -42,6 +43,7 @@ export function ShowPixiStage({
   dataKey,
   dialogOpen,
   floatSizeIndex,
+  galleryHref,
   images,
   hasMore,
   onClusterFocusChange,
@@ -66,6 +68,8 @@ export function ShowPixiStage({
   dataKey: string;
   dialogOpen: boolean;
   floatSizeIndex: number;
+  /** Where to browse the same images when the stage cannot start; null when the gallery is off. */
+  galleryHref?: string | null;
   images: readonly ShowImage[];
   hasMore: boolean;
   onClusterFocusChange: (focus: ShowClusterFocus | null, entry?: ShowClusterEntry) => void;
@@ -98,7 +102,7 @@ export function ShowPixiStage({
   const handleOpen = useEffectEvent(onOpen);
   const [runtime, setRuntime] = useState<ShowPixiRuntime | null>(null);
   const [visibleItems, setVisibleItems] = useState<readonly ShowPixiVisibleItem[]>([]);
-  const [initializationError, setInitializationError] = useState("");
+  const [initializationFailed, setInitializationFailed] = useState(false);
   const [diagnosticsEnabled] = useState(
     () => import.meta.env.DEV || window.__imageShowPixiDiagnostics === true
   );
@@ -131,7 +135,7 @@ export function ShowPixiStage({
     };
     // React Strict Mode runs a development-only setup/cleanup/setup cycle.
     // Defer the expensive asynchronous WebGL initialization by one microtask
-    // so the discarded setup never creates a second Application or canvas.
+    // so the discarded setup never creates a second renderer or canvas.
     void Promise.resolve()
       .then(() => {
         if (disposed) return null;
@@ -183,11 +187,13 @@ export function ShowPixiStage({
         if (diagnosticsEnabled) created.exposeDebug();
         runtimeRef.current = created;
         setRuntime(created);
-        setInitializationError("");
+        setInitializationFailed(false);
       })
       .catch((error: unknown) => {
         if (disposed) return;
-        setInitializationError(error instanceof Error ? error.message : "WebGL 初始化失败");
+        // The page explains the requirement; the browser's own reason stays in the console.
+        console.error("[ImageShow] 展映无法初始化", error);
+        setInitializationFailed(true);
       });
     return () => {
       disposed = true;
@@ -270,12 +276,20 @@ export function ShowPixiStage({
           </div>
         ))}
       </div>
-      {initializationError && (
-        <div className="show-query-state" role="alert">
-          <p>PixiJS / WebGL 展映无法启动：{initializationError}</p>
+      {/* A stage that cannot start has no data states or hints worth showing over its notice. */}
+      {initializationFailed && (
+        <div className="show-query-state">
+          <div className="query-error-state" role="alert">
+            <p>当前浏览器无法显示展映（需要 WebGL）</p>
+            {galleryHref && (
+              <Link className="button secondary" to={galleryHref}>
+                在画廊中浏览
+              </Link>
+            )}
+          </div>
         </div>
       )}
-      {children}
+      {!initializationFailed && children}
       {diagnosticsEnabled && <output
         ref={statsRef}
         hidden

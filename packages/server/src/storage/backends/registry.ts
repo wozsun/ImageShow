@@ -186,6 +186,11 @@ export function invalidateStorageBackendRegistry() {
   storageCacheExpiresAt = 0;
 }
 
+/** The last published backends, empty before the first load; never starts database work. */
+export function publishedStorageBackends(): readonly StorageBackendRecord[] {
+  return storageCache ?? [];
+}
+
 /** Host admission uses the last published configuration without starting database work. */
 export function publishedLocalPublicUrl() {
   const local = storageCache?.find((backend) => backend.slug === "local");

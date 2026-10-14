@@ -13,6 +13,7 @@ import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { siteConfigPayload } from "../config/app-settings.ts";
 import { staticResourceBaseUrl } from "../config/site-host.ts";
 import { effectiveEmbedAncestorSources } from "../config/embed-ancestors.ts";
+import { publishedPublicImageOrigins } from "../storage/objects/public-urls.ts";
 import {
   embedSpaDocumentHeaders,
   markEmbedDocumentResponse,
@@ -80,18 +81,36 @@ function documentNames(path: string, runtime: RuntimeConfig): string[] {
   return embedded ? ["embed", embedded[1]!] : [target.slice(1)];
 }
 
+// Public pages connect to the hosts their images come from while their code
+// loads. The show page's textures are anonymous CORS fetches and the other
+// pages' images credentialed loads, which browsers keep on separate connections.
+function imageConnections(names: readonly string[]) {
+  const page = names.find((name) => name === "home" || name === "gallery" || name === "show");
+  if (!page) return "";
+  const crossorigin = page === "show" ? " crossorigin" : "";
+  return publishedPublicImageOrigins()
+    .map((origin) => `<link rel="preconnect" href="${escapeHtmlAttr(origin)}"${crossorigin}>`)
+    .join("");
+}
+
 const spaDocuments = new Map<string, {
+  connections: string;
   representation: (runtime: RuntimeConfig) => ContentRepresentation;
   encoded: ReturnType<typeof createEncodedContentCache>;
 }>();
 
-function spaDocument(names: readonly string[]) {
-  const key = names.join("+");
+function spaDocument(names: readonly string[], embedded: boolean, connections: string) {
+  const key = `${embedded ? "embedded:" : ""}${names.join("+")}`;
   let document = spaDocuments.get(key);
-  if (!document) {
+  // The image hosts follow the storage registry rather than the configuration,
+  // so a change replaces the document in place.
+  if (document?.connections !== connections) {
     document = {
+      connections,
       representation: createContentSnapshot(
-        (runtime: RuntimeConfig) => buildSpaDocument(runtime, names)
+        (runtime: RuntimeConfig) => buildSpaDocument(runtime, names, embedded, connections),
+        // A cache revalidating the document must also see its policy change.
+        (runtime: RuntimeConfig) => JSON.stringify(spaDocumentHeaders(runtime, embedded))
       ),
       encoded: createEncodedContentCache()
     };
@@ -156,7 +175,12 @@ function escapeHtmlAttr(value: string) {
     .replace(/'/g, "&#39;");
 }
 
-function buildSpaDocument(runtime: RuntimeConfig, names: readonly string[]): string {
+function buildSpaDocument(
+  runtime: RuntimeConfig,
+  names: readonly string[],
+  embedded: boolean,
+  connections: string
+): string {
   const source = readSpaTemplate();
   const preloads = readDocumentPreloads();
   const scripts = new Set(names.flatMap((name) => preloads[name]?.scripts ?? []));
@@ -179,7 +203,7 @@ function buildSpaDocument(runtime: RuntimeConfig, names: readonly string[]): str
     : source;
   return template
     .replace(importMapPattern, () => `<script type="importmap">${importMapOf(runtime).text}</script>`)
-    .replace("</head>", () => `${preloadLinks}</head>`)
+    .replace("</head>", () => `${connections}${preloadLinks}</head>`)
     .replace(
       /\b(src|href)="\.\/assets\//g,
       (_match, attribute: string) =>
@@ -192,49 +216,50 @@ function buildSpaDocument(runtime: RuntimeConfig, names: readonly string[]): str
     )
     .replace(
       /<link\s+rel="icon"[^>]*>/i,
+      // The tab belongs to the parent page, so an embedded document's icon
+      // never shows.
       () =>
-        `<link rel="icon" type="${iconUrl.endsWith(".svg") ? "image/svg+xml" : ""}" href="${iconUrl}" />`
+        embedded
+          ? ""
+          : `<link rel="icon" type="${iconUrl.endsWith(".svg") ? "image/svg+xml" : ""}" href="${iconUrl}" />`
     )
     .replace("</head>", () => `${head}</head>`);
 }
 
-function spaDocumentResponse(
-  c: Context,
-  runtime: RuntimeConfig,
-  options: {
-    cacheControl?: string;
-    headers: Readonly<Record<string, string>>;
-    ifNoneMatch?: string | null;
-    acceptEncoding?: string;
-  }
-) {
-  const document = spaDocument(documentNames(c.req.path, runtime));
-  const selected = document.encoded(document.representation(runtime), options.acceptEncoding);
+// A document's policy follows the configuration beyond its body: the script
+// sources, and for embeds the ancestors allowed to frame it.
+function spaDocumentHeaders(runtime: RuntimeConfig, embedded: boolean) {
+  const inlineScriptHashes = [importMapOf(runtime).hash];
+  return embedded
+    ? embedSpaDocumentHeaders(effectiveEmbedAncestorSources(runtime), runtime.site, inlineScriptHashes)
+    : siteSpaDocumentHeaders(runtime.site, inlineScriptHashes);
+}
+
+function spaDocumentResponse(c: Context, runtime: RuntimeConfig, embedded: boolean) {
+  const names = documentNames(c.req.path, runtime);
+  const document = spaDocument(names, embedded, imageConnections(names));
+  const headers = spaDocumentHeaders(runtime, embedded);
+  const selected = document.encoded(document.representation(runtime), c.req.header("accept-encoding"));
   if (!selected) {
     return new Response(null, {
       status: 406,
       headers: {
-        ...options.headers,
+        ...headers,
         Vary: "Accept-Encoding",
         "Cache-Control": noStoreCacheControl
       }
     });
   }
   return contentResponse(selected, {
-    cacheControl: options.cacheControl ?? publicDocumentCacheControl,
+    cacheControl: publicDocumentCacheControl,
     contentType: "text/html; charset=utf-8",
-    headers: { ...options.headers, Vary: "Accept-Encoding" },
-    ifNoneMatch: options.ifNoneMatch
+    headers: { ...headers, Vary: "Accept-Encoding" },
+    ifNoneMatch: c.req.header("if-none-match")
   });
 }
 
 async function spaHandler(c: Context) {
-  const runtime = getRuntimeConfig();
-  return spaDocumentResponse(c, runtime, {
-    headers: siteSpaDocumentHeaders(runtime.site, [importMapOf(runtime).hash]),
-    ifNoneMatch: c.req.header("if-none-match"),
-    acceptEncoding: c.req.header("accept-encoding")
-  });
+  return spaDocumentResponse(c, getRuntimeConfig(), false);
 }
 
 async function rootSpaHandler(c: Context) {
@@ -246,17 +271,8 @@ async function rootSpaHandler(c: Context) {
 
 async function embedSpaHandler(c: Context) {
   const runtime = getRuntimeConfig();
-  const allowedAncestors = effectiveEmbedAncestorSources(runtime);
-  if (allowedAncestors.length === 0) {
+  if (effectiveEmbedAncestorSources(runtime).length === 0) {
     return apiErrorResponse({ status: 404, message: "Not Found" });
   }
-  return markEmbedDocumentResponse(
-    c,
-    spaDocumentResponse(c, runtime, {
-      cacheControl: noStoreCacheControl,
-      headers: embedSpaDocumentHeaders(allowedAncestors, runtime.site, [importMapOf(runtime).hash]),
-      ifNoneMatch: c.req.header("if-none-match"),
-      acceptEncoding: c.req.header("accept-encoding")
-    })
-  );
+  return markEmbedDocumentResponse(c, spaDocumentResponse(c, runtime, true));
 }

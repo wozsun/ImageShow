@@ -659,13 +659,15 @@ test("[Web/展映] Stage 回调读取已提交版本并保持异步实例生命�
   await React.act(async () => render(6, false, "failure"));
   await React.act(async () => creations[1].ready.resolve(creations[1].instance));
   assert.equal(creations[1].destroys, 1, "过期异步初始化结果被销毁");
-  await React.act(async () =>
-    creations[2].ready.reject(new Error("controlled initialization failure"))
+  const logged = t.mock.method(console, "error", (..._data: unknown[]) => {});
+  const failure = new Error("controlled initialization failure");
+  await React.act(async () => creations[2].ready.reject(failure));
+  assert.ok(document.querySelector('[role="alert"]'), "初始化失败时显示提示");
+  assert.ok(
+    logged.mock.calls.some((call) => call.arguments.includes(failure)),
+    "浏览器给出的原因写入控制台"
   );
-  assert.match(
-    document.querySelector('[role="alert"]')!.textContent!,
-    /controlled initialization failure/u
-  );
+  logged.mock.restore();
   calls.length = 0;
   await React.act(async () => root.unmount());
   unmounted = true;

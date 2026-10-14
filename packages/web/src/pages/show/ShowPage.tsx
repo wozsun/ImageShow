@@ -1,4 +1,5 @@
 import {
+  publicPageTarget,
   readableFilterSearch,
   type ShowClusterGroup,
   type ShowDensity,
@@ -30,11 +31,13 @@ import { usePublicImageViewportControls } from "../../hooks/usePublicImageViewpo
 import { usePublicNavigationEntrance } from "../../hooks/usePublicNavigationEntrance.js";
 import {
   imageBrowseApiSearchParams,
+  imageBrowseNavigationHref,
   showClusterGroupFromSearchParams,
   showModeFromSearchParams,
   showOrderFromSearchParams,
   updateImageBrowseSearchParams
 } from "../../lib/gallery/gallery-query.js";
+import { useSiteConfig } from "../../lib/api/site-queries.js";
 import { publicNavigationAutoHideDelayMs } from "../../lib/ui/public-navigation.js";
 import {
   ShowClusterGroupControl,
@@ -107,6 +110,14 @@ export function ShowPage({
   settings: SiteShowSettings;
 }) {
   const browseRoute = useImageBrowseRoute();
+  const { data: siteConfig } = useSiteConfig();
+  // A stage that cannot start offers the gallery, when it shows itself, with
+  // the same filters and order; an embedded stage stays within the embeds.
+  const galleryPath = embedded ? "/embed/gallery" : "/gallery";
+  const galleryHref = siteConfig
+    && publicPageTarget(siteConfig.site, siteConfig.embed.enabled, galleryPath) === galleryPath
+    ? `${embedded ? "/embed" : ""}${imageBrowseNavigationHref("/gallery", browseRoute.browseSearch)}`
+    : null;
   const filterDialog = usePublicFilterDialog(browseRoute);
   const {
     params: routeSearchParams,
@@ -521,6 +532,7 @@ export function ShowPage({
         dataKey={data.committedKey}
         dialogOpen={dialogOpen}
         floatSizeIndex={floatSizeIndex}
+        galleryHref={galleryHref}
         images={data.images}
         hasMore={data.hasMore}
         onColumnsChange={requestWaterfallColumns}

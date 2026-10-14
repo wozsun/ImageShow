@@ -46,13 +46,3 @@
 .show-pixi-accessibility {
   z-index: 3;
 }
-
-.show-pixi-page .show-query-state > p {
-  width: min(440px, calc(100vw - 32px));
-  margin: 0;
-  padding: 18px;
-  color: var(--color-public-text-primary);
-  background: var(--public-color-gallery-menu-surface);
-  border: 1px solid var(--public-color-border-default);
-  border-radius: 14px;
-}
