@@ -55,6 +55,7 @@ type SiteGallerySettings = {
 
 type RuntimeSiteSettings = {
   domain: string;
+  additional_domains: string[];
   icon: string;
   title: string;
   description: string;

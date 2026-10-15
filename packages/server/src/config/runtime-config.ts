@@ -41,6 +41,7 @@ import {
   siteRoot,
   sessionTtlSeconds,
   siteDomain,
+  siteAdditionalDomains,
   siteDescription,
   siteFooter,
   siteFooterText,
@@ -60,6 +61,7 @@ const fallbackOrderMessage = "须包含 device、brightness、author、tag、the
 const runtimeConfigSchema = z.strictObject({
   site: z.strictObject({
     domain: siteDomain,
+    additional_domains: siteAdditionalDomains,
     icon: siteIcon,
     title: siteTitle,
     description: siteDescription,
@@ -226,12 +228,12 @@ function mergeDefined(base: Record<string, unknown>, patch: Record<string, unkno
 
 export function parseRuntimeConfig(value: unknown): RuntimeConfig {
   const config = runtimeConfigSchema.parse(value);
-  if (publicUrlUsesSiteHost(config.site.assets_base_url, config.site.domain)) {
+  if (publicUrlUsesSiteHost(config.site.assets_base_url, config.site)) {
     throw new z.ZodError([
       {
         code: "custom",
         path: ["site", "assets_base_url"],
-        message: "静态资源公开地址须使用独立 Host；使用主站地址请将公开 URL 留空"
+        message: "静态资源公开地址不能使用主站或附加站点域名；使用同源地址请将公开 URL 留空"
       }
     ]);
   }

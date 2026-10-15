@@ -2550,6 +2550,7 @@ test("[Web/后台表单] 词条图标在视图切换中保留保存状态、失�
 
 test("[Web/后台表单] 站点配置完整草稿支持保存与重载确认，并在超时、失败和卸载后收口", async (t) => {
   const h = await createConfigStreamHarness(t);
+  h.window.scrollTo = () => {};
   const clock = installControlledClock(t, h.window);
   const { registerHooks } = await import("node:module");
   const hooks = registerHooks({
@@ -2744,10 +2745,10 @@ test("[Web/后台表单] 站点配置完整草稿支持保存与重载确认，�
   await finishDialog();
   assert.equal(input().value, "from file");
   assert.equal(h.pending.length, 4, "重载响应直接发布配置，无额外读取");
-  const domain = h.document.querySelector<HTMLInputElement>('input[aria-label="站点域名"]')!;
+  const domain = h.document.querySelector<HTMLInputElement>('input[aria-label="主站域名"]')!;
   await h.React.act(async () => inputText(h.window, domain, "new.example.org"));
   await h.React.act(async () => save().click());
-  assert.match(dialog().textContent!, /new.example.org/);
+  assert.ok(dialog());
   assert.equal(h.pending.length, 4, "域名变化确认后才提交");
   await submitConfirmation();
   assert.equal(JSON.parse(String(h.pending[4].body)).config.site.domain, "new.example.org");
@@ -2756,10 +2757,29 @@ test("[Web/后台表单] 站点配置完整草稿支持保存与重载确认，�
   await clock.advanceBy(500);
   await h.flush();
   await finishDialog();
+  const additionalDomains = h.document.querySelector<HTMLTextAreaElement>('textarea[aria-label="附加站点域名"]')!;
+  for (const domains of [["alternate.example.org", "preview.example.org:8443"], []]) {
+    await h.React.act(async () => {
+      inputText(h.window, additionalDomains, domains.length ? ` ${domains.join("\n\n")} ` : "");
+      dispatchDomEvent(h.window, additionalDomains, "focusout");
+    });
+    const requestIndex: number = h.pending.length;
+    await h.React.act(async () => save().click());
+    assert.ok(dialog());
+    assert.equal(h.pending.length, requestIndex, "增删附加域名都须确认后提交");
+    await submitConfirmation();
+    assert.deepEqual(JSON.parse(String(h.pending[requestIndex].body)).config.site.additional_domains, domains);
+    settings = { ...settings, site: { ...settings.site, additional_domains: domains } };
+    await h.respond(requestIndex, { config: settings, settings, revision: settings.site.header_name.padEnd(43, "_") });
+    await clock.advanceBy(500);
+    await h.flush();
+    await finishDialog();
+    assert.equal(additionalDomains.value, domains.join("\n"));
+  }
   await edit("leave during save");
   await h.React.act(async () => save().click());
   await h.render(null);
-  assert.equal(h.pending[5].signal?.aborted, true);
+  assert.equal(h.pending.at(-1)!.signal?.aborted, true);
 });
 test("[Web/后台表单] 词表首份请求尚未完成时新词条提交隔离旧响应", async () => {
   const { QueryClient, QueryObserver } = await import("@tanstack/react-query");

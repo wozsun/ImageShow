@@ -61,6 +61,7 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal("security" in (await ordinary.json()).settings, false);
 
   const candidate = structuredClone(initial);
+  candidate.site.additional_domains = ["alternate.example.test", "preview.example.test:8443"];
   candidate.site.description = "完整配置表单";
   candidate.site.home.enabled = false;
   candidate.site.show.mode = "float";
@@ -128,12 +129,15 @@ await runIntegrationScenario(async (runtime) => {
     syncBuiltinESMExports();
   }
 
-  const disk = { ...candidate, site: { ...candidate.site, title: "磁盘标题", unknown_key: true } };
+  const disk = { ...candidate, site: {
+    ...candidate.site, title: "磁盘标题", additional_domains: [" NEW.example.test ", "new.example.test"], unknown_key: true
+  } };
   await writeFile(file, JSON.stringify(disk));
   const reloaded = await request("/reload", {});
   assert.equal(reloaded.status, 200);
   const current = (await reloaded.json()).config;
   assert.equal(current.site.title, "磁盘标题");
+  assert.deepEqual(current.site.additional_domains, ["new.example.test"]);
   assert.deepEqual(await persisted(), current);
   assert.deepEqual(store.getRuntimeConfig(), current);
   assert.equal("unknown_key" in current.site, false);

@@ -110,7 +110,7 @@ export function saveAppSettings(value: unknown, revision: string) {
       }
       throw error;
     }
-    await assertLocalImageHostForSite(config.site.domain);
+    await assertLocalImageHostForSite(config.site);
     return replaceRuntimeConfig(config);
   });
 }

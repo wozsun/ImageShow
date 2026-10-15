@@ -73,7 +73,7 @@ function updatedStorageConfig(
   }
   if (input.public_base_url === undefined) return current;
   const publicBaseUrl = localPublicUrlSchema.parse(input.public_base_url);
-  assertLocalPublicUrlDomain(publicBaseUrl, getRuntimeConfig().site.domain);
+  assertLocalPublicUrlDomain(publicBaseUrl, getRuntimeConfig().site);
   return { ...current, public_base_url: publicBaseUrl };
 }
 

@@ -1,4 +1,5 @@
 import { appConfig } from "@imageshow/shared";
+import type { RuntimeConfig } from "@imageshow/shared/browser";
 import { ApiError } from "../../core/api-error.ts";
 import { coalesce } from "../../core/coalesce.ts";
 import {
@@ -197,9 +198,9 @@ export function publishedLocalPublicUrl() {
   return local?.type === "local" ? (local.public_base_url ?? "") : "";
 }
 
-export async function assertLocalImageHostForSite(domain: string) {
+export async function assertLocalImageHostForSite(site: RuntimeConfig["site"]) {
   const local = await getStorageBackend("local");
-  if (local.type === "local") assertLocalPublicUrlDomain(local.public_base_url ?? "", domain);
+  if (local.type === "local") assertLocalPublicUrlDomain(local.public_base_url ?? "", site);
 }
 
 export async function closeStorageBackendRegistry() {

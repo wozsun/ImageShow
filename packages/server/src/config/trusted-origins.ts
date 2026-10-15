@@ -1,22 +1,20 @@
 import type { RuntimeConfig } from "@imageshow/shared/browser";
-import { hasExplicitSiteDomain } from "../core/url-validation.ts";
+import { configuredSiteDomains, hasExplicitSiteDomain } from "../core/url-validation.ts";
 import { getRuntimeConfig } from "./runtime-config-store.ts";
 
 type TrustedOriginConfig = Pick<RuntimeConfig, "site" | "embed">;
 
 export function trustedOriginSources(config: TrustedOriginConfig = getRuntimeConfig()) {
-  if (!hasExplicitSiteDomain(config.site.domain)) {
-    return ["'self'", ...config.embed.allowed_origins];
-  }
-  const siteUrl = new URL(`https://${config.site.domain}`);
-  const authority = `${siteUrl.hostname}${siteUrl.port ? `:${siteUrl.port}` : ""}`;
-  return [
-    ...new Set([
-      `https://${authority}`,
-      `https://*.${authority}`,
-      ...config.embed.allowed_origins
-    ])
-  ];
+  const siteSources = configuredSiteDomains(config.site).flatMap((domain) => {
+    const siteUrl = new URL(`https://${domain}`);
+    const authority = `${siteUrl.hostname}${siteUrl.port ? `:${siteUrl.port}` : ""}`;
+    return [`https://${authority}`, `https://*.${authority}`];
+  });
+  return [...new Set([
+    ...(!hasExplicitSiteDomain(config.site.domain) ? ["'self'"] : []),
+    ...siteSources,
+    ...config.embed.allowed_origins
+  ])];
 }
 
 export function isTrustedReferer(

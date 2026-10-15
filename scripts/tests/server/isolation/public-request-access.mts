@@ -16,7 +16,7 @@ await runIntegrationScenario(async (runtime) => {
   const { redis } = runtime.redisClient;
   const { updateRuntimeConfig, getRuntimeConfig } = runtime.runtimeConfigStore;
   await updateRuntimeConfig({
-    site: { domain: "images.example.test" },
+    site: { domain: "images.example.test", additional_domains: ["alternate.example.test"] },
     embed: {
       enabled: false,
       allowed_origins: ["https://portal.example.test", "https://*.trusted.example.test"]
@@ -48,12 +48,13 @@ await runIntegrationScenario(async (runtime) => {
       method,
       headers: { Host: host, Origin: "https://untrusted.example.test", "Sec-Fetch-Site": "cross-site", "X-Forwarded-Proto": "https", "X-Real-IP": "192.0.2.1", ...headers }
     });
-    if (path.startsWith("/random?") && host === "images.example.test") {
+    const siteHost = ["images.example.test", "alternate.example.test"].includes(host);
+    if (path.startsWith("/random?") && siteHost) {
       assert.equal(response.headers.get("Access-Control-Allow-Origin"), "*");
       assert.equal(response.headers.get("Access-Control-Allow-Credentials"), null);
       assert.equal(response.headers.get("Access-Control-Expose-Headers"), "Retry-After");
     }
-    if (/^\/images\/(large|medium|small)\//.test(path) && host === "images.example.test") {
+    if (/^\/images\/(large|medium|small)\//.test(path) && siteHost) {
       assert.equal(response.headers.get("Access-Control-Allow-Origin"), "*");
       assert.equal(response.headers.get("Access-Control-Allow-Credentials"), null);
       assert.equal(response.headers.get("Access-Control-Expose-Headers"), "ETag, Content-Range, Accept-Ranges");
@@ -112,6 +113,8 @@ await runIntegrationScenario(async (runtime) => {
   for (const referer of [
     "https://images.example.test/gallery",
     "https://sub.images.example.test/",
+    "https://alternate.example.test/gallery",
+    "https://child.alternate.example.test/",
     "https://portal.example.test/article?q=1",
     "https://a.b.trusted.example.test/"
   ]) {
@@ -121,6 +124,12 @@ await runIntegrationScenario(async (runtime) => {
   }
   await expectLimited(await request(random(), { Referer: "https://untrusted.example.test/" }));
   await expectLimited(await request(random("mode=json&limit=2"), { Referer: "not-a-url" }));
+  const aliasRedirect = await request(random("mode=redirect"), {
+    Referer: "https://alternate.example.test/gallery"
+  }, "GET", "alternate.example.test");
+  assert.equal(aliasRedirect.status, 302);
+  assert.equal(aliasRedirect.headers.get("Location"), `https://images.example.test/images/medium/${key}`);
+  await aliasRedirect.arrayBuffer();
 
   // Rejected requests keep their charge; a limit that is not a count spends a batch slot.
   // A repeated limit is charged by its first non-blank value, the same one parsing reads.
@@ -249,8 +258,8 @@ await runIntegrationScenario(async (runtime) => {
       neverAbortedSignal
     );
     const redirected = await request(`/images/large/${key}`, {
-      Referer: "https://images.example.test/"
-    });
+      Referer: "https://alternate.example.test/"
+    }, "GET", "alternate.example.test");
     assert.equal(redirected.status, 302);
     assert.equal(redirected.headers.get("Vary"), "Referer");
     assert.equal(
@@ -263,7 +272,8 @@ await runIntegrationScenario(async (runtime) => {
       for (const referer of [
         "",
         "https://portal.example.test/path",
-        "https://child.images.example.test/"
+        "https://child.images.example.test/",
+        "https://alternate.example.test/gallery"
       ]) {
         const response = await request(path, { Referer: referer }, "GET", "media.example.test");
         assert.equal(response.status, 200);
@@ -303,6 +313,13 @@ await runIntegrationScenario(async (runtime) => {
   } finally {
     openRead.mock.restore();
   }
+
+  await updateRuntimeConfig({ site: { additional_domains: [] } });
+  await reloadRuntimeConfigFromDisk();
+  await expectLimited(await request(random(), { Referer: "https://alternate.example.test/" }));
+  await expectStatus(await request(`/pictures/large/${key}`, {
+    Referer: "https://alternate.example.test/"
+  }, "GET", "media.example.test"), 403);
 
   const ended = once(redis, "end");
   redis.disconnect();

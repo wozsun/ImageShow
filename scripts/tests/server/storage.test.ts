@@ -268,11 +268,18 @@ test("[Server/存储] local / S3 配置只按实际连接参数复用 driver", (
   });
   assert.equal(local.public_base_url, "https://images.example.com/pictures");
   for (const domain of ["images.example.com", "images.example.com:443"]) {
-    assert.throws(() => assertLocalPublicUrlDomain(local.public_base_url!, domain), {
-      code: "storage_public_url_host_conflict"
-    });
+    for (const site of [
+      { domain, additional_domains: [] },
+      { domain: "main.example.com", additional_domains: [domain] }
+    ]) {
+      assert.throws(() => assertLocalPublicUrlDomain(local.public_base_url!, site), {
+        code: "storage_public_url_host_conflict"
+      });
+    }
   }
-  assert.doesNotThrow(() => assertLocalPublicUrlDomain(local.public_base_url!, "main.example.com"));
+  assert.doesNotThrow(() => assertLocalPublicUrlDomain(local.public_base_url!, {
+    domain: "main.example.com", additional_domains: ["alternate.example.com"]
+  }));
   assert.deepEqual(storageBackendUpdateInput.parse({ public_base_url: "" }), {
     public_base_url: ""
   });

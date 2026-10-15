@@ -52,6 +52,10 @@ export const siteDomain = z
       return false;
     }
   }, "站点域名需为空或不含协议和路径的有效 DNS 域名，可带端口");
+export const siteAdditionalDomains = z
+  .array(siteDomain.min(1, "附加站点域名不能为空"))
+  .max(32)
+  .transform((values) => [...new Set(values)]);
 export const siteIcon = z
   .string()
   .trim()

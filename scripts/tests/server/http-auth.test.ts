@@ -125,6 +125,7 @@ import assert from "node:assert/strict";
 import {
   getRuntimeConfig,
   initializeRuntimeConfig,
+  reloadRuntimeConfigFromDisk,
   updateRuntimeConfig
 } from ${JSON.stringify(runtimeConfigStoreUrl)};
 import { imageResourceBaseUrl } from ${JSON.stringify(siteHostUrl)};
@@ -167,6 +168,25 @@ for (const path of ["/unknown", "/images", "/images/original/", "/images/origina
   }
 }
 assert.equal(await status("img.example.com", "/unknown", "OPTIONS"), 204);
+await updateRuntimeConfig({ site: { additional_domains: ["ALTERNATE.example.com", "preview.example.com:8443", "example.com"] } });
+await reloadRuntimeConfigFromDisk();
+for (const host of ["alternate.example.com", "ALTERNATE.example.com:443", "preview.example.com:8443", "example.com"]) {
+  assert.equal(await status(host, "/random", "POST"), 405);
+  assert.equal(await status(host, "/images/original/not-a-uuid"), 401);
+  const response = await app.request("http://internal.test/api/site-config", { headers: { Host: host } });
+  assert.equal(response.status, 200);
+}
+for (const host of ["preview.example.com", "preview.example.com:9443", "child.alternate.example.com", "alternate.example.com.attacker.test", "unknown.example.com"]) {
+  assert.equal(await status(host, "/api/ping", "OPTIONS"), 404);
+}
+const spoofed = await app.request("http://internal.test/api/site-config", {
+  headers: { Host: "unknown.example.com", "X-Forwarded-Host": "alternate.example.com" }
+});
+assert.equal(spoofed.status, 404);
+assert.equal(imageResourceBaseUrl(), "https://img.example.com/images");
+await updateRuntimeConfig({ site: { additional_domains: [] } });
+assert.equal(await status("alternate.example.com", "/api/ping", "OPTIONS"), 404);
+assert.equal(await status("img.example.com", "/api/ping", "OPTIONS"), 204);
 for (const domain of ["img.example.com:5518", "local.example:5518"]) {
   await updateRuntimeConfig({ site: { domain } });
   assert.equal(imageResourceBaseUrl(), "https://" + domain + "/images");

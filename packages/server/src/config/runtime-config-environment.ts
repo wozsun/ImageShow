@@ -30,6 +30,7 @@ type RuntimeConfigEnvironmentBinding = {
 
 export const runtimeConfigEnvironmentBindings = [
   { path: "site.domain", environmentVariable: "SITE_DOMAIN", valueKind: "string" },
+  { path: "site.additional_domains", environmentVariable: "SITE_ADDITIONAL_DOMAINS", valueKind: "json-array" },
   { path: "site.icon", environmentVariable: "SITE_ICON", valueKind: "string" },
   { path: "site.title", environmentVariable: "SITE_TITLE", valueKind: "string" },
   { path: "site.description", environmentVariable: "SITE_DESCRIPTION", valueKind: "string" },

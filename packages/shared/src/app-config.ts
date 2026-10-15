@@ -140,6 +140,7 @@ export const appConfig = {
   runtimeDefaults: {
     site: {
       domain: "example.com",
+      additional_domains: [] as string[],
       icon: "",
       title: "ImageShow",
       description: "画廊与随机图片API",

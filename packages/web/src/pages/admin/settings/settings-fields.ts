@@ -161,11 +161,18 @@ const small = normalizeFields("small", "小图");
 const settingsFields = {
   "site.domain": {
     group: "addresses",
-    label: "站点域名",
+    label: "主站域名",
     kind: "text",
     maxLength: 259,
     placeholder: "img.example.com",
-    hint: "不含协议和路径，可带端口。留空或 example.com 时接受有效访问 Host；设置后其他 Host 将无法访问主站。"
+    hint: "不含协议和路径，可带端口。留空或 example.com 时接受有效访问 Host；设置后只接受主站及附加站点域名。"
+  },
+  "site.additional_domains": {
+    group: "addresses",
+    label: "附加站点域名",
+    kind: "lines",
+    placeholder: "alternate.example.net\npreview.example.org:8443",
+    hint: "每行一个域名，最多 32 项，不含协议和路径，可带端口。与主站共用数据，图片和静态资源地址保持现有配置。请先自行配置 DNS、证书及 Nginx，回源保留访问域名。"
   },
   "site.title": {
     group: "identity",

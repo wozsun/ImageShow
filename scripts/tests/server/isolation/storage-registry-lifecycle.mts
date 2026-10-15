@@ -26,8 +26,10 @@ await runIntegrationScenario(async (runtime) => {
   const objectAccess = await import("../../../../packages/server/src/storage/objects/access.ts");
   {
     const { createHttpApp } = await import("../../../../packages/server/src/http-app.ts");
-    const originalDomain = runtime.runtimeConfigStore.getRuntimeConfig().site.domain;
-    await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { domain: "main.example.test" } });
+    const originalSite = runtime.runtimeConfigStore.getRuntimeConfig().site;
+    await runtime.runtimeConfigStore.updateRuntimeConfig({ site: {
+      domain: "main.example.test", additional_domains: ["alternate.example.test"]
+    } });
     const local = (await registry.resolveStorageAccess("local")).driver;
     const key = storageObjectKey("00000000-0000-7000-8000-0000000000a5");
     const bytes = Buffer.from("synthetic-local-public-image");
@@ -57,12 +59,14 @@ await runIntegrationScenario(async (runtime) => {
         publicUrls.directStorageObjectUrl(await registry.getStorageBackend("local"), "large", key),
         `https://images.example.test/pictures/large/${key}`
       );
-      await assert.rejects(
-        backendUpdate.updateStorageBackend("local", {
-          public_base_url: "https://main.example.test/pictures"
-        }, neverAbortedSignal),
-        { code: "storage_public_url_host_conflict" }
-      );
+      for (const domain of ["main.example.test", "alternate.example.test"]) {
+        await assert.rejects(
+          backendUpdate.updateStorageBackend("local", {
+            public_base_url: `https://${domain}/pictures`
+          }, neverAbortedSignal),
+          { code: "storage_public_url_host_conflict" }
+        );
+      }
       assert.equal(registry.publishedLocalPublicUrl(), "https://images.example.test/pictures");
 
       const { readFile, writeFile } = await import("node:fs/promises");
@@ -86,19 +90,21 @@ await runIntegrationScenario(async (runtime) => {
       const configFile = join(runtime.dataDirectory, "config.json");
       const previousFile = await readFile(configFile, "utf8");
       try {
-        const conflict = JSON.parse(previousFile);
-        conflict.site.domain = "images.example.test";
-        await writeFile(configFile, JSON.stringify(conflict));
-        const reload = await settingsApp.request(
-          "http://main.example.test/api/admin/settings/reload",
-          { method: "POST" }
-        );
-        assert.equal(reload.status, 400);
-        assert.equal((await reload.json()).code, "storage_public_url_host_conflict");
-        assert.equal(
-          runtime.runtimeConfigStore.getRuntimeConfig().site.domain,
-          "main.example.test"
-        );
+        for (const site of [
+          { domain: "images.example.test" },
+          { additional_domains: ["images.example.test"] }
+        ]) {
+          const conflict = JSON.parse(previousFile);
+          Object.assign(conflict.site, site);
+          await writeFile(configFile, JSON.stringify(conflict));
+          const reload = await settingsApp.request(
+            "http://main.example.test/api/admin/settings/reload",
+            { method: "POST" }
+          );
+          assert.equal(reload.status, 400);
+          assert.equal((await reload.json()).code, "storage_public_url_host_conflict");
+          assert.deepEqual(runtime.runtimeConfigStore.getRuntimeConfig(), JSON.parse(previousFile));
+        }
         assert.equal(registry.publishedLocalPublicUrl(), "https://images.example.test/pictures");
       } finally {
         await writeFile(configFile, previousFile);
@@ -114,21 +120,21 @@ await runIntegrationScenario(async (runtime) => {
           }
         );
       const savedConfig = structuredClone(runtime.runtimeConfigStore.getRuntimeConfig());
-      const badAssets = {
-        ...savedConfig,
-        site: { ...savedConfig.site, assets_base_url: "https://main.example.test/static" }
-      };
-      {
+      for (const domain of ["main.example.test", "alternate.example.test"]) {
+        const badAssets = {
+          ...savedConfig,
+          site: { ...savedConfig.site, assets_base_url: `https://${domain}/static` }
+        };
         const result = await fullConfigRequest(badAssets);
         assert.equal(result.status, 400);
         assert.equal((await result.json()).code, "validation_error");
       }
       assert.deepEqual(runtime.runtimeConfigStore.getRuntimeConfig(), savedConfig);
-      const conflictConfig = {
-        ...savedConfig,
-        site: { ...savedConfig.site, domain: "images.example.test" }
-      };
-      {
+      for (const site of [
+        { domain: "images.example.test" },
+        { additional_domains: ["images.example.test"] }
+      ]) {
+        const conflictConfig = { ...savedConfig, site: { ...savedConfig.site, ...site } };
         const result = await fullConfigRequest(conflictConfig);
         assert.equal(result.status, 400);
         assert.equal((await result.json()).code, "storage_public_url_host_conflict");
@@ -323,7 +329,9 @@ await runIntegrationScenario(async (runtime) => {
       await backendUpdate.updateStorageBackend("local", { public_base_url: "" }, neverAbortedSignal);
       await removeDriverObject(local, "large", key);
       await removeDriverObject(local, "small", key);
-      await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { domain: originalDomain } });
+      await runtime.runtimeConfigStore.updateRuntimeConfig({ site: {
+        domain: originalSite.domain, additional_domains: originalSite.additional_domains
+      } });
     }
   }
   const registryBackend = "registry-contract";

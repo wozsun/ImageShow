@@ -21,7 +21,7 @@ packages/web ─────► packages/shared
 
 - `scripts/build/` 只承载生产构建、资源生成和产物装配；`scripts/runtime/` 只承载容器运行命令；`scripts/tests/` 承载受 Git 跟踪的长期契约测试、门禁及其固定夹具，位于生产构建上下文之外：顶层入口只编排稳定领域套件，`support/` 只提供窄职责支撑，数据库跨域合同按行为拆为可独立选择的小场景。领域套件、场景和支撑文件的数量保持稳定，新增须符合 [测试准入](test-admission.md)。
 - `docs/` 是公开文档目录：`DEPLOY.md` 维护安装部署与恢复，`CONFIG.md` 维护配置，`api/` 说明随机图 API 和嵌入协议；读者范围与写作要求见 [AGENTS.md 文档规则](../../AGENTS.md#文档规则)。根目录 `tests/` 是被 Git 忽略的本地记录与临时产物目录，内容见同一节；受跟踪测试所需的文件都在 `scripts/tests/` 内。
-- 默认 Compose 的 `data/` 保存应用配置、存储、运维自定义静态资源（`asset/`）、日志和接入临时数据；本机宿主目录覆盖见本地测试资源 `tests/local-resources.md` 的“本地运行环境”。
+- 默认 Compose 的 `data/` 保存应用配置、存储、运维自定义静态资源（`asset/`）、日志和接入临时数据；开发环境的目录布局见本地测试资源 `tests/local-resources.md` 的“固定开发运行环境”。
 - `postgres/` 与 `redis/` 分别保存默认 Compose 的 PostgreSQL、Redis 持久数据，和 `data/` 一同排除于 Git 与 Docker 构建上下文；变更挂载时先停机迁移并保留回退数据。
 - `.agents/process/` 保存流程，`.agents/spec/` 保存专项规范，`.agents/reference/` 保存模块约束与设计原因，通用约束留在 `AGENTS.md`；`.agents/plan/` 保存与 `TODO.md` 配套的未完成详细方案，`.agents/skills/` 是第三方技能，两者被 Git 忽略，完成记录留在 Release 或本地报告中。
 - 生产镜像只包含生产依赖、编译产物、必要 schema / SPA 资产和运维入口。

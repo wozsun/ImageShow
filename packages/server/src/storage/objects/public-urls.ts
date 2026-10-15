@@ -16,7 +16,7 @@ function encodeKeyPath(key: string) {
 export function directStorageObjectUrl(config: StorageConfig, prefix: ReadablePrefix, key: string) {
   if (config.type === "local") {
     if (!config.public_base_url) return "";
-    assertLocalPublicUrlDomain(config.public_base_url, getRuntimeConfig().site.domain);
+    assertLocalPublicUrlDomain(config.public_base_url, getRuntimeConfig().site);
     return `${config.public_base_url.replace(/\/+$/, "")}/${prefix}/${encodeKeyPath(key)}`;
   }
   if (!config.s3.public_base_url) return "";
@@ -25,7 +25,7 @@ export function directStorageObjectUrl(config: StorageConfig, prefix: ReadablePr
 
 export function publicImageBaseUrl(config: StorageConfig) {
   if (config.type === "local" && config.public_base_url) {
-    assertLocalPublicUrlDomain(config.public_base_url, getRuntimeConfig().site.domain);
+    assertLocalPublicUrlDomain(config.public_base_url, getRuntimeConfig().site);
     return config.public_base_url.replace(/\/+$/, "");
   }
   if (config.type === "s3" && config.s3.public_base_url) {

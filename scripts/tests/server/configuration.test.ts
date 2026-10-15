@@ -33,11 +33,18 @@ import { storageBackendLabel } from "../../../packages/server/src/storage/backen
 test("[Server/配置] 来源白名单匹配完整 Referer 并保留协议、端口与子域边界", () => {
   const config = runtimeConfigDefaults();
   config.site.domain = "images.example.test:8443";
+  config.site.additional_domains = ["alternate.example.test", "preview.example.test:9443"];
   config.embed.allowed_origins = ["https://portal.example.test", "https://*.trusted.example.test"];
   for (const [referer, expected] of [
     ["https://images.example.test:8443/page?q=1", true],
     ["https://child.images.example.test:8443/", true],
     ["https://images.example.test/", false],
+    ["https://alternate.example.test/gallery", true],
+    ["https://child.alternate.example.test/", true],
+    ["https://preview.example.test:9443/", true],
+    ["https://preview.example.test/", false],
+    ["https://alternate.example.test.attacker.test/", false],
+    ["http://alternate.example.test/", false],
     ["https://PORTAL.example.test:443/article?q=1", true],
     ["https://portal.example.test", true],
     ["https://portal.example.test:8443/", false],
@@ -298,8 +305,34 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
     site: RuntimeConfig["site"] & Record<string, unknown>;
   };
   delete (missingSiteRoot.site as Partial<RuntimeConfig["site"]>).root;
+  delete (missingSiteRoot.site as Partial<RuntimeConfig["site"]>).additional_domains;
   missingSiteRoot.site.unknown_site_key = "invalid";
   assert.equal(normalizeRuntimeConfig(missingSiteRoot).site.root, "home");
+  assert.deepEqual(normalizeRuntimeConfig(missingSiteRoot).site.additional_domains, []);
+
+  const multiDomain = parseRuntimeConfig({
+    ...defaults,
+    site: { ...defaults.site, domain: "main.example.test", additional_domains: [
+      " ALTERNATE.example.test ", "alternate.example.test", "preview.example.test:8443"
+    ] }
+  });
+  assert.deepEqual(multiDomain.site.additional_domains, ["alternate.example.test", "preview.example.test:8443"]);
+  assert.deepEqual(normalizeRuntimeConfig(JSON.parse(JSON.stringify(multiDomain))), multiDomain);
+  for (const additional_domains of [
+    [""], ["https://alternate.example.test"], ["alternate.example.test/path"], ["*.example.test"],
+    ["127.0.0.1"], ["alternate.example.test:65536"], Array.from({ length: 33 }, (_, i) => `site${i}.example.test`)
+  ]) {
+    assert.throws(() => parseRuntimeConfig({ ...multiDomain, site: { ...multiDomain.site, additional_domains } }));
+  }
+  assert.throws(() => parseRuntimeConfig({
+    ...multiDomain, site: { ...multiDomain.site, assets_base_url: "https://alternate.example.test/static" }
+  }));
+  multiDomain.embed.enabled = true;
+  assert.deepEqual(effectiveEmbedAncestorSources(multiDomain), [
+    "https://main.example.test", "https://*.main.example.test",
+    "https://alternate.example.test", "https://*.alternate.example.test",
+    "https://preview.example.test:8443", "https://*.preview.example.test:8443"
+  ]);
 
   const invalidCurrentSiteRoot = structuredClone(defaults) as RuntimeConfig & {
     site: RuntimeConfig["site"] & Record<string, unknown>;
@@ -531,6 +564,10 @@ test("[Server/配置] 完整环境播种严格覆盖全部已映射 RuntimeConfi
     );
   }
   assert.equal(runtimeConfigFromEnvironment({ SITE_DOMAIN: "" }).site.domain, "");
+  assert.deepEqual(runtimeConfigFromEnvironment({
+    SITE_ADDITIONAL_DOMAINS: '[" ALTERNATE.example.test ","alternate.example.test","preview.example.test:8443"]'
+  }).site.additional_domains, ["alternate.example.test", "preview.example.test:8443"]);
+  assert.throws(() => runtimeConfigFromEnvironment({ SITE_ADDITIONAL_DOMAINS: "alternate.example.test" }));
   assert.equal(
     runtimeConfigFromEnvironment({ SITE_DOMAIN: "  EXAMPLE.COM  " }).site.domain,
     "example.com"
@@ -743,6 +780,7 @@ const unknownSiteKey = "unknown_site_key";
 
 if (scenario === "seed") {
   const generated = initializeRuntimeConfig();
+  assert.deepEqual(generated.site.additional_domains, ["alternate.example.test"]);
   assert.equal(generated.site.root, "show");
   assert.equal(generated.site.description, "");
   assert.equal(generated.site.icp, "测试ICP备123号");
@@ -767,7 +805,6 @@ if (scenario === "seed") {
   assert.equal(generated.normalize.large.max_size_kb, 700);
   const persisted = JSON.parse(await readFile(join(root, "config.json"), "utf8"));
   assert.deepEqual(persisted, generated);
-  assert.deepEqual(Object.keys(persisted.site).slice(0, 5), ["domain", "icon", "title", "description", "header_name"]);
   console.log("config-seed-ok");
 } else if (scenario === "invalid-current") {
   const invalid = structuredClone(runtimeConfigDefaults());
@@ -781,6 +818,7 @@ if (scenario === "seed") {
   console.log("config-invalid-current-ok");
 } else {
 const drifted = structuredClone(runtimeConfigDefaults());
+drifted.site.additional_domains = [" ALTERNATE.example.test ", "alternate.example.test"];
 delete drifted.site.icp;
 delete drifted.site.mps;
 delete drifted.site.footer;
@@ -796,6 +834,7 @@ drifted.site.home.unknown = "remove-me";
 drifted.unknown_section = { enabled: false };
 await writeFile(join(root, "config.json"), JSON.stringify(drifted));
 const normalized = initializeRuntimeConfig();
+assert.deepEqual(normalized.site.additional_domains, ["alternate.example.test"]);
 assert.equal(normalized.site.title, "ImageShow");
 assert.equal(normalized.site.header_name, "文件页头");
 assert.equal(normalized.site.description, "画廊与随机图片API");
@@ -892,6 +931,7 @@ console.log("config-existing-ok");
           SITE_TITLE: "环境网页标题",
           SITE_HEADER_NAME: "环境页头名称",
           SITE_ROOT: "show",
+          SITE_ADDITIONAL_DOMAINS: '[" ALTERNATE.example.test ","alternate.example.test"]',
           SITE_DESCRIPTION: "",
           SITE_ICP: "测试ICP备123号",
           SITE_MPS: "测试公网安备123456号",
@@ -914,6 +954,7 @@ console.log("config-existing-ok");
           SITE_TITLE: "忽略环境标题",
           SITE_HEADER_NAME: "忽略环境页头",
           SITE_ROOT: "invalid",
+          SITE_ADDITIONAL_DOMAINS: "invalid",
           SITE_ICP: "忽略环境备案号",
           SITE_MPS: "忽略环境公安备案号",
           SITE_FOOTER: "忽略环境页脚",

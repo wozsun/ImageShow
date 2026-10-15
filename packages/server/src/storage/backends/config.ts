@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { RuntimeConfig } from "@imageshow/shared/browser";
 import {
   isHttpsEndpoint,
   publicBaseUrlSchema,
@@ -12,12 +13,15 @@ export const storedLocalConfigSchema = z.object({
   public_base_url: localPublicUrlSchema.optional().default("")
 });
 
-export function assertLocalPublicUrlDomain(publicBaseUrl: string, siteDomain: string) {
-  if (publicUrlUsesSiteHost(publicBaseUrl, siteDomain)) {
+export function assertLocalPublicUrlDomain(
+  publicBaseUrl: string,
+  site: Pick<RuntimeConfig["site"], "domain" | "additional_domains">
+) {
+  if (publicUrlUsesSiteHost(publicBaseUrl, site)) {
     throw new ApiError(
       400,
       "storage_public_url_host_conflict",
-      "本地图片公开地址须使用独立 Host；使用主站地址请将公开 URL 留空"
+      "本地图片公开地址不能使用主站或附加站点域名；使用主站地址请将公开 URL 留空"
     );
   }
 }

@@ -72,7 +72,7 @@ export function registerSettingsRoutes(app: Hono) {
     requireAdminPermission(adminPermissions.settingsManage),
     async (c) => {
       const config = await reloadRuntimeConfigFromDisk((candidate) =>
-        assertLocalImageHostForSite(candidate.site.domain)
+        assertLocalImageHostForSite(candidate.site)
       );
       c.header("Cache-Control", privateNoStoreCacheControl);
       return c.json(runtimeConfigResponse(config));

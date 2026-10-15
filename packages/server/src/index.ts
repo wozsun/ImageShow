@@ -87,7 +87,7 @@ async function initializeApplication() {
   await ensureRuntimeDirectories();
   await clearVariantScratchAtStartup();
   await initializeDatabaseSchema();
-  await assertLocalImageHostForSite(getRuntimeConfig().site.domain);
+  await assertLocalImageHostForSite(getRuntimeConfig().site);
   await ensureSuperAdmin({
     username: bootstrapEnvironment.adminUsername,
     password: bootstrapEnvironment.adminPassword

@@ -169,7 +169,9 @@ function SettingsPageContent({ snapshot }: { snapshot: RuntimeConfigResponseDto 
     const submitted = settleField();
     returnFocusRef.current = trigger;
     const action: SettingsAction = kind === "save" ? { kind, ...submitted } : { kind };
-    const changesDomain = submitted.config.site.domain.trim().toLowerCase() !== serverConfig.site.domain;
+    const changesDomain = submitted.config.site.domain.trim().toLowerCase() !== serverConfig.site.domain
+      || JSON.stringify(submitted.config.site.additional_domains.map((domain) => domain.trim().toLowerCase()))
+        !== JSON.stringify(serverConfig.site.additional_domains);
     const discardsDraft = JSON.stringify(submitted.config) !== JSON.stringify(serverConfig);
     if ((kind === "save" && changesDomain) || (kind === "reload" && discardsDraft)) {
       setActionError("");
@@ -298,7 +300,7 @@ function SettingsPageContent({ snapshot }: { snapshot: RuntimeConfigResponseDto 
           title={confirmation.kind === "reload" ? "读取配置文件" : "变更站点域名"}
           description={confirmation.kind === "reload"
             ? "读取成功后将以配置文件替换当前未保存的修改，并应用到后续请求。"
-            : `主站域名将变为 ${confirmation.config.site.domain.trim() || "任意有效 Host"}。请确认域名已接入；保存后可能需要从新域名重新登录。`}
+            : "保存后将按新的主站域名和附加站点域名接收请求。请确认 DNS、证书与 Nginx 已自行配置；移除当前访问域名后，需要从其他允许域名重新登录。"}
           confirmLabel={confirmation.kind === "reload" ? "读取并替换" : "确认保存"}
           confirmIcon={confirmation.kind === "reload" ? "refresh-line" : "save-3-line"}
           pendingLabel="处理中"

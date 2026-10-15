@@ -19,7 +19,8 @@
 
 | 配置项 | 默认值 | 说明 |
 | --- | --- | --- |
-| `site.domain` | `"example.com"` | 主站域名，如 `img.example.com`，可带端口，不写协议和路径。设置后，除已配置的图片和静态资源域名外，其他域名返回 404。留空或保持 `example.com` 表示不限制域名 |
+| `site.domain` | `"example.com"` | 主站域名，如 `img.example.com`，可带端口，不写协议和路径。设置后，站点只接受该域名及附加站点域名；已配置的图片和静态资源域名仍只提供对应资源。留空或保持 `example.com` 表示不限制域名 |
+| `site.additional_domains` | `[]` | 附加站点域名列表，后台每行一个，最多 32 项；可带端口，不写协议和路径。与主站共用页面、API、账号和数据，登录状态按域名分别保存。图片和静态资源地址沿用现有配置；不能与本地图片或静态资源专用域名冲突。需要自行完成 DNS、证书及 Nginx 配置，见[多域名入口](DEPLOY.md#多域名入口)。开启外部嵌入时，嵌入页面的安全策略响应头会列出全部附加站点域名 |
 | `site.title` | `"ImageShow"` | 浏览器标签页上的网页标题，不能为空 |
 | `site.header_name` | `"ImageShow"` | 页面顶部和后台显示的站点名称，不能为空 |
 | `site.description` | `"画廊与随机图片API"` | 网页描述，供搜索引擎使用，最多 200 字；留空时使用网页标题 |
@@ -122,7 +123,7 @@ SITE_FOOTER='Powered by <a href="https://github.com/wozsun/ImageShow">ImageShow<
 | `embed.enabled` | `false` | 开放 `/embed/home`、`/embed/gallery`、`/embed/show`，供其他网站用 iframe 嵌入。对应的首页、画廊、展映也必须开启 |
 | `embed.allowed_origins` | `[]` | 允许嵌入本站的其他网站，JSON 数组，最多 32 个 |
 
-开启后，本站自身默认可以嵌入；设置了 `site.domain` 时，该域名及其子域名的 HTTPS 页面也可以。其他网站需要加入 `embed.allowed_origins`，例如：
+开启后，主站域名、附加站点域名及各自子域名的 HTTPS 页面默认可以嵌入；主站域名留空或为 `example.com` 时还允许当前同源页面。其他网站需要加入 `embed.allowed_origins`，例如：
 
 ```json
 ["https://portal.example.com", "https://*.trusted.example.net"]

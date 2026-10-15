@@ -1,5 +1,6 @@
 import { isIP } from "node:net";
 import { z } from "zod";
+import type { RuntimeConfig } from "@imageshow/shared/browser";
 
 const publicBaseUrlMaxLength = 2048;
 
@@ -58,10 +59,19 @@ export function publicUrlMatchesHost(base: URL, host: string) {
   return authority === base.host || (!base.port && authority === `${base.hostname}:443`);
 }
 
-export function publicUrlUsesSiteHost(publicBaseUrl: string, siteDomain: string) {
-  if (!publicBaseUrl || !hasExplicitSiteDomain(siteDomain)) return false;
+type SiteDomains = Pick<RuntimeConfig["site"], "domain" | "additional_domains">;
+
+export function configuredSiteDomains(site: SiteDomains) {
+  return [...new Set([
+    ...(hasExplicitSiteDomain(site.domain) ? [site.domain] : []),
+    ...site.additional_domains
+  ])];
+}
+
+export function publicUrlUsesSiteHost(publicBaseUrl: string, site: SiteDomains) {
+  if (!publicBaseUrl) return false;
   const url = new URL(publicBaseUrl);
-  return (
+  return configuredSiteDomains(site).some((siteDomain) =>
     matchesSiteHost(url.host, siteDomain) ||
     (!url.port && matchesSiteHost(`${url.hostname}:443`, siteDomain))
   );
@@ -108,7 +118,7 @@ export function matchesSiteHost(hostHeader: string, domain: string) {
   const current = splitHost(raw);
   if (!current.hostname) return false;
   if (current.port && (Number(current.port) < 1 || Number(current.port) > 65_535)) return false;
-  if (!hasExplicitSiteDomain(domain)) return true;
+  if (!domain) return true;
   const root = splitHost(domain);
   return current.hostname === root.hostname && (!root.port || current.port === root.port);
 }
