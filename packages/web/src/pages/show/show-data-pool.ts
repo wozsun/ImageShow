@@ -94,6 +94,17 @@ export class ShowDataPool {
     return image ? this.#activate(slotKey, imageId, image) : null;
   }
 
+  /** Candidates the next claims will take, in order, without claiming them. */
+  upcoming(count: number) {
+    const images: ShowImage[] = [];
+    for (const imageId of this.#available) {
+      if (images.length >= count) break;
+      const image = this.#availableSet.has(imageId) ? this.#items.get(imageId) : undefined;
+      if (image) images.push(image);
+    }
+    return images;
+  }
+
   release(slotKey: string) {
     const imageId = this.#activeBySlot.get(slotKey);
     if (!imageId) return;

@@ -95,6 +95,8 @@ const minimumDragVelocity = 0.018;
 const wheelScrollResponseMs = 86;
 const wheelScrollStopDistance = 0.08;
 const floatRotationAmplitude = (3 * Math.PI) / 180;
+// Largest fixed tilt of a card, about five degrees either way.
+const floatMaximumTilt = 0.085;
 const floatHoverStraightenMs = 240;
 // Card sides vary this much around the size step: enough that the stream does
 // not look stamped, without letting single images dominate it.
@@ -116,6 +118,15 @@ const floatSideOverhang = 0.25;
 // New cards are placed with their far edge within this many card sides of the
 // end of the band that the stream is filling.
 const floatPlacementDepth = 0.6;
+// Images for this many screens of stream travel are downloaded ahead of
+// their plans. The stream takes candidates in order, so nearly every one is
+// shown later; only those left when the show stops go unused. A second
+// screen keeps fast drags on a phone ready at the default size; more helps
+// only slow networks and the densest sizes, a little.
+const floatPrefetchScreens = 2;
+// Entering cards keep their rotated extent at least this far outside the
+// viewport, clear of edge antialiasing and rounding.
+const floatEntryMargin = 16;
 // The finger distance changes by this ratio for each size step of a pinch;
 // pinch steps and Ctrl + wheel steps keep the same minimum interval.
 const floatPinchStepRatio = 1.15;
@@ -139,6 +150,15 @@ function noise(value: number, salt: number) {
 function imageRatio(image: ShowImage) {
   if (image.width <= 0 || image.height <= 0) return 1;
   return image.height / image.width;
+}
+
+/** Height a card can cover with its tilt and rotation swing. */
+function floatCardRotatedHeight(width: number, height: number, rotation: number) {
+  const maximumRotation = Math.abs(rotation) + floatRotationAmplitude;
+  return (
+    height * Math.abs(Math.cos(maximumRotation)) +
+    width * Math.abs(Math.sin(maximumRotation))
+  );
 }
 
 /** Width a card can sweep through with its rotation and sway. */
@@ -713,6 +733,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     this.#cancelVerticalInput();
     this.#removeInputListeners();
     this.#clearTexturePrefetches();
+    this.#textureCache.prefetchSources([]);
     this.#onVisibleItems([]);
     for (const state of this.#cards) state.card.destroy();
     this.#cards.length = 0;
@@ -917,12 +938,18 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
       while (pending.length && shownBottom(pending[0]!) < edge - side * 1.5) {
         this.#retire(pending.shift()!);
       }
-      let count = placed.filter((bounds) => bounds.y + bounds.height / 2 <= edge).length;
+      // Entering cards may reach past the band's bottom; they count once the
+      // sweep reaches it.
+      let count = placed.filter(
+        (bounds) => Math.min(bounds.y + bounds.height / 2, bottom) <= edge
+      ).length;
       while (count < target) {
         const next = pending[0];
-        const state = next && shownBottom(next) <= edge + side * 0.5
+        // Like the count, a card reaching past the band's bottom is due once
+        // the sweep reaches it.
+        const state = next && Math.min(shownBottom(next), bottom) <= edge + side * 0.5
           ? this.#reseatCard(next, edge, top, placed)
-          : this.#placeNext(-1, edge, top, alpha, placed);
+          : this.#placeNext(-1, edge, top, false, alpha, placed);
         if (!state) break;
         if (state === next) pending.shift();
         placed.push(this.#slotOf(state));
@@ -942,13 +969,13 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
   #replenish(direction: FloatStreamDirection) {
     const buffer = this.#streamBuffer();
     const floor = direction < 0 ? this.#height + buffer : -buffer;
-    const nearLimit = direction < 0 ? this.#height : 0;
+    const nearLimit = direction < 0 ? this.#height + floatEntryMargin : -floatEntryMargin;
     const placed = this.#cards
       .filter((state) => !state.retiring)
       .map((state) => this.#slotOf(state));
     let added = 0;
     while (this.#entryQuota >= 1) {
-      const state = this.#placeNext(direction, floor, nearLimit, 0, placed);
+      const state = this.#placeNext(direction, floor, nearLimit, true, 0, placed);
       if (!state) break;
       placed.push(this.#slotOf(state));
       this.#entryQuota -= 1;
@@ -1004,6 +1031,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     direction: FloatStreamDirection,
     floor: number,
     nearLimit: number,
+    entering: boolean,
     alpha: number,
     neighbors: readonly FloatSlotBounds[]
   ) {
@@ -1026,7 +1054,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     }
     const plan = queue[0]!;
     const geometry = this.#planGeometry(plan);
-    const slot = this.#openSlot(geometry, floor, nearLimit, direction, neighbors);
+    const slot = this.#openSlot(geometry, floor, nearLimit, direction, entering, neighbors);
     if (!slot) return null;
     queue.shift();
     return this.#addCard(plan, geometry, slot.x, slot.y, alpha);
@@ -1048,6 +1076,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
       floor,
       nearLimit,
       -1,
+      false,
       neighbors,
       shownX
     );
@@ -1061,7 +1090,10 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
 
   /**
    * Choose the most open slot for a card with its far edge just inside the
-   * floor and, when it fits, its near edge beyond the limit. The unfilled side
+   * floor and its rotated near edge beyond the limit. A card too tall for that
+   * room reaches past the band's end instead: an entering card past the
+   * floor, so it still enters hidden, and a card placed by a sweep past the
+   * band's top, since the sweep counts cards by the floor. The unfilled side
    * beyond the floor counts as occupied, so cards do not gather against it
    * and leave openings behind. A card being re-seated prefers openings near
    * its current column.
@@ -1071,17 +1103,24 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     floor: number,
     nearLimit: number,
     direction: FloatStreamDirection,
+    entering: boolean,
     neighbors: readonly FloatSlotBounds[],
     nearX?: number
   ) {
     const { minimumX, maximumX } = this.#horizontalRange(geometry);
     const side = Math.sqrt(geometry.width * geometry.height);
     const half = geometry.height / 2;
-    // How far the far edge may sit from the floor. A card taller than the
-    // room before the limit is placed right at the floor.
-    const room = Math.abs(floor - nearLimit) - geometry.height;
-    const depth = Math.max(0, Math.min(this.#cardSide() * floatPlacementDepth, room));
-    const reach = side * 3 + depth;
+    // How far the far edge may sit inside the floor while the card, tilted
+    // and swinging, stays beyond the near limit. Negative depth is how far an
+    // entering card reaches past the floor.
+    const rotatedHalf =
+      floatCardRotatedHeight(geometry.width, geometry.height, geometry.rotation) / 2;
+    const room = Math.abs(floor - nearLimit) - half - rotatedHalf;
+    const depth = Math.min(
+      this.#cardSide() * floatPlacementDepth,
+      entering ? room : Math.max(0, room)
+    );
+    const reach = side * 3 + Math.abs(depth);
     const nearby = neighbors.filter((bounds) => Math.abs(bounds.y - floor) < reach + half);
     let best: { x: number; y: number; score: number } | null = null;
     for (let attempt = 0; attempt < floatPlacementCandidates; attempt += 1) {
@@ -1089,7 +1128,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
       const x = local
         ? Math.max(minimumX, Math.min(maximumX, nearX + (Math.random() - 0.5) * 1.2 * side))
         : minimumX + Math.random() * (maximumX - minimumX);
-      const y = floor + direction * (half + Math.random() * depth);
+      const y = floor + direction * (half + (depth > 0 ? Math.random() * depth : depth));
       const spacing = floatSlotSpacing(
         { x, y, width: geometry.width, height: geometry.height },
         nearby
@@ -1324,7 +1363,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     return {
       width,
       height,
-      rotation: (noise(plan.serial, 11) - 0.5) * 0.17,
+      rotation: (noise(plan.serial, 11) - 0.5) * 2 * floatMaximumTilt,
       drift: Math.min(16, width * this.#driftFactor(plan.serial))
     };
   }
@@ -1402,7 +1441,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     // Equal-area cards, as in the cluster, limited so the rotated card keeps
     // room for viewing within the viewport.
     const side = this.#cardSide() * factor;
-    const angle = 0.085 + floatRotationAmplitude;
+    const angle = floatMaximumTilt + floatRotationAmplitude;
     const widthLimit = Math.max(24, this.#width - 56) / (Math.cos(angle) + ratio * Math.sin(angle));
     const heightLimit =
       Math.max(24, this.#height - showFloatViewingMargin) /
@@ -1412,10 +1451,9 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
   }
 
   #cardSide() {
-    // Small size steps stop where the band, two screens tall at such sizes,
-    // would outgrow the Sprite cap.
+    // Small size steps stop where the band would outgrow the Sprite cap.
     const minimum = Math.sqrt(
-      (showFloatPacking * this.#width * this.#height * 2) / (this.#maximumCards() * 0.9)
+      (showFloatPacking * this.#width * this.#streamHeight()) / (this.#maximumCards() * 0.9)
     );
     return Math.max(
       showFloatStepSide(this.#sizeIndex, this.#width, this.#height),
@@ -1435,10 +1473,10 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
   }
 
   #streamBuffer() {
-    // Half a screen, and at least a 2:1 portrait card at the current size, so
-    // such cards enter hidden apart from a rotated corner; longer images fade
-    // in at the edge.
-    return Math.max(this.#height * 0.5, this.#cardSize(2, 1 + floatSizeSpread).height + 16);
+    // Half a screen. Float cards keep their texture size whatever the budget,
+    // so the band height sets the texture use: a full screen would fill the
+    // budget at the phone default and at small desktop steps.
+    return this.#height * 0.5;
   }
 
   #streamHeight() {
@@ -1543,6 +1581,16 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
       plan.textureKey = textureKey;
       plan.lease = this.#textureCache.acquire(imageVariantUrl(plan.image, "small"), lod, () => undefined);
     }
+    // Download the images for the next stretch of travel ahead of their
+    // plans, so plans made from them decode from memory even when the stream
+    // is dragged faster than the network answers.
+    const upcoming = Math.ceil((this.#height * floatPrefetchScreens) / this.#travelPerCard());
+    this.#textureCache.prefetchSources(
+      this.#images
+        .filter((image) => !this.#consumedIds.has(image.id))
+        .slice(0, upcoming)
+        .map((image) => imageVariantUrl(image, "small"))
+    );
     this.#requestCandidates();
   }
 

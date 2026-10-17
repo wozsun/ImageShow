@@ -37,6 +37,11 @@ type WaterfallSceneOptions = ShowPixiSceneOptions & {
 
 const waterfallMaximumSprites = (width: number) => (width <= 760 ? 960 : 2_800);
 const waterfallOverscan = 0.35;
+// Candidates for this many screens of new cards are downloaded ahead. Cards
+// take candidates in order whichever way the camera moves, so nearly every
+// one is shown later. The overscan leaves little time to load once a card is
+// created, so a long lead still pays off on slow networks.
+const waterfallPrefetchScreens = 3;
 function intersectionArea(card: ShowCardSlot, width: number, height: number) {
   const left = Math.max(0, card.x);
   const top = Math.max(0, card.y);
@@ -237,6 +242,7 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
     this.#destroyed = true;
     this.#onVisibleItems([]);
     this.#clearCards();
+    this.#textureCache.prefetchSources([]);
     this.#controller.clear();
     this.#pool.clear();
     this.#imageIds.clear();
@@ -370,6 +376,13 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
       this.#lastVisibleSignature = signature;
       this.#onVisibleItems(visibleItems);
     }
+    // Download the candidates for the next new cards, so the cards created
+    // for them as they enter the overscan decode from memory.
+    this.#textureCache.prefetchSources(
+      this.#pool
+        .upcoming(Math.ceil(snapshot.visibleCards * waterfallPrefetchScreens))
+        .map((image) => imageVariantUrl(image, "small"))
+    );
     const poolStats = this.#pool.snapshot();
     if (
       (snapshot.missingCards > 0 || poolStats.available < 100) &&

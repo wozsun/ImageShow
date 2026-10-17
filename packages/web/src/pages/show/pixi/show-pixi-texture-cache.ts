@@ -196,8 +196,15 @@ export class ShowPixiTextureCache {
   readonly #queue = new Set<TextureEntry>();
   readonly #options: ShowPixiTextureCacheOptions;
   readonly #maximumFailedUrls: number;
+  // Prefetched downloads, like loading leases, end only with the whole cache.
+  readonly #prefetchController = new AbortController();
+  #prefetchRequest: readonly string[] = [];
+  #prefetchUrls: string[] = [];
+  // Downloaded once per list, even when the bytes could not be kept.
+  readonly #prefetched = new Set<string>();
   #destroyed = false;
   #inFlight = 0;
+  #prefetchInFlight = 0;
   #reservedPixels = 0;
   #rejected = 0;
   #failures = 0;
@@ -381,6 +388,35 @@ export class ShowPixiTextureCache {
     }
   }
 
+  /** Bytes kept for compressed images, set when the cache is created. */
+  get maximumSourceBytes() {
+    return this.#options.maximumSourceBytes;
+  }
+
+  /**
+   * Download the compressed bytes of the images a scene expects to show next,
+   * most urgent first, without decoding them: a card created for one of them
+   * later decodes from memory instead of waiting for the network. Each call
+   * replaces the list. A download starts only in a slot no texture load is
+   * using or waiting for; one already started is not cancelled, since a
+   * texture load may share it, so a burst of texture loads can briefly run
+   * beside up to as many prefetches. Nothing is decoded, so the GPU budget is
+   * unaffected; the most urgent listed bytes, up to half of the byte budget,
+   * are evicted last, and prefetching pauses once they fill it.
+   */
+  prefetchSources(urls: readonly string[]) {
+    if (this.#destroyed) return;
+    if (
+      urls.length === this.#prefetchRequest.length &&
+      urls.every((url, index) => url === this.#prefetchRequest[index])
+    )
+      return;
+    this.#prefetchRequest = [...urls];
+    this.#prefetchUrls = [...new Set(urls.map((url) => this.#resourceUrl(url)))];
+    this.#prefetched.clear();
+    this.#pumpPrefetch();
+  }
+
   resumeTransportRequests() {
     if (this.#destroyed) return;
     this.#blockedOrigins.clear();
@@ -449,6 +485,10 @@ export class ShowPixiTextureCache {
   destroy() {
     if (this.#destroyed) return;
     this.#destroyed = true;
+    this.#prefetchController.abort(new DOMException("Pixi 纹理缓存已卸载", "AbortError"));
+    this.#prefetchRequest = [];
+    this.#prefetchUrls = [];
+    this.#prefetched.clear();
     this.#queue.clear();
     for (const entry of this.#entries.values()) {
       entry.controller?.abort(new DOMException("Pixi 纹理缓存已卸载", "AbortError"));
@@ -525,7 +565,6 @@ export class ShowPixiTextureCache {
           entry.texture = texture;
           entry.state = "ready";
           entry.touchedAt = performance.now();
-          this.#originTransportFailures.delete(this.#origin(entry.url));
           for (const listener of entry.listeners)
             listener(texture, false, this.#availabilityRevision);
           entry.listeners.clear();
@@ -544,6 +583,40 @@ export class ShowPixiTextureCache {
           this.#evictFor(0);
           this.#trimUnreferenced();
           this.#pump();
+          this.#pumpPrefetch();
+        });
+    }
+  }
+
+  #pumpPrefetch() {
+    // Downloading stops at the end of the kept prefix rather than dropping
+    // some bytes to fetch others, which would fetch them again as the list
+    // reorders.
+    for (const { url, cached } of this.#keptPrefix()) {
+      if (
+        this.#destroyed ||
+        this.#queue.size ||
+        this.#inFlight + this.#prefetchInFlight >= this.#options.maximumInFlight
+      )
+        return;
+      if (
+        cached ||
+        this.#prefetched.has(url) ||
+        this.#sourceRequests.has(url) ||
+        this.#isBlocked(url)
+      )
+        continue;
+      this.#prefetched.add(url);
+      this.#prefetchInFlight += 1;
+      void this.#readSource(url, this.#prefetchController.signal)
+        // A failed download is remembered as a texture load's would be, so the
+        // list does not retry it and the card waits for the same recovery.
+        .catch((error: unknown) => {
+          if (!this.#destroyed) this.#rememberFailedUrl(url, error instanceof TextureTransportError);
+        })
+        .finally(() => {
+          this.#prefetchInFlight -= 1;
+          this.#pumpPrefetch();
         });
     }
   }
@@ -568,13 +641,15 @@ export class ShowPixiTextureCache {
         if (!this.#destroyed && blob.size <= this.#options.maximumSourceBytes) {
           while (this.#sources.size >= this.#options.maximumEntries
             || this.#sourceBytes + blob.size > this.#options.maximumSourceBytes) {
-            const oldest = this.#sources.keys().next().value;
+            const oldest = this.#evictableSource();
             if (oldest === undefined) break;
             this.#forgetSource(oldest);
           }
           this.#sources.set(url, blob);
           this.#sourceBytes += blob.size;
         }
+        // A completed download shows the origin is reachable again.
+        if (!this.#destroyed) this.#originTransportFailures.delete(this.#origin(url));
         return blob;
       })
       .catch((error: unknown) => {
@@ -586,6 +661,33 @@ export class ShowPixiTextureCache {
       .finally(() => this.#sourceRequests.delete(url));
     this.#sourceRequests.set(url, request);
     return request;
+  }
+
+  /**
+   * The listed URLs, most urgent first, up to the one at which their
+   * downloaded bytes fill half of the byte budget: the kept prefix.
+   */
+  *#keptPrefix() {
+    let keptBytes = 0;
+    for (const url of this.#prefetchUrls) {
+      if (keptBytes >= this.#options.maximumSourceBytes / 2) return;
+      const cached = this.#sources.get(url);
+      if (cached) keptBytes += cached.size;
+      yield { url, cached };
+    }
+  }
+
+  /**
+   * The least recently used bytes outside the kept prefix of the list, else
+   * the least urgent kept ones.
+   */
+  #evictableSource() {
+    const kept = [...this.#keptPrefix()].flatMap(({ url, cached }) => (cached ? [url] : []));
+    const keptSet = new Set(kept);
+    for (const url of this.#sources.keys()) {
+      if (!keptSet.has(url)) return url;
+    }
+    return kept.at(-1);
   }
 
   #forgetSource(url: string) {
@@ -701,6 +803,8 @@ export class ShowPixiTextureCache {
         this.#availabilityListeners.delete(listener);
         listener();
       }
+      // After the woken cards queued their loads, which go first.
+      this.#pumpPrefetch();
     });
   }
 

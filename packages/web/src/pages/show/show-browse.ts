@@ -12,8 +12,7 @@ export function showInitialBatchLimit(options: {
 }) {
   const { width, height, columns, mode, device } = options;
   if (mode === "float") {
-    // The float stream spans the viewport plus at least half a screen at each
-    // end; the default sizes keep it at about two screens.
+    // The float stream spans the viewport plus half a screen at each end.
     const side = showFloatStepSide(options.floatSizeIndex, width, height);
     const resident = Math.min(
       180,

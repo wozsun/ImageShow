@@ -204,7 +204,8 @@ function createFloatSceneHarness(
           acquisition.active = false;
         }
       };
-    }
+    },
+    prefetchSources: () => undefined
   } as unknown as ShowPixiTextureCache;
   let visibleItems: readonly ShowPixiVisibleItem[] = [];
   let requests = 0;
@@ -416,6 +417,10 @@ async function createTextureRecoveryHarness(
 }
 const unchangedTextureLods: ShowPixiTextureCache["fitResidentLods"] = (requests) =>
   requests.map(({ lod }) => lod);
+// Lets downloads without a completion callback (byte prefetch) finish.
+const settle = async () => {
+  for (let turn = 0; turn < 10; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+};
 
 const nativeFetch = globalThis.fetch;
 
@@ -731,6 +736,7 @@ test("[Web/展映] waterfall 在窄屏与宽屏高密度视口执行各自 Sprit
         inputElement: target.element,
         textureCache: {
           fitResidentLods: unchangedTextureLods,
+          prefetchSources: () => undefined,
           acquire: () => ({ release() {} })
         } as unknown as ShowPixiTextureCache,
         renderer: {} as Renderer,
@@ -1059,7 +1065,10 @@ test("[Web/展映] waterfall 超过 3G 前停在边界，允许后继续缩放�
         reducedMotion: false,
         speed: 28,
         inputElement: target.element,
-        textureCache: { fitResidentLods: unchangedTextureLods } as ShowPixiTextureCache,
+        textureCache: {
+          fitResidentLods: unchangedTextureLods,
+          prefetchSources: () => undefined
+        } as unknown as ShowPixiTextureCache,
         renderer: {} as Renderer,
         onNeedImages: () => undefined,
         onOpen: () => undefined,
@@ -1316,7 +1325,18 @@ test("[Web/展映] 纹理缓存保留原图比例做居中裁剪，共享引用�
   await evicted.ready;
   evicted.release();
   assert.equal(requests, 4, "字节预算淘汰最久未使用图片，之后正常重新读取");
+  const decodes = calls.length;
+  cache.prefetchSources(["https://images.example/ahead.webp"]);
+  await settle();
+  assert.equal(requests, 5);
+  assert.equal(calls.length, decodes, "字节预取只下载，不解码");
+  const ahead = acquireSize("https://images.example/ahead.webp", 32);
+  await ahead.ready;
+  ahead.release();
+  assert.equal(requests, 5, "卡片用预取的字节解码，不再下载");
+  cache.prefetchSources(["https://images.example/later.webp"]);
   cache.destroy();
+  await settle();
   assert.equal(cache.stats().sourceBytes, 0);
   assert.equal(cache.stats().sourceEntries, 0);
   assert.ok(bitmaps.every((bitmap) => bitmap.closed));
@@ -1610,6 +1630,7 @@ test("[Web/展映] waterfall 单图循环填屏时焦点只属于当前卡片槽
     inputElement: target.element,
     textureCache: {
       fitResidentLods: unchangedTextureLods,
+      prefetchSources: () => undefined,
       acquire: () => ({ release() {} })
     } as unknown as ShowPixiTextureCache,
     renderer: {} as Renderer,
@@ -1660,6 +1681,7 @@ test("[Web/展映] 瀑布稳定暂停后仍响应数据、尺寸、手动移动�
     inputElement: target.element,
     textureCache: {
       fitResidentLods: unchangedTextureLods,
+      prefetchSources: () => undefined,
       acquire: () => ({ release() {} })
     } as unknown as ShowPixiTextureCache,
     renderer: {} as Renderer,
@@ -2268,6 +2290,20 @@ test("[Web/展映] 纹理恢复按浏览器资源 URL 匹配，域名大小写�
   await h.flush();
   assert.equal(card.isTextureReady, true);
   assert.deepEqual(h.requests, Array(2).fill("https://textures.example/small/al/canonical.webp"));
+  const ahead = "https://textures.example/small/ad/ahead.webp";
+  h.setStatus("ahead", 404);
+  h.cache.prefetchSources([ahead]);
+  await settle();
+  h.cache.prefetchSources([ahead, "https://textures.example/small/al/canonical.webp"]);
+  await settle();
+  const aheadCard = h.card("ahead");
+  await h.flush();
+  assert.equal(aheadCard.isTextureReady, false);
+  assert.deepEqual(
+    h.requests.filter((url) => url === ahead),
+    [ahead],
+    "预取失败与纹理加载共用失败记录，换一份列表或创建卡片都不再下载"
+  );
 });
 test("[Web/展映] 图片成功信号解除来源暂停，CORS 仍失败时再次暂停且回收后不唤醒", async (t) => {
   const h = await createTextureRecoveryHarness(t, { maximumEntries: 6 });
@@ -2342,6 +2378,7 @@ test("[Web/展映] 两种场景和三种排序原位更新元数据并保持卡�
         inputElement: target.element,
         textureCache: {
           fitResidentLods: unchangedTextureLods,
+          prefetchSources: () => undefined,
           acquire() {
             acquired++;
             return {
@@ -2501,9 +2538,11 @@ test("[Web/展映] float 暂停时连续双向补图，保留反向预取并接�
   for (const delta of [-450, 450, -3600, 3600, -900, 900]) {
     h.dragBy(delta);
     // Both ends refill to the stream density, so the band keeps about the
-    // same number of cards whichever way it moves.
+    // same number of cards whichever way it moves. Random placement alone
+    // moves the count by up to about a quarter; a drain or pile-up moves it
+    // by half or more.
     const { activeSprites, visibleSprites } = h.scene.stats();
-    assert.ok(Math.abs(activeSprites - initialCount) <= Math.max(3, initialCount * 0.2));
+    assert.ok(Math.abs(activeSprites - initialCount) <= Math.max(4, initialCount * 0.4));
     assert.ok(visibleSprites > 0);
     assert.ok(h.activeLeases().length <= activeSprites + 36);
   }
@@ -3244,6 +3283,7 @@ test("[Web/展映] 四批重复后横移清空窗口，末页仅命中近期记�
           inputElement: target.element,
           textureCache: {
             fitResidentLods: unchangedTextureLods,
+            prefetchSources: () => undefined,
             acquire: () => ({ release() {} })
           } as unknown as ShowPixiTextureCache,
           renderer: {} as Renderer,
@@ -3341,6 +3381,7 @@ for (const [timing, following] of [
             inputElement: target.element,
             textureCache: {
               fitResidentLods: unchangedTextureLods,
+              prefetchSources: () => undefined,
               acquire: () => ({ release() {} })
             } as unknown as ShowPixiTextureCache,
             renderer: {} as Renderer,
@@ -3440,6 +3481,7 @@ for (const ending of ["fresh page", "recent EOF"] as const) {
             inputElement: target.element,
             textureCache: {
               fitResidentLods: unchangedTextureLods,
+              prefetchSources: () => undefined,
               acquire: () => ({ release() {} })
             } as unknown as ShowPixiTextureCache,
             renderer: {} as Renderer,
@@ -3680,6 +3722,7 @@ test("[Web/展映] 漂浮与星群删除释放卡片，星群故障恢复保留�
       inputElement: target,
       textureCache: {
         fitResidentLods: unchangedTextureLods,
+        prefetchSources: () => undefined,
         acquire: () => {
           leases++;
           return { release() { leases--; } };

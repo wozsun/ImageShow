@@ -165,6 +165,12 @@ const maximumVisibleItems = 96;
 const labelCountOffset = 20;
 const labelHeight = 36;
 const reconcileIntervalMs = 200;
+// 当前星团先下载接下来轮换的几张图，其余星团各一张：换图发生在看不见的位置，转回正面前还有时间加载，
+// 多备的图在离开星团时多半用不上。
+const clusterRotationPrefetch = 4;
+// 字节预算至少这么大时才先下载其余星团的背面：受保护的一半装得下大分类时的背面（约六百多张）。
+// 窄屏的预算只有一半，列出来只会随星环转动反复淘汰、重新下载。
+const clusterBackPrefetchBudget = 32 * 1024 * 1024;
 // 同一个星团两次换图至少隔这么久：快速转动时每秒新请求的图片有上限；总览里星团很小，慢慢换即可。
 const activeImageSwapIntervalMs = 100;
 const overviewImageSwapIntervalMs = 6000;
@@ -562,6 +568,7 @@ export class ShowPixiClusterScene implements ShowPixiSceneController {
     this.#queue = [];
     this.#rotating = false;
     this.#orbit.clear();
+    this.#textureCache.prefetchSources([]);
     this.#publishVisibleItems([]);
   }
 
@@ -1586,6 +1593,40 @@ export class ShowPixiClusterScene implements ShowPixiSceneController {
     this.#assignSlot(stale, image);
   }
 
+  /**
+   * 先下载接下来可能进入画面的图片字节，不解码：转到正面或轮换上来时只需解码，不必等网络。
+   * 按上屏的把握排先后：当前星团接下来轮换的图，当前星团与它在环上的两个邻居还没持有贴图的位置
+   * （切换星团时邻居随即展开），其余星团接下来轮换的图（总览里才轮换），最后是其余星团由近及远、
+   * 转过来才会画出的总览位置；字节预算装不下这些背面时不列（见 clusterBackPrefetchBudget）。
+   */
+  #prefetchSources(ordered: readonly ClusterState[]) {
+    const active = this.#activeCluster;
+    const expanding = new Set(
+      active ? [active, this.#ringNeighbour(active, 1), this.#ringNeighbour(active, -1)] : []
+    );
+    const others = ordered.filter((cluster) => !expanding.has(cluster));
+    const urls: string[] = [];
+    const listRotation = (cluster: ClusterState, count: number) => {
+      for (const image of cluster.images.slice(cluster.next, cluster.next + count)) {
+        urls.push(imageVariantUrl(image, "small"));
+      }
+    };
+    const listSlots = (cluster: ClusterState, all: boolean) => {
+      for (const slot of cluster.slots) {
+        if (!slot.vacant && !slot.resident && (all || slot.overview)) {
+          urls.push(imageVariantUrl(slot.image, "small"));
+        }
+      }
+    };
+    if (active) listRotation(active, clusterRotationPrefetch);
+    for (const cluster of expanding) listSlots(cluster, true);
+    for (const cluster of ordered) if (cluster !== active) listRotation(cluster, 1);
+    if (this.#textureCache.maximumSourceBytes >= clusterBackPrefetchBudget) {
+      for (const cluster of others) listSlots(cluster, false);
+    }
+    this.#textureCache.prefetchSources(urls);
+  }
+
   /** 低频协调：按需创建 / 回收卡片、分配贴图档位、发布键盘与读屏代理。 */
   #reconcile() {
     // 贴图按卡片创建的先后排队：当前星团最先，其余从屏幕中间靠前的星团往两边、再往后。
@@ -1600,7 +1641,8 @@ export class ShowPixiClusterScene implements ShowPixiSceneController {
           );
     const drawn: SlotState[] = [];
     const retained: SlotState[] = [];
-    for (const cluster of [...this.#clusters].sort((left, right) => distance(left) - distance(right))) {
+    const ordered = [...this.#clusters].sort((left, right) => distance(left) - distance(right));
+    for (const cluster of ordered) {
       // 作背景的星团已有的卡片原样保留，不随镜头远近换档：回到星群时还是总览里的那一档。
       const background =
         (this.#returning || this.#activeCluster !== null) &&
@@ -1664,6 +1706,8 @@ export class ShowPixiClusterScene implements ShowPixiSceneController {
       // 悬浮中的卡片显示的是倾斜快照：尺寸换档后在同一帧里按新尺寸重算，否则会闪一下。
       if (resized && slot.card.isInteractionActive) slot.card.update(0);
     }
+    // 在卡片取过贴图之后：预取只用贴图加载留下的空闲名额。
+    this.#prefetchSources(ordered);
     const active = this.#activeCluster;
     const items: ShowPixiVisibleItem[] = [];
     if (active) {
