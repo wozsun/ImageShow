@@ -66,6 +66,7 @@ function normalizeHostname(hostname: string) {
 }
 
 const externalImageDispatcher = new Agent({
+  connectTimeout: 15_000,
   connect: {
     lookup: createExternalImageLookup((hostname) =>
       lookup(hostname, {

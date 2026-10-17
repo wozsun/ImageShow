@@ -67,6 +67,7 @@ import {
 } from "../../../packages/server/src/core/concurrency.ts";
 import {
   immutableCacheControl,
+  privateRedirectCacheControl,
   privateRevalidationCacheControl,
   publicRedirectCacheControl
 } from "../../../packages/server/src/core/http/headers.ts";
@@ -94,7 +95,7 @@ import {
 import {
   servePublicStoredObject
 } from "../../../packages/server/src/images/serving/stored-image.ts";
-import { serveAdminExternalOriginal } from "../../../packages/server/src/images/serving/external-original.ts";
+import { serveExternalOriginal } from "../../../packages/server/src/images/serving/external-original.ts";
 import {
   configureSharpRuntime,
   transcodeStoredImage
@@ -1590,7 +1591,7 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
   };
 
   const proxySignal = new AbortController().signal;
-  const proxyResponse = await serveAdminExternalOriginal(
+  const proxyResponse = await serveExternalOriginal(
     item.id,
     {
       userAgent: "fixture-agent",
@@ -1615,13 +1616,12 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
     }
   });
   assert.deepEqual(proxyCalls[0]?.[3], {
-    "Cache-Control": privateRevalidationCacheControl,
-    Vary: "Cookie, User-Agent",
+    "Cache-Control": immutableCacheControl,
     "Referrer-Policy": "no-referrer"
-  });
+  }, "原图由本站返回时与三档图片一样不可变缓存，不按会话或浏览器区分");
 
   direct = true;
-  const directRedirect = await serveAdminExternalOriginal(
+  const directRedirect = await serveExternalOriginal(
     item.id,
     { signal: neverAbortedSignal, userAgent: "fixture-agent" },
     dependencies as never
@@ -1632,11 +1632,12 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
   assert.equal(directRedirect.headers.get("Location"), item.original);
   assert.equal(
     directRedirect.headers.get("Cache-Control"),
-    privateRevalidationCacheControl
+    privateRedirectCacheControl,
+    "跳转只对探测时的浏览器类别有效，只允许该客户端短期缓存"
   );
   assert.equal(directRedirect.headers.get("Referrer-Policy"), "no-referrer");
 
-  assert.equal(directRedirect.headers.get("Vary"), "Cookie, User-Agent");
+  assert.equal(directRedirect.headers.get("Vary"), null);
   const redirectUrls = [
     ["https://img.example.com/照片.webp", "https://img.example.com/%E7%85%A7%E7%89%87.webp"],
     [
@@ -1650,7 +1651,7 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
   ];
   for (const [original, expected] of redirectUrls) {
     for (const method of ["GET", "HEAD"] as const) {
-      const response = await serveAdminExternalOriginal(
+      const response = await serveExternalOriginal(
         item.id,
         { signal: neverAbortedSignal, method },
         {
@@ -1660,14 +1661,14 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
       );
       assert.equal(response.status, 302);
       assert.equal(response.headers.get("Location"), expected);
-      assert.equal(response.headers.get("Cache-Control"), privateRevalidationCacheControl);
-      assert.equal(response.headers.get("Vary"), "Cookie, User-Agent");
+      assert.equal(response.headers.get("Cache-Control"), privateRedirectCacheControl);
+      assert.equal(response.headers.get("Vary"), null);
       assert.equal(await response.text(), "");
     }
   }
   for (const control of ["\r", "\n", "\t", "\u200b"]) {
     await assert.rejects(
-      serveAdminExternalOriginal(
+      serveExternalOriginal(
         item.id,
         { signal: neverAbortedSignal },
         {
@@ -1686,7 +1687,7 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
     { ...record, original: "" }
   ]) {
     await assert.rejects(
-      serveAdminExternalOriginal(
+      serveExternalOriginal(
         item.id,
         { signal: neverAbortedSignal },
         {
@@ -2696,12 +2697,12 @@ test("[Server/图片] 管理员原图等待共享探测时单个 HTTP 取消不�
   };
   const cancelled = new AbortController();
   const other = new AbortController();
-  const first = serveAdminExternalOriginal(
+  const first = serveExternalOriginal(
     item.id,
     { signal: cancelled.signal },
     dependencies as never
   );
-  const second = serveAdminExternalOriginal(
+  const second = serveExternalOriginal(
     item.id,
     { signal: other.signal },
     dependencies as never
@@ -2716,7 +2717,7 @@ test("[Server/图片] 管理员原图等待共享探测时单个 HTTP 取消不�
   assert.equal((await second).status, 302);
   assert.equal(
     (
-      await serveAdminExternalOriginal(
+      await serveExternalOriginal(
         item.id,
         { signal: neverAbortedSignal },
         dependencies as never

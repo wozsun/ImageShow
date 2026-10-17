@@ -134,6 +134,7 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
   assert.deepEqual(defaults.import.keep_original_link, ["url", "jsonl", "weibo"]);
   assert.equal(defaults.weibo.source_enabled, true);
   assert.equal(defaults.site.root, "home");
+  assert.equal(defaults.site.public_original, false);
   assert.equal(defaults.site.random_size, "medium");
   assert.equal(defaults.site.assets_base_url, "");
   for (const assets_base_url of [
@@ -233,6 +234,7 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
   const driftSite = drift.site as Record<string, unknown>;
   delete driftSite.description;
   delete driftSite.root;
+  delete driftSite.public_original;
   delete driftSite.random_size;
   delete driftSite.assets_base_url;
   driftSite.unknown_site_key = "gallery";
@@ -251,6 +253,7 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
   assert.equal(normalized.weibo.source_enabled, true);
   assert.equal(normalized.site.description, "画廊与随机图片API");
   assert.equal(normalized.site.root, "home");
+  assert.equal(normalized.site.public_original, false);
   assert.equal(normalized.site.random_size, "medium");
   assert.equal(normalized.site.assets_base_url, "");
   assert.equal(
@@ -591,6 +594,7 @@ test("[Server/配置] 完整环境播种严格覆盖全部已映射 RuntimeConfi
     SITE_SHOW_DRIFT_SPEED: "42",
     SITE_SHOW_ORDER: "oldest",
     SITE_GALLERY_ENABLED: "false",
+    SITE_PUBLIC_ORIGINAL: "true",
     SITE_ROBOTS_ENABLED: "false",
     SITE_RANDOM_SIZE: "small",
     SITE_ASSETS_BASE_URL: " https://ASSET.example.com:443///static//nested/// ",
@@ -617,6 +621,7 @@ test("[Server/配置] 完整环境播种严格覆盖全部已映射 RuntimeConfi
     order: "oldest"
   });
   assert.equal(environmentConfig.site.gallery.enabled, false);
+  assert.equal(environmentConfig.site.public_original, true);
   assert.equal(environmentConfig.site.robots_enabled, false);
   assert.equal(environmentConfig.site.random_size, "small");
   assert.equal(environmentConfig.site.assets_base_url, "https://asset.example.com/static/nested");
@@ -802,6 +807,7 @@ if (scenario === "seed") {
     order: "oldest"
   });
   assert.equal(generated.site.gallery.enabled, false);
+  assert.equal(generated.site.public_original, true);
   assert.equal(generated.normalize.large.max_size_kb, 700);
   const persisted = JSON.parse(await readFile(join(root, "config.json"), "utf8"));
   assert.deepEqual(persisted, generated);
@@ -828,6 +834,7 @@ delete drifted.site.description;
 delete drifted.site.root;
 delete drifted.site.show.autoplay;
 delete drifted.site.gallery.enabled;
+delete drifted.site.public_original;
 drifted.site[unknownSiteKey] = "gallery";
 drifted.site.unknown = "remove-me";
 drifted.site.home.unknown = "remove-me";
@@ -843,6 +850,7 @@ assert.equal(normalized.site.mps, "");
 assert.equal(normalized.site.footer, "");
 assert.equal(normalized.site.root, "home");
 assert.equal(normalized.site.gallery.enabled, true);
+assert.equal(normalized.site.public_original, false);
 assert.equal(unknownSiteKey in normalized.site, false);
 assert.equal("unknown" in normalized.site, false);
 assert.equal("unknown" in normalized.site.home, false);
@@ -944,6 +952,7 @@ console.log("config-existing-ok");
           SITE_SHOW_DRIFT_SPEED: "42",
           SITE_SHOW_ORDER: "oldest",
           SITE_GALLERY_ENABLED: "false",
+          SITE_PUBLIC_ORIGINAL: "true",
           NORMALIZE_LARGE_MAX_SIZE_KB: "700"
         },
         output: /config-seed-ok/
@@ -959,6 +968,7 @@ console.log("config-existing-ok");
           SITE_MPS: "忽略环境公安备案号",
           SITE_FOOTER: "忽略环境页脚",
           SITE_GALLERY_ENABLED: "invalid",
+          SITE_PUBLIC_ORIGINAL: "true",
           UPLOAD_MAX_ITEMS: "invalid"
         },
         output: /config-existing-ok/

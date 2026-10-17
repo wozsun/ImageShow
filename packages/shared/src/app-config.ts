@@ -169,6 +169,7 @@ export const appConfig = {
         enabled: true,
         order: "latest"
       },
+      public_original: false,
       random_method: "redirect",
       random_size: "medium",
       random_fallback_order: ["device", "brightness", "author", "tag", "theme"] as RandomFallbackDimension[],

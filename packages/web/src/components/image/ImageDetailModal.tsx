@@ -98,6 +98,7 @@ type ImageDetailModalProps =
       item: PublicImageItem;
       onClose: () => void;
       admin?: false;
+      taxonomyFromList?: boolean;
       detailLoading?: boolean;
       detailError?: string;
       onDetailRetry?: () => void;
@@ -145,6 +146,9 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   );
   const detailLoading = !currentSnapshot && !admin && props.detailLoading === true;
   const detailError = !currentSnapshot && !admin ? (props.detailError?.trim() ?? "") : "";
+  const taxonomyReady = admin
+    || props.taxonomyFromList === true
+    || (!detailLoading && !detailError);
   const onDetailRetry = !admin ? props.onDetailRetry : undefined;
   const handleItemUpdated = useCallback(
     (nextItem: EditableImageSnapshotDto) => {
@@ -179,6 +183,8 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   );
 
   const { themeLabel, tagLabels } = taxonomyDisplay(item);
+  const taxonomyPlaceholder = detailLoading ? "加载中" : "加载失败";
+  const tagsShown = taxonomyReady && item.tags.length > 0;
 
   const authorSlug = item.author ?? "";
   const authorOption = authorSlug ? authorMap.get(authorSlug) : undefined;
@@ -195,7 +201,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
       : sourceAvailable
         ? "打开来源页面"
         : "暂无来源";
-  const originalHref = showAdminDetails ? imageOriginalUrl(item) : null;
+  const originalHref = imageOriginalUrl(item);
   const imageAspectRatio =
     "width" in item && "height" in item && item.width > 0 && item.height > 0
       ? `${item.width} / ${item.height}`
@@ -279,24 +285,24 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                 />
                 <div className="image-detail-scroll-body">
                   <dl className="image-detail-public-properties">
-                    {authorSlug && (
-                      <>
-                        <dt>作者</dt>
-                        <dd>
-                          {authorLink ? (
-                            <a
-                              href={authorLink}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              {authorLabel}
-                            </a>
-                          ) : (
-                            authorLabel
-                          )}
-                        </dd>
-                      </>
-                    )}
+                    <dt>作者</dt>
+                    <dd>
+                      {detailLoading
+                        ? "加载中"
+                        : detailError
+                          ? "加载失败"
+                          : authorLink
+                            ? (
+                              <a
+                                href={authorLink}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                {authorLabel}
+                              </a>
+                            )
+                            : authorLabel || "—"}
+                    </dd>
                     <dt>设备</dt>
                     <dd>
                       {detailLoading
@@ -314,25 +320,29 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                           : brightnessOptionLabel(item.brightness)}
                     </dd>
                     <dt>主题</dt>
-                    <dd>{detailLoading ? "加载中" : detailError ? "加载失败" : themeLabel}</dd>
-                    {item.tags.length > 0 && (
-                      <>
-                        <dt className="image-detail-tags-label">标签</dt>
-                        <dd className="image-detail-tags">
-                          {item.tags.map((tag, index) => (
-                            <span key={tag} className="tag-chip">
-                              {tagLabels[index]}
-                            </span>
-                          ))}
-                        </dd>
-                      </>
-                    )}
-                    {imageTime && (
-                      <>
-                        <dt>发布时间</dt>
-                        <dd>{formatDate(imageTime)}</dd>
-                      </>
-                    )}
+                    <dd>{taxonomyReady ? themeLabel : taxonomyPlaceholder}</dd>
+                    <dt className={tagsShown ? "image-detail-tags-label" : undefined}>标签</dt>
+                    <dd className={tagsShown ? "image-detail-tags" : undefined}>
+                      {tagsShown
+                        ? item.tags.map((tag, index) => (
+                          <span key={tag} className="tag-chip">
+                            {tagLabels[index]}
+                          </span>
+                        ))
+                        : taxonomyReady
+                          ? "—"
+                          : taxonomyPlaceholder}
+                    </dd>
+                    <dt>发布时间</dt>
+                    <dd>
+                      {detailLoading
+                        ? "加载中"
+                        : detailError
+                          ? "加载失败"
+                          : imageTime
+                            ? formatDate(imageTime)
+                            : "—"}
+                    </dd>
                   </dl>
                   <div className="inline-actions image-detail-actions" ref={actionsRef}>
                     <a

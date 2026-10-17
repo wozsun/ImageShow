@@ -65,6 +65,7 @@ type RuntimeSiteSettings = {
   home: SiteHomeSettings;
   show: SiteShowSettings;
   gallery: SiteGallerySettings;
+  public_original: boolean;
   random_method: RandomDefaultMethod;
   random_size: RandomImageSize;
   random_fallback_order: RandomFallbackDimension[];

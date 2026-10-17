@@ -134,6 +134,25 @@ test("[Web/后台] 无会话上下文的公开详情保持访客身份并隔离�
     [`/api/images/${id}?view=gallery`]
   );
   assert.equal(storage.get("site_session_hint"), "1", "访客详情不修改普通页面的登录提示");
+  await h.React.act(async () => {
+    void client.invalidateQueries({ queryKey: queryKeys.publicImageDetail });
+  });
+  await h.flush();
+  assert.equal(h.pending.length, 2);
+  assert.equal(h.pending[1]!.credentials, "omit");
+  await h.respond(1, { ok: true, item });
+  assert.equal(
+    h.document.querySelector(".image-detail-original")?.getAttribute("href"),
+    `/images/original/${id}`,
+    "嵌入页按匿名详情投影显示公开原图，不依赖管理员身份"
+  );
+  await h.React.act(async () => {
+    void client.invalidateQueries({ queryKey: queryKeys.publicImageDetail });
+  });
+  await h.flush();
+  assert.equal(h.pending.length, 3);
+  await h.respond(2, { ok: true, item: visitorItem });
+  assert.equal(h.document.querySelector(".image-detail-original"), null);
   await h.render(null);
 });
 

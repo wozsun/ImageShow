@@ -247,7 +247,7 @@ const { items } = await response.json();
 
 - `credentials: "omit"` 表示不发送登录 Cookie 等凭据。这些公开入口不开放携带凭据的跨站读取，不要设为 `"include"`；同站后台登录不受影响。
 - CORS 让浏览器能够读取响应；[频率限制和图片来源检查](#来源检查与频率限制)仍然生效。iframe 是否允许嵌入则由[嵌入设置](embed.md#开启嵌入)决定。
-- 主站三档公开图片和 ImageShow 提供的独立本地图片地址也支持匿名跨站读取。用 `fetch(item.url, { credentials: "omit", referrerPolicy: "no-referrer" })` 可省略 Referer 并读取图片内容；原图 `/images/original/*` 需要管理员登录，不开放跨站读取。
+- 主站三档公开图片和 ImageShow 提供的独立本地图片地址也支持匿名跨站读取。用 `fetch(item.url, { credentials: "omit", referrerPolicy: "no-referrer" })` 可省略 Referer 并读取图片内容；原图 `/images/original/*` 是否允许匿名访问由 `site.public_original` 控制，不开放跨站读取；它同样检查来源，带其他网站 Referer 的请求返回 `403`。原图不属于随机图 API 的输出，不要在其他网站嵌入。
 - 如果返回或跳转到云存储、CDN 等外部地址，最终图片响应也必须允许跨站读取。外部服务未配置 CORS 时，可以使用本站 `mode=proxy` 获取图片内容。
 
 请求使用 `GET` 或 `HEAD`。`/random` 支持 `OPTIONS` 预检，允许 `Content-Type` 请求头，并向浏览器脚本开放读取 `Retry-After`。三档图片的预检允许 `Range`、`If-None-Match`、`If-Modified-Since`、`If-Range` 请求头，响应额外开放读取 `ETag`、`Content-Range`、`Accept-Ranges`。

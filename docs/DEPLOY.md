@@ -237,7 +237,7 @@ docker run -d --name imageshow --restart unless-stopped \
 
 ### 使用 CDN
 
-CDN 可以加速图片和静态文件，但需要遵守以下规则，否则可能泄露原图或让防盗链失效：
+CDN 可以加速图片和静态文件，但需要遵守以下规则，否则可能让管理员无法打开原图或让防盗链失效：
 
 - 保留完整的查询参数，遵守应用返回的缓存头，不要强制缓存或改写内容。
 - 应用自己负责压缩：保留 `Accept-Encoding`，原样传递编码、长度和缓存相关的响应头。
@@ -245,10 +245,10 @@ CDN 可以加速图片和静态文件，但需要遵守以下规则，否则可�
 - `/random` 不能缓存。
 - 保留应用的 `Access-Control-Allow-Origin` 和 `Access-Control-Expose-Headers`，并允许 `OPTIONS` 预检到达应用；不要重复添加冲突的 CORS 头。随机图和三档公开图片允许匿名跨站读取，具体用法见[随机图 API](api/random.md#跨站读取)。
 - 登录和 `/random` 的频率限制按访客 IP 计算。CDN 回源时 `$remote_addr` 是 CDN 节点地址，需要先用 Nginx 的 `set_real_ip_from`（填 CDN 回源地址段）和 `real_ip_header`（填 CDN 提供的访客 IP 请求头）恢复访客 IP，再覆盖 `X-Real-IP` 和 `X-Forwarded-For`。不要让所有访客共用 CDN 节点的 IP，也不要透传访客自己发来的 IP 头。
-- 原图 `/images/original/*` 只允许管理员访问：必须透传登录 Cookie，遵守 `private, no-cache`。
+- 原图 `/images/original/*` 是否允许访客访问由 `site.public_original` 控制，关闭时回源必须透传登录 Cookie，应用才能识别管理员。由本站返回的原图不论开关都按普通图片长期缓存，和三档图片一样按 `Vary: Referer` 区分；源站允许直连时的跳转是 `private`，代理失败后的回退跳转不缓存，CDN 都不存。关闭后，CDN 已缓存的原图（包括管理员打开过的）仍会返回给任何人，只是不会再让本站去取新的原图。修改某张图的原图链接后，需要手动清理该图的 `/images/original/<id>` 缓存。
 - 图片防盗链按 Referer 判断：必须透传 Referer，并按 `Vary: Referer` 区分缓存；不支持的 CDN 需要在边缘实现相同规则。
 
-修改站点设置、收紧防盗链或原图访问后，CDN 不会自动更新，需要手动清理对应缓存（原图相关的还包括 `/api/images/*`）。另外要注意：
+修改站点设置、收紧防盗链或关闭原图公开访问，只影响到达应用的请求；命中已有 CDN 缓存的请求不受影响，应用不会自动清理缓存。如果需要已有缓存也立即失效，再手动清理对应缓存（原图相关的还包括 `/api/images/*`）。另外要注意：
 
 - 已经被下载或缓存在浏览器中的内容无法收回。
 - 直接访问 CDN 或云存储源站的请求不经过应用检查。

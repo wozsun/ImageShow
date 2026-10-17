@@ -635,17 +635,17 @@ test("[Web/后台] 图片详情根据链接显示原图并保持来源、标题�
             auth
           })
         ).present,
-        false,
-        `${auth} 即使残留原图链接也不显示按钮`
+        true,
+        `${auth} 使用详情响应提供的原图可用标记`
       );
     }
     const guestDetail = await renderScenario({
       auth: "guest"
     });
-    assert.equal(guestDetail.present, false);
+    assert.equal(guestDetail.present, true);
     assert.equal(
       guestDetail.href,
-      null
+      "/images/original/00000000-0000-7000-8000-000000000544"
     );
     assert.equal(
       guestDetail.sourceHref,
@@ -659,8 +659,8 @@ test("[Web/后台] 图片详情根据链接显示原图并保持来源、标题�
       guestDetail.actionClasses.map((className) =>
         className.includes("image-detail-source") ? "source" : "original"
       ),
-      ["source"],
-      "访客仅显示来源入口"
+      ["source", "original"],
+      "公开原图时访客显示来源与原图入口"
     );
     for (const auth of ["image", "super"] as const) {
       const detail = await renderScenario({ auth });
@@ -681,7 +681,7 @@ test("[Web/后台] 图片详情根据链接显示原图并保持来源、标题�
         })
       ).present,
       true,
-      "后台调用方必须继续由 admin 上下文显示原图"
+      "后台调用方使用编辑快照中的原图地址"
     );
     const unavailableOriginal = await renderScenario({
       auth: "guest",

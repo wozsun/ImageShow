@@ -74,6 +74,7 @@ const settingsGroups = {
   homeFooter: { section: "home", title: "备案与页脚" },
   gallery: { section: "browsing", title: "画廊" },
   show: { section: "browsing", title: "展映" },
+  original: { section: "browsing", title: "原图访问" },
   random: { section: "browsing", title: "随机图片 API" },
   embed: { section: "embed" },
   ingestion: { section: "ingestion", title: "原图与入库" },
@@ -335,6 +336,12 @@ const settingsFields = {
     label: "展映默认排序",
     kind: "select",
     options: orderOptions
+  },
+  "site.public_original": {
+    group: "original",
+    label: "公开原图",
+    kind: "toggle",
+    hint: "允许访客打开原图；关闭后仅管理员可访问。已有 CDN 缓存不受影响。"
   },
   "site.random_method": {
     group: "random",

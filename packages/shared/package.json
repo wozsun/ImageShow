@@ -1,6 +1,6 @@
 {
   "name": "@imageshow/shared",
-  "version": "6.8.13",
+  "version": "6.8.14",
   "private": true,
   "type": "module",
   "exports": {

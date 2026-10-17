@@ -62,9 +62,6 @@ await runIntegrationScenario(async (runtime) => {
   app.onError((error, context) => handleApiError(context, error));
   registerPublicRoutes(app);
   registerPublicAuthRoutes(app);
-  const { registerAdminImageRoutes } =
-    await import("../../../../packages/server/src/routes/admin-images.ts");
-  registerAdminImageRoutes(app);
   const baselineConfig = structuredClone(runtime.runtimeConfigStore.getRuntimeConfig());
   const originalFetch = globalThis.fetch;
   const originalUrl = "https://original.example.test/image.jpg";
@@ -145,7 +142,7 @@ await runIntegrationScenario(async (runtime) => {
     await vocabCache.refreshEntityVocabularies(["theme", "tag", "author"]);
     await runtimeAvailability.requireOperationalRedis();
     await runtime.runtimeConfigStore.updateRuntimeConfig({
-      site: { domain: "images.example" },
+      site: { domain: "images.example", public_original: false },
       altcha: { enabled: false }
     });
     const displayed = await publicUrls.publicImageUrl(
@@ -178,28 +175,35 @@ await runIntegrationScenario(async (runtime) => {
         headers: { cookie, ...(etag ? { "If-None-Match": etag } : {}) }
       });
     const sessionCookie = `imageshow_session=${sessionId}`;
-    const resourceRequest = (cookie = "", method = "GET", id = imageIds[0]) =>
+    // A direct original redirect is kept only by the client it was probed for, whoever asked.
+    const originalRedirectCache = "private, max-age=300";
+    const resourceRequest = (cookie = "", method = "GET", id = imageIds[0], conditional = true, referer = "") =>
       app.request(`http://images.example/images/original/${id}`, {
         method,
         headers: {
           cookie,
-          "If-None-Match": '"cached-original"',
-          "If-Modified-Since": "Sun, 20 Sep 2026 00:00:00 GMT"
+          ...(referer ? { Referer: referer } : {}),
+          ...(conditional ? {
+            "If-None-Match": '"cached-original"',
+            "If-Modified-Since": "Sun, 20 Sep 2026 00:00:00 GMT"
+          } : {})
         }
       });
     const assertOriginalDenied = async (cookie = "") => {
       const before = sourceRequests;
       for (const method of ["GET", "HEAD"]) {
         for (const id of [imageIds[0], "invalid-id"]) {
-          const response = await resourceRequest(cookie, method, id);
-          assert.equal(response.status, 401, "原图必须在解析 ID 和条件请求前鉴权");
-          assert.equal(response.headers.get("Location"), null);
-          assert.equal(response.headers.get("Cache-Control"), "no-store");
+          for (const conditional of [false, true]) {
+            const response = await resourceRequest(cookie, method, id, conditional);
+            assert.equal(response.status, 401, "原图必须在解析 ID 和条件请求前鉴权");
+            assert.equal(response.headers.get("Location"), null);
+            assert.equal(response.headers.get("Cache-Control"), "no-store");
+          }
         }
       }
       assert.equal(sourceRequests, before, "未认证请求不得探测或获取外部原图");
     };
-    // Visitors receive no original field at all, not even false.
+    // When originals are private, visitors receive no original field, not even false.
     const originalProjection = (item: { original?: boolean }) =>
       Object.hasOwn(item, "original") ? item.original : "omitted";
     const assertDetailVisibility = async () => {
@@ -248,13 +252,48 @@ await runIntegrationScenario(async (runtime) => {
         const resource = await resourceRequest(sessionCookie, method);
         assert.equal(resource.status, 302);
         assert.equal(resource.headers.get("Location"), originalUrl);
-        assert.equal(resource.headers.get("Cache-Control"), "private, no-cache");
-        assert.equal(resource.headers.get("Vary"), "Cookie, User-Agent");
+        assert.equal(resource.headers.get("Cache-Control"), originalRedirectCache);
+        assert.equal(resource.headers.get("Vary"), "Referer");
         assert.equal(await resource.text(), "");
         const sameAddress = await resourceRequest(sessionCookie, method, imageIds[2]);
         assert.equal(sameAddress.status, 302);
         assert.equal(sameAddress.headers.get("Location"), `${displayed}#original`);
       }
+
+      await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { public_original: true } });
+      const publicDetail = await detailRequest("", anonymousEtag);
+      assert.equal(publicDetail.status, 200, "公开开关变化使匿名详情验证器失效");
+      assert.equal((await publicDetail.json()).item.original, true);
+      assert.equal(publicDetail.headers.get("Cache-Control"), "private, no-cache");
+      assert.equal(publicDetail.headers.get("Set-Cookie"), null);
+      const publicEtag = publicDetail.headers.get("ETag")!;
+      assert.equal((await detailRequest("", publicEtag)).status, 304);
+      const noOriginalDetail = await app.request(`http://images.example/api/images/${imageIds[1]}?view=gallery`);
+      assert.equal((await noOriginalDetail.json()).item.original, false);
+      for (const cookie of ["", "imageshow_session=expired"]) {
+        assert.equal((await (await detailRequest(cookie)).json()).item.original, true);
+        for (const method of ["GET", "HEAD"]) {
+          const resource = await resourceRequest(cookie, method);
+          assert.equal(resource.status, 302, "公开原图无需有效管理员会话");
+          assert.equal(resource.headers.get("Location"), originalUrl);
+          assert.equal(resource.headers.get("Cache-Control"), originalRedirectCache);
+          assert.equal(resource.headers.get("Vary"), "Referer");
+        }
+      }
+      const beforeHotlink = sourceRequests;
+      const hotlinked = await resourceRequest("", "GET", imageIds[0], false, "https://hotlink.example.test/page");
+      assert.equal(hotlinked.status, 403, "公开原图仍按防盗链拒绝外站 Referer");
+      assert.equal(hotlinked.headers.get("Location"), null);
+      assert.equal(hotlinked.headers.get("Cache-Control"), "no-store");
+      assert.ok(hotlinked.headers.get("Vary")?.split(/,\s*/).includes("Referer"));
+      assert.equal(sourceRequests, beforeHotlink, "外站 Referer 不得探测或获取外部原图");
+      const sameSite = await resourceRequest("", "GET", imageIds[0], false, "https://images.example/gallery");
+      assert.equal(sameSite.status, 302, "本站 Referer 可打开公开原图");
+      await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { public_original: false } });
+      const privateDetail = await detailRequest("", publicEtag);
+      assert.equal(privateDetail.status, 200, "关闭公开访问不能沿用含原图标记的 304");
+      assert.equal(originalProjection((await privateDetail.json()).item), "omitted");
+      await assertOriginalDenied();
     };
     await assertDetailVisibility();
     const databaseResources = await readServingResources();
@@ -408,7 +447,7 @@ await runIntegrationScenario(async (runtime) => {
     const trashedOriginal = await resourceRequest(`imageshow_session=${trashAdminId}`);
     assert.equal(trashedOriginal.status, 302);
     assert.equal(trashedOriginal.headers.get("Location"), originalUrl);
-    assert.equal(trashedOriginal.headers.get("Cache-Control"), "private, no-cache");
+    assert.equal(trashedOriginal.headers.get("Cache-Control"), originalRedirectCache);
     await trash.restoreImages([imageIds[0]]);
     assert.equal(
       (

@@ -90,6 +90,7 @@ const runtimeConfigSchema = z.strictObject({
       enabled: z.boolean(),
       order: galleryOrder
     }),
+    public_original: z.boolean(),
     random_method: randomDefaultMethod,
     random_size: randomImageSize,
     random_fallback_order: z.array(z.enum(randomFallbackDimensions, { error: fallbackOrderMessage }), { error: fallbackOrderMessage })

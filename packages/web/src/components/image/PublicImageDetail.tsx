@@ -101,6 +101,7 @@ export function PublicImageDetail({
       onItemUpdated={onItemUpdated}
       onItemRefreshRequested={onItemRefreshRequested}
       admin={false}
+      taxonomyFromList={view === "gallery"}
       detailLoading={detailLoading}
       detailError={detailError}
       onDetailRetry={() => void refetch()}

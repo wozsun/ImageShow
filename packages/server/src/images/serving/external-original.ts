@@ -5,7 +5,8 @@ import { coalesce } from "../../core/coalesce.ts";
 import { raceWithAbortSignal } from "../../core/abort.ts";
 import { safeFetchExternalImage } from "../../core/external-image-fetch.ts";
 import {
-  privateRevalidationCacheControl,
+  immutableCacheControl,
+  privateRedirectCacheControl,
   safeRedirectLocation
 } from "../../core/http/headers.ts";
 import {
@@ -137,7 +138,7 @@ type ExternalOriginalRequest = {
   signal: AbortSignal;
 };
 
-export async function serveAdminExternalOriginal(
+export async function serveExternalOriginal(
   id: string,
   request: ExternalOriginalRequest,
   dependencies: ExternalOriginalServingDependencies = defaultExternalOriginalServingDependencies
@@ -152,13 +153,17 @@ export async function serveAdminExternalOriginal(
     )
   );
   signal.throwIfAborted();
+  // Proxied bytes are the same for every client and are cached like the
+  // stored variants whoever asked; the route only keeps anonymous requests
+  // from making this application fetch them. A redirect holds only for the
+  // browser family probed, so only that client may keep it and shared caches
+  // need not vary on the user agent.
   if (direct) {
     return new Response(null, {
       status: 302,
       headers: {
         Location: safeRedirectLocation(original.url),
-        "Cache-Control": privateRevalidationCacheControl,
-        Vary: "Cookie, User-Agent",
+        "Cache-Control": privateRedirectCacheControl,
         "Referrer-Policy": "no-referrer"
       }
     });
@@ -176,8 +181,7 @@ export async function serveAdminExternalOriginal(
       }
     },
     {
-      "Cache-Control": privateRevalidationCacheControl,
-      Vary: "Cookie, User-Agent",
+      "Cache-Control": immutableCacheControl,
       "Referrer-Policy": "no-referrer"
     }
   );

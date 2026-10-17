@@ -29,6 +29,7 @@
 | `site.version.link_enabled` | `true` | 版本信息可点击打开 GitHub Release |
 | `site.root` | `"home"` | 打开站点根路径 `/` 时显示的页面：`home` 首页、`gallery` 画廊、`show` 展映。所选页面关闭时，依次改用画廊、展映、首页 |
 | `site.robots_enabled` | `false` | 提供 `/robots.txt`，只允许搜索引擎抓取首页。关闭时该地址返回 404 |
+| `site.public_original` | `false` | 允许访客通过 `/images/original/<id>` 访问外部原图，并在有原图的详情中显示按钮；关闭后仅管理员可访问。适用于画廊、展映及嵌入页 |
 | `site.random_method` | `"redirect"` | `/random` 默认的返回方式：`redirect` 跳转到图片地址；`proxy` 由本站直接返回图片，会占用本站带宽 |
 | `site.random_size` | `"medium"` | `/random` 默认的图片尺寸：`large`、`medium`、`small` |
 | `site.random_fallback_order` | `["device","brightness","author","tag","theme"]` | 零匹配回退时 `all` 展开的顺序，五个维度各出现一次：`fallback=all` 按此顺序放宽全部维度，列表末尾的 `all` 按此顺序放宽其余维度；请求中写明的维度按书写顺序放宽 |
@@ -64,6 +65,14 @@
 | `site.show.order` | `"random"` | 展映默认排序，取值同画廊 |
 
 链接中的 `mode`、`order` 参数优先于这些默认值。访客在页面上的调整只影响自己当前的浏览。
+
+### 原图访问
+
+`site.public_original` 控制本站原图入口是否向访客开放，默认关闭。关闭时，匿名请求返回 401，不探测、跳转或抓取微博等来源的原图；图片管理员与超级管理员仍可访问。开启后，有外部原图链接的图片会向访客显示「原图」按钮。原图入口与三档图片共用防盗链：来自本站、嵌入页或允许列表中网站的请求，以及不发送 Referer 的请求不受影响，带其他网站 Referer 的请求返回 403。源站不允许直接访问时，原图由本站代理返回，会占用本站带宽；允许直接访问时，访客会被跳转到外部原图地址。
+
+原图不论开关都按普通图片缓存：由本站返回的原图允许浏览器与 CDN 长期缓存，跳转到外部地址的响应只在访客浏览器中缓存几分钟。修改某张图的原图链接后，打开过旧图的浏览器在缓存期内仍显示旧图，CDN 上的旧图需要手动清理。开关只阻止访客让本站去取原图：保存或读取配置文件后，对随后到达应用的请求生效；命中已有 CDN 或浏览器缓存的请求不经过应用，关闭后已缓存的原图（包括经 CDN 时管理员打开过的）在过期前仍可能被访问，应用也不会自动清理。
+
+此设置只控制已有外部原图链接的访问，不保存上传原文件，也不改变导入时是否保留原图链接。
 
 ### 自定义页脚
 
@@ -136,7 +145,7 @@ SITE_FOOTER='Powered by <a href="https://github.com/wozsun/ImageShow">ImageShow<
 
 `/random` 和三档公开图片的匿名 CORS 使用 `*`，不由这个列表控制，见[跨站读取](api/random.md#跨站读取)。
 
-嵌入的页面始终以访客身份显示，没有管理功能和原图入口。宿主网站可以通过[宿主光标协议](api/embed-cursor.md)显示自定义光标，通过[嵌入安全区协议](api/embed-safe-area.md)调整嵌入页在手机全面屏上避开的边距。
+嵌入的页面始终以访客身份显示，没有管理功能；原图入口跟随 `site.public_original`。宿主网站可以通过[宿主光标协议](api/embed-cursor.md)显示自定义光标，通过[嵌入安全区协议](api/embed-safe-area.md)调整嵌入页在手机全面屏上避开的边距。
 
 ## 上传与导入
 
@@ -157,7 +166,7 @@ SITE_FOOTER='Powered by <a href="https://github.com/wozsun/ImageShow">ImageShow<
 | `weibo.source_enabled` | `true` | 把微博帖子页面记为图片来源 |
 | `weibo.request_delay_seconds` | `[2, 5]` | 相邻两次微博请求之间随机等待的秒数 `[最短, 最长]`，每项 0–60，最短不能大于最长 |
 
-保留的原图链接只有管理员能看到。原图链接和微博来源是否保留，以任务首次提交时的设置为准；已经提交的任务重试时沿用原来的选择。修改设置不会改动已入库的图片。
+保留的原图是否允许访客访问，由 `site.public_original` 控制。原图链接和微博来源是否保留，以任务首次提交时的设置为准；已经提交的任务重试时沿用原来的选择。修改这些导入设置不会改动已入库的图片。
 
 ## 图片处理
 

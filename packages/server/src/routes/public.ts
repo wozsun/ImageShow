@@ -36,6 +36,7 @@ import {
   servePublicStoredObject
 } from "../images/serving/stored-image.ts";
 import type { StoredResponseRequest } from "../images/serving/stored-object-response.ts";
+import { serveExternalOriginal } from "../images/serving/external-original.ts";
 import { requireImageReferer } from "./image-referer.ts";
 
 const galleryStatsQueryKeys = Object.keys(galleryStatsQuery.shape);
@@ -43,6 +44,11 @@ const galleryStatsQueryKeySet = new Set<string>(galleryStatsQueryKeys);
 const siteConfigRepresentation = createApiSuccessSnapshot((config: RuntimeConfig) =>
   siteConfigPayload(config)
 );
+
+async function canAccessOriginal(context: Context) {
+  return getRuntimeConfig().site.public_original
+    || Boolean(await readAdminSession(context));
+}
 
 function storedResponseRequest(context: Context): StoredResponseRequest {
   return {
@@ -123,13 +129,26 @@ export function registerPublicRoutes(app: Hono) {
     const id = parse(uuidInput, c.req.param("id"));
     const { view } = parse(imageDetailQuery, c.req.query());
     appendVaryHeader(c, "Cookie");
-    const includeOriginal = Boolean(await readAdminSession(c));
+    const includeOriginal = await canAccessOriginal(c);
     const response = {
       item: await getPublicImage(id, view, c.req.raw.signal, includeOriginal)
     } satisfies PublicImageDetailResponseDto<PublicImageView>;
     return cacheableContentResponse(c, JSON.stringify({ ok: true, ...response }), {
       cacheControl: privateRevalidationCacheControl,
       contentType: "application/json; charset=UTF-8"
+    });
+  });
+
+  app.get("/images/original/:id", requireImageReferer, async (c) => {
+    if (!await canAccessOriginal(c)) {
+      throw new ApiError(401, "unauthorized", "Unauthorized");
+    }
+    return serveExternalOriginal(parse(uuidInput, c.req.param("id")), {
+      userAgent: c.req.header("user-agent") ?? "",
+      method: c.req.method === "HEAD" ? "HEAD" : "GET",
+      ifNoneMatch: c.req.header("if-none-match"),
+      ifModifiedSince: c.req.header("if-modified-since"),
+      signal: c.req.raw.signal
     });
   });
 

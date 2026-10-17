@@ -88,7 +88,7 @@ type ImageDetailFieldsDto = Pick<
 
 /**
  * 标题及画廊主题、标签复用列表当前值，详情请求不负责刷新这些字段。
- * 原图有无只对管理员会话投影为布尔 original，访客响应不含该字段。
+ * 允许访问原图的请求投影布尔 original，其余响应不含该字段。
  */
 export type PublicImageDetailDto<View extends PublicImageView = "show"> =
   Omit<ImageDetailFieldsDto, "theme" | "tags"> & { original?: boolean }
@@ -97,7 +97,7 @@ export type PublicImageDetailDto<View extends PublicImageView = "show"> =
 type ImageDetailItemDto = ImageDetailFieldsDto & { id: string; title: string };
 
 /**
- * Original access belongs to the authenticated site, not the storage image root.
+ * Original access belongs to the site origin, not the storage image root.
  * Editable data carries the raw original and details carry a boolean; both are truthy only when an original exists.
  */
 export function imageOriginalUrl(image: { id: string; original?: string | boolean }) {
