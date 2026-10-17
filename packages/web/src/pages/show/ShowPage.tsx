@@ -56,7 +56,7 @@ import {
   clampShowWaterfallColumns,
   defaultShowFloatSizeIndex,
   largerShowWaterfallImages,
-  showFloatSizeSteps,
+  showFloatSizeStepCount,
   showWaterfallDensity,
   smallerShowWaterfallImages,
   type ShowWaterfallDensity
@@ -80,7 +80,7 @@ function configuredWaterfallColumns(
 }
 
 function configuredFloatSize(configured: ShowDensity) {
-  if (configured === "relaxed") return showFloatSizeSteps.length - 1;
+  if (configured === "relaxed") return showFloatSizeStepCount - 1;
   if (configured === "dense") return 0;
   return defaultShowFloatSizeIndex;
 }
@@ -379,7 +379,7 @@ export function ShowPage({
     const params = updateImageBrowseSearchParams(routeSearchParams, { group });
     return `?${readableFilterSearch(params)}`;
   };
-  const floatSizeDescription = `当前尺寸档位 ${floatSizeIndex + 1}/${showFloatSizeSteps.length}`;
+  const floatSizeDescription = `当前尺寸档位 ${floatSizeIndex + 1}/${showFloatSizeStepCount}`;
   const waterfallSizeDescription = `当前约 ${
     Number.isInteger(waterfallColumns)
       ? waterfallColumns
@@ -395,7 +395,7 @@ export function ShowPage({
     scene === "waterfall"
       ? waterfallColumns <= waterfallDensity.minimumColumns + 0.001
       : scene === "float"
-        ? floatSizeIndex >= showFloatSizeSteps.length - 1
+        ? floatSizeIndex >= showFloatSizeStepCount - 1
         : clusterImages.length === 0;
   const pointerHint =
     scene === "waterfall"
@@ -409,7 +409,7 @@ export function ShowPage({
     scene === "waterfall"
       ? "拖动平移；点按 ± 或双指缩放"
       : scene === "float"
-        ? "上下拖动；点按 ± 调整尺寸"
+        ? "上下拖动；点按 ± 或双指缩放调整尺寸"
         : clusterFocus
           ? "拖动旋转；双指缩放，缩到最小回到星群"
           : "拖动转动星群；点按星团进入";

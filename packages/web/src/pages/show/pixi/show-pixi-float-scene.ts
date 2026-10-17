@@ -11,8 +11,9 @@ import {
 } from "./show-pixi-card.js";
 import {
   clampShowFloatSizeIndex,
-  showFloatDefaultWidth,
-  showFloatSizeSteps
+  showFloatPacking,
+  showFloatStepSide,
+  showFloatViewingMargin
 } from "./show-pixi-layout.js";
 import type {
   ShowPixiTextureCache,
@@ -36,34 +37,56 @@ type FloatSceneOptions = ShowPixiSceneOptions & {
 
 type FloatCardState = {
   card: ShowPixiCard;
-  cruiseSpeed: number;
+  /** Slot center. Slots move with the stream as one sheet and own spacing. */
+  x: number;
+  y: number;
+  /** Displayed displacement from the slot, easing back to zero. */
+  offsetX: number;
+  offsetY: number;
+  /** Displayed y while hover or focus holds the card in place. */
+  heldY: number | null;
   drift: number;
   driftFactor: number;
   driftRate: number;
-  entryOffset: number;
   phase: number;
   rotationPhase: number;
   rotationRate: number;
   hoverRotationFrom: number | null;
   hoverRotationElapsed: number;
-  speed: number;
-  widthFactor: number;
-  x: number;
-  xRatio: number;
-  velocityX: number;
-  y: number;
-  targetY: number | null;
+  sizeFactor: number;
   retiring: boolean;
 };
 
 type FloatStreamDirection = -1 | 1;
 
+type FloatPinch = {
+  /** Client positions of the two fingers. */
+  points: Map<number, { x: number; y: number }>;
+  /** Finger distance when the size step last changed. */
+  distance: number;
+  changedAt: number;
+};
+
 type FloatImagePlan = {
   image: ShowImage;
   serial: number;
-  widthFactor: number;
+  sizeFactor: number;
   textureKey: string;
   lease: ShowPixiTextureLease | null;
+};
+
+type FloatCardGeometry = {
+  width: number;
+  height: number;
+  rotation: number;
+  drift: number;
+};
+
+type FloatSlotBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 };
 
 const goldenRatioConjugate = 0.6180339887498949;
@@ -73,19 +96,39 @@ const wheelScrollResponseMs = 86;
 const wheelScrollStopDistance = 0.08;
 const floatRotationAmplitude = (3 * Math.PI) / 180;
 const floatHoverStraightenMs = 240;
-const floatMinimumWidthFactor = 0.7;
-const floatMaximumWidthFactor = 1.2;
-const floatMeanWidthSquared =
-  (floatMinimumWidthFactor ** 2 +
-    floatMinimumWidthFactor * floatMaximumWidthFactor +
-    floatMaximumWidthFactor ** 2) /
-  3;
+// Card sides vary this much around the size step: enough that the stream does
+// not look stamped, without letting single images dominate it.
+const floatSizeSpread = 0.12;
+// Like the cluster's sphere lattice, spacing is measured between card centers,
+// so neighbors overlap a little at corners and edges in every direction instead
+// of tiling into touching rows or columns. Offsets are scaled by the pair's
+// mean width and height: measuring them in card sides would keep portrait
+// cards too far apart side by side and let them press on each other's top and
+// bottom edges, which stacks narrow screens into two columns.
+const floatMinimumSpacing = 1.1;
+// No pair may cover more than this share of the smaller card.
+const floatMaximumOverlap = 0.15;
+const floatPlacementCandidates = 64;
+// Cards may reach this share of their width into the side margins kept for
+// rotation and sway, so they can meet the screen edge as cluster cards do.
+// Without it a large card on a narrow screen leaves an unusable strip beside it.
+const floatSideOverhang = 0.25;
+// New cards are placed with their far edge within this many card sides of the
+// end of the band that the stream is filling.
+const floatPlacementDepth = 0.6;
+// The finger distance changes by this ratio for each size step of a pinch;
+// pinch steps and Ctrl + wheel steps keep the same minimum interval.
+const floatPinchStepRatio = 1.15;
+const floatSizeStepIntervalMs = 140;
+const floatSettleMs = 650;
+const floatSettleSpeed = 480;
+const floatSpawnIntervalMs = 100;
 
-function floatWidthFactor(serial: number) {
+function floatSizeFactor(serial: number) {
   // Spread sizes through every short sequence, including the upcoming texture
-  // leases, so large images keep smaller companions across the whole stream.
+  // leases, so a run of large images still gets smaller companions.
   const position = (serial * goldenRatioConjugate + 0.5) % 1;
-  return floatMinimumWidthFactor + position * (floatMaximumWidthFactor - floatMinimumWidthFactor);
+  return 1 + floatSizeSpread * (position * 2 - 1);
 }
 
 function noise(value: number, salt: number) {
@@ -98,25 +141,23 @@ function imageRatio(image: ShowImage) {
   return image.height / image.width;
 }
 
-function floatCardFootprint(
+/** Width a card can sweep through with its rotation and sway. */
+function floatCardFootprintWidth(
   width: number,
   height: number,
   rotation: number,
   drift: number
 ) {
   const maximumRotation = Math.abs(rotation) + floatRotationAmplitude;
-  const cosine = Math.abs(Math.cos(maximumRotation));
-  const sine = Math.abs(Math.sin(maximumRotation));
-  return {
-    width: width * cosine + height * sine + drift * 2 + 12,
-    height: height * cosine + width * sine + 12
-  };
+  return (
+    width * Math.abs(Math.cos(maximumRotation)) +
+    height * Math.abs(Math.sin(maximumRotation)) +
+    drift * 2 +
+    12
+  );
 }
 
-function rectanglesOverlap(
-  left: { x: number; y: number; width: number; height: number },
-  right: { x: number; y: number; width: number; height: number }
-) {
+function rectanglesOverlap(left: FloatSlotBounds, right: FloatSlotBounds) {
   const overlapWidth = Math.max(
     0,
     Math.min(
@@ -142,6 +183,32 @@ function rectanglesOverlap(
   return overlapWidth * overlapHeight;
 }
 
+/**
+ * Smallest center spacing to the neighbors, relative to each pair's mean size,
+ * or -1 when the spot is too close to a neighbor or would cover too much of
+ * either card.
+ */
+function floatSlotSpacing(
+  slot: FloatSlotBounds,
+  neighbors: readonly FloatSlotBounds[]
+) {
+  let spacing = Number.POSITIVE_INFINITY;
+  const area = slot.width * slot.height;
+  for (const neighbor of neighbors) {
+    const distance = Math.hypot(
+      (neighbor.x - slot.x) / ((neighbor.width + slot.width) / 2),
+      (neighbor.y - slot.y) / ((neighbor.height + slot.height) / 2)
+    );
+    if (distance < floatMinimumSpacing) return -1;
+    const overlap = rectanglesOverlap(slot, neighbor);
+    if (overlap > floatMaximumOverlap * Math.min(area, neighbor.width * neighbor.height)) {
+      return -1;
+    }
+    spacing = Math.min(spacing, distance);
+  }
+  return spacing;
+}
+
 export class ShowPixiFloatScene implements ShowPixiSceneController {
   readonly kind = "float" as const;
   readonly root = new Container();
@@ -160,10 +227,23 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     [1]: []
   };
   readonly #handlePointerDown = (event: PointerEvent) => {
-    if (!this.#inputEnabled || this.#dragPointerId !== null) return;
+    if (!this.#inputEnabled) return;
     if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (this.#dragPointerId !== null) {
+      // A second touch point turns a touch drag into a pinch; further
+      // pointers, and pointers of other types, are ignored. The runtime clears
+      // a card's click intent only for non-primary pointers of the same type.
+      if (
+        event.pointerType === "touch" &&
+        this.#dragPointerType === "touch" &&
+        !this.#pinch
+      ) this.#beginPinch(this.#dragPointerId, event);
+      return;
+    }
     this.#dragPointerId = event.pointerId;
     this.#dragPointerType = event.pointerType;
+    this.#dragClientX = event.clientX;
+    this.#dragClientY = event.clientY;
     this.#dragLastY = this.#eventY(event.clientY);
     this.#dragLastAt = event.timeStamp;
     this.#dragVelocityY = 0;
@@ -177,9 +257,19 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     if (event.cancelable) event.preventDefault();
   };
   readonly #handlePointerMove = (event: PointerEvent) => {
-    if (!this.#inputEnabled
-      || !this.#dragging
-      || event.pointerId !== this.#dragPointerId) return;
+    if (!this.#inputEnabled) return;
+    const pinchPoint = this.#pinch?.points.get(event.pointerId);
+    if (pinchPoint) {
+      pinchPoint.x = event.clientX;
+      pinchPoint.y = event.clientY;
+      this.#updatePinch(this.#pinch!, event.timeStamp);
+      if (event.cancelable) event.preventDefault();
+      return;
+    }
+    if (event.pointerId !== this.#dragPointerId) return;
+    this.#dragClientX = event.clientX;
+    this.#dragClientY = event.clientY;
+    if (!this.#dragging) return;
     const nextY = this.#eventY(event.clientY);
     const elapsed = Math.min(64, Math.max(1, event.timeStamp - this.#dragLastAt));
     const requestedDelta = nextY - this.#dragLastY;
@@ -196,6 +286,24 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     if (event.cancelable) event.preventDefault();
   };
   readonly #handlePointerUp = (event: PointerEvent) => {
+    const pinch = this.#pinch;
+    if (pinch?.points.has(event.pointerId)) {
+      this.#releasePointer(event.pointerId);
+      pinch.points.delete(event.pointerId);
+      // The finger left on the screen stays inert until it lifts, so the end
+      // of a pinch never turns into a drag.
+      const [remaining] = pinch.points;
+      this.#dragPointerId = remaining?.[0] ?? null;
+      if (remaining) {
+        this.#dragClientX = remaining[1].x;
+        this.#dragClientY = remaining[1].y;
+      }
+      this.#pinch = null;
+      this.#dragging = false;
+      this.#dragVelocityY = 0;
+      if (event.cancelable) event.preventDefault();
+      return;
+    }
     if (event.pointerId !== this.#dragPointerId) return;
     this.#releasePointer(event.pointerId);
     this.#dragPointerId = null;
@@ -224,7 +332,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
       );
       if (
         Math.abs(this.#wheelSizeAccumulator) >= 48 &&
-        event.timeStamp - this.#lastWheelSizeAt >= 140
+        event.timeStamp - this.#lastWheelSizeAt >= floatSizeStepIntervalMs
       ) {
         const direction = this.#wheelSizeAccumulator < 0 ? 1 : -1;
         const requested = clampShowFloatSizeIndex(this.#sizeIndex + direction);
@@ -254,7 +362,6 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
   readonly #consumedIds = new Set<string>();
   #hasMore = false;
   #lastUsageSignature = "";
-  #meanImageRatio = 1;
   #imageCursor = 0;
   #width: number;
   #height: number;
@@ -266,12 +373,16 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
   #order: ShowOrder = "random";
   #serial = 0;
   #streamDirection: FloatStreamDirection = -1;
-  #elapsed = 0;
   #lifecycleElapsed = 0;
   #nextSpawnAt = 0;
-  #nextPathAt = 0;
-  #nextSpacingAt = 0;
-  #pathCursor = 0;
+  /** Cards owed at the incoming end for the distance the stream has moved. */
+  #entryQuota = 0;
+  #waitingForImages = false;
+  /** Viewport the band was last fully seated for. */
+  #seatedWidth: number;
+  #seatedHeight: number;
+  /** Cards that left this frame, reused by the cards entering it. */
+  readonly #spareCards: ShowPixiCard[] = [];
   #nextVisibleAt = 0;
   #lastVisibleSignature: string | null = null;
   #recycledSprites = 0;
@@ -280,6 +391,9 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
   #inputEnabled = true;
   #dragPointerId: number | null = null;
   #dragPointerType = "";
+  #dragClientX = 0;
+  #dragClientY = 0;
+  #pinch: FloatPinch | null = null;
   #dragLastY = 0;
   #dragLastAt = 0;
   #dragVelocityY = 0;
@@ -301,6 +415,8 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     this.#onVisibleItems = options.onVisibleItems;
     this.#width = Math.max(1, options.width);
     this.#height = Math.max(1, options.height);
+    this.#seatedWidth = this.#width;
+    this.#seatedHeight = this.#height;
     this.#sizeIndex = clampShowFloatSizeIndex(options.sizeIndex);
     this.#speed = options.speed;
     this.#running = options.running;
@@ -315,9 +431,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     const next = clampShowFloatSizeIndex(index);
     if (next === this.#sizeIndex) return;
     this.#sizeIndex = next;
-    this.#scheduleCountTransition();
-    this.#refreshTexturePrefetches();
-    this.#layoutRevision += 1;
+    this.#reflow();
   }
 
   setSpeed(speed: number) {
@@ -329,24 +443,27 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     const previousHeight = this.#height;
     this.#width = Math.max(1, width);
     this.#height = Math.max(1, height);
+    if (
+      Math.abs(this.#width - previousWidth) < 1 &&
+      Math.abs(this.#height - previousHeight) < 1
+    ) return;
+    const scaleX = this.#width / previousWidth;
+    const scaleY = this.#height / previousHeight;
     for (const state of this.#cards) {
-      state.y = previousHeight > 0
-        ? state.y / previousHeight * this.#height
-        : state.y;
-      state.x =
-        previousWidth > 0
-          ? state.x / previousWidth * this.#width
-          : state.xRatio * this.#width;
-      state.card.root.x = state.x;
-      state.card.root.y = state.y;
-      this.#retargetSize(state);
+      state.x *= scaleX;
+      state.y *= scaleY;
+      state.offsetX *= scaleX;
+      state.offsetY *= scaleY;
+      if (state.heldY !== null) state.heldY *= scaleY;
     }
-    if (Math.abs(previousWidth - this.#width) > 1) {
-      this.#settleHorizontalDistribution();
-    }
-    this.#scheduleCountTransition();
-    this.#refreshTexturePrefetches();
-    this.#layoutRevision += 1;
+    // Small changes only nudge the cards. Once the viewport has moved well
+    // away from the one the band was seated for, as a rotation or a long
+    // window drag does, the band is re-seated. Height alone gets more room,
+    // since a mobile toolbar showing or hiding changes it by about a tenth.
+    const widthMoved = Math.abs(this.#width / this.#seatedWidth - 1) > 0.1;
+    const heightMoved = Math.abs(this.#height / this.#seatedHeight - 1) > 0.25;
+    if (widthMoved || heightMoved) this.#reflow();
+    else this.#relayout();
   }
 
   setImages(images: readonly ShowImage[], dataKey: string, order: ShowOrder, hasMore: boolean) {
@@ -377,20 +494,14 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     for (const id of this.#consumedIds) {
       if (replacing || !nextIds.has(id)) this.#consumedIds.delete(id);
     }
-    this.#meanImageRatio = nextImages.length
-      ? nextImages.reduce((total, image) => total + imageRatio(image), 0) / nextImages.length
-      : 1;
     this.#imageCursor = replacing || !nextImages.length
       ? 0
       : previousCursor % nextImages.length;
+    let vacated = false;
     if (replacing) {
       this.#cancelVerticalInput();
       this.#clearTexturePrefetches();
-      for (const state of this.#cards) {
-        state.card.root.parent?.removeChild(state.card.root);
-        state.card.destroy();
-      }
-      this.#cards.length = 0;
+      this.#removeAllCards();
       this.#serial = 0;
       this.#streamDirection = -1;
     } else {
@@ -406,35 +517,31 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
           return true;
         });
       }
-      if (!imageMap.size) {
-        for (const state of this.#cards) {
-          state.card.root.parent?.removeChild(state.card.root);
-          state.card.destroy();
-        }
-        this.#cards.length = 0;
-      }
-      for (const state of [...this.#cards]) {
+      if (!imageMap.size) this.#removeAllCards();
+      for (const state of this.#cards) {
         const currentId = state.card.image?.id;
         const nextImage = currentId ? imageMap.get(currentId) : undefined;
         if (!nextImage) {
-          if (this.#assignState(state, false)) this.#recycledSprites += 1;
-          else this.#removeCard(this.#cards.indexOf(state));
+          // The fading card's place is filled again right away.
+          if (!state.retiring) vacated = true;
+          this.#retire(state);
           continue;
         }
-        const width = this.#cardWidth(state);
-        state.drift = Math.min(16, width * state.driftFactor);
-        state.card.assign(
-          state.card.key,
-          nextImage,
-          width,
-          width * imageRatio(nextImage),
-          state.card.baseRotation,
-          true
-        );
+        this.#retargetCard(state, nextImage);
         this.#applyCardTransform(state);
       }
     }
-    if (!this.#cards.length) this.#fillInitialComposition();
+    // A band that ran out of candidates is completed once more arrive.
+    const incomplete = this.#waitingForImages;
+    this.#waitingForImages = false;
+    if (!this.#cards.length) {
+      this.#seatedWidth = this.#width;
+      this.#seatedHeight = this.#height;
+      this.#fillStream(1);
+      this.#publishVisibleItems();
+    } else if (vacated || incomplete) {
+      this.#fillStream(0);
+    }
     this.#refreshTexturePrefetches();
     this.#layoutRevision += 1;
   }
@@ -504,10 +611,12 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     } else if (!this.#dragging) {
       this.#dragVelocityY = 0;
     }
-    const moving = this.#running && !this.#reducedMotion && !manualMovement;
+    const moving = this.#running && !this.#reducedMotion && !manualMovement && !this.#pinch;
     if (moving) this.#setStreamDirection(-1);
     this.#lifecycleElapsed += elapsed;
-    if (moving) this.#elapsed += elapsed;
+    // The whole stream rises at one speed, so spacing settled at entry holds
+    // for the entire journey; individual motion stays within the sway.
+    const distance = moving ? (this.#speed * elapsed) / 1_000 : 0;
     for (let index = this.#cards.length - 1; index >= 0; index -= 1) {
       const state = this.#cards[index];
       const opacityStep = elapsed / 400;
@@ -518,73 +627,38 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
         this.#removeCard(index);
         continue;
       }
-      // Hover/focus owns this card's motion lease: keep it fixed while the
-      // shared stream continues moving around it. Releasing the card resumes
-      // from the exact frozen position without resetting its lifecycle. Planar
+      // Hover/focus owns this card's motion lease: its slot moves on with the
+      // stream while the card stays put. Releasing it eases the card back into
+      // the slot, which no other card has taken in the meantime. Planar
       // rotation can still ease upright while the pointer owns the card.
-      if (moving && !state.card.isInteractionActive) {
-        const distance = (this.#verticalSpeed(state) * elapsed) / 1_000;
+      const held = state.card.isInteractionActive;
+      if (held && state.heldY === null) state.heldY = this.#shownY(state);
+      if (!held && state.heldY !== null) {
+        state.offsetY = state.heldY - state.y;
+        state.heldY = null;
+      }
+      if (distance) {
         state.y -= distance;
-        if (state.targetY !== null) state.targetY -= distance;
-        state.phase += state.driftRate * elapsed;
-        state.rotationPhase += state.rotationRate * elapsed;
-        this.#advanceHorizontalMotion(state, elapsed);
-      } else {
-        state.velocityX = 0;
+        if (!held) {
+          state.phase += state.driftRate * elapsed;
+          state.rotationPhase += state.rotationRate * elapsed;
+        }
       }
-      if (!manualMovement && !state.card.isInteractionActive && state.targetY !== null) {
-        const progress = this.#reducedMotion ? 1 : 1 - Math.exp(-elapsed / 900);
-        state.y += (state.targetY - state.y) * progress;
-        if (Math.abs(state.targetY - state.y) < 0.1) state.targetY = null;
-      }
+      if (!held && !manualMovement) this.#settleOffset(state, elapsed);
       this.#straightenHoveredCard(state, elapsed);
       this.#applyCardTransform(state);
       state.card.update(elapsed, true);
-      const buffer = Math.max(72, state.card.height * 0.35);
-      const onScreen =
-        state.y + state.card.height / 2 >= -buffer &&
-        state.y - state.card.height / 2 <= this.#height + buffer;
-      state.card.setVisible(onScreen);
+      this.#updateVisibility(state);
     }
-    if (moving) this.#recycleOutsideStream();
-    if (this.#cards.length < this.#targetCount()
-      && this.#lifecycleElapsed >= this.#nextSpawnAt) {
-      const state = this.#spawn(false);
-      if (state) {
-        if (moving || manualMovement) {
-          state.y = this.#chooseStreamY(
-            state.card.targetHeight,
-            state.entryOffset,
-            this.#serial,
-            state,
-            false
-          );
-          const placement = this.#choosePlacement(
-            this.#serial,
-            state.card.targetWidth,
-            state.card.targetHeight,
-            state.y,
-            state
-          );
-          state.xRatio = placement.xRatio;
-          state.x = state.xRatio * this.#width;
-          this.#applyCardTransform(state);
-        } else {
-          this.#placeStaticState(state);
-        }
-        state.card.root.alpha = 0;
-        this.#refreshTexturePrefetches();
-      }
-      this.#nextSpawnAt = this.#lifecycleElapsed + 120;
+    if (distance) {
+      this.#removeOutsideStream();
+      this.#owe(distance);
     }
-    if (moving && this.#elapsed >= this.#nextPathAt) {
-      this.#adjustHorizontalPath();
-      this.#nextPathAt = this.#elapsed + Math.max(24, Math.min(80, 2_000 / this.#cards.length));
+    if (this.#entryQuota >= 1 && this.#lifecycleElapsed >= this.#nextSpawnAt) {
+      this.#nextSpawnAt = this.#lifecycleElapsed + floatSpawnIntervalMs;
+      if (this.#replenish(this.#streamDirection)) this.#refreshTexturePrefetches();
     }
-    if (moving && this.#elapsed >= this.#nextSpacingAt) {
-      this.#balanceFlowSpacing();
-      this.#nextSpacingAt = this.#elapsed + 500;
-    }
+    this.#destroySpareCards();
     if (this.#lifecycleElapsed >= this.#nextVisibleAt) {
       this.#publishVisibleItems();
       this.#nextVisibleAt = this.#lifecycleElapsed + 250;
@@ -596,7 +670,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     const composition = this.#compositionMetrics(visible);
     const visibleSprites = visible.length;
     const meanY = this.#cards.length
-      ? this.#cards.reduce((total, state) => total + state.y, 0) / this.#cards.length
+      ? this.#cards.reduce((total, state) => total + state.card.root.y, 0) / this.#cards.length
       : 0;
     const horizontalBuckets = new Array<number>(8).fill(0);
     for (const state of visible) {
@@ -623,7 +697,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
       layoutRevision: this.#layoutRevision,
       inputEnabled: this.#inputEnabled,
       inputListenerCount: this.#inputListenerCount,
-      activePointers: this.#dragPointerId === null ? 0 : 1,
+      activePointers: this.#pinch?.points.size ?? (this.#dragPointerId === null ? 0 : 1),
       waterfallColumns: null,
       waterfallCameraX: null,
       waterfallCameraY: null,
@@ -642,6 +716,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     this.#onVisibleItems([]);
     for (const state of this.#cards) state.card.destroy();
     this.#cards.length = 0;
+    this.#destroySpareCards();
     this.#images = [];
     this.#consumedIds.clear();
     this.root.removeAllListeners();
@@ -682,21 +757,64 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     if (!Number.isFinite(requestedDelta) || requestedDelta === 0) return 0;
     if (!this.#cards.length) return 0;
     this.#setStreamDirection(requestedDelta < 0 ? -1 : 1);
-    // Advance the retained stream in bounded spatial steps. Even a large
-    // pointer delta replenishes the incoming band before moving through it.
+    // Advance the stream in bounded spatial steps. Even a large pointer delta
+    // replenishes the incoming band before moving through it.
     const maximumStep = Math.max(32, Math.min(128, this.#streamBuffer() * 0.25));
     const steps = Math.ceil(Math.abs(requestedDelta) / maximumStep);
     const delta = requestedDelta / steps;
+    let replenished = false;
     for (let step = 0; step < steps; step += 1) {
       for (const state of this.#cards) {
         state.y += delta;
-        // A prior size transition must not pull a manually moved card back.
-        state.targetY = null;
+        if (state.heldY !== null) state.heldY += delta;
       }
-      this.#recycleOutsideStream();
+      this.#removeOutsideStream();
+      this.#owe(Math.abs(delta));
+      if (this.#replenish(this.#streamDirection)) replenished = true;
     }
+    if (replenished) this.#refreshTexturePrefetches();
+    this.#destroySpareCards();
     this.#onManualVerticalMovement(-requestedDelta, pointerType);
     return requestedDelta;
+  }
+
+  #beginPinch(firstPointerId: number, event: PointerEvent) {
+    this.#pinch = {
+      points: new Map([
+        [firstPointerId, { x: this.#dragClientX, y: this.#dragClientY }],
+        [event.pointerId, { x: event.clientX, y: event.clientY }]
+      ]),
+      distance: Math.max(
+        1,
+        Math.hypot(event.clientX - this.#dragClientX, event.clientY - this.#dragClientY)
+      ),
+      changedAt: Number.NEGATIVE_INFINITY
+    };
+    // A pinch only changes the size step; it never moves the stream.
+    this.#dragging = false;
+    this.#dragVelocityY = 0;
+    this.#wheelScrollRemainingY = 0;
+    try {
+      this.#inputElement.setPointerCapture(event.pointerId);
+    } catch {
+      // A detached canvas or an inactive pointer rejects capture.
+    }
+    if (event.cancelable) event.preventDefault();
+  }
+
+  #updatePinch(pinch: FloatPinch, timeStamp: number) {
+    const [first, second] = [...pinch.points.values()];
+    if (!first || !second) return;
+    const distance = Math.max(1, Math.hypot(first.x - second.x, first.y - second.y));
+    const ratio = distance / pinch.distance;
+    if (
+      Math.abs(Math.log(ratio)) < Math.log(floatPinchStepRatio) ||
+      timeStamp - pinch.changedAt < floatSizeStepIntervalMs
+    ) return;
+    const requested = clampShowFloatSizeIndex(this.#sizeIndex + (ratio > 1 ? 1 : -1));
+    this.setSizeIndex(clampShowFloatSizeIndex(this.#onSizeIndexChange(requested)));
+    pinch.distance = distance;
+    pinch.changedAt = timeStamp;
   }
 
   #hasManualMovement() {
@@ -708,92 +826,22 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     );
   }
 
-  #setStreamDirection(direction: FloatStreamDirection) {
-    if (this.#streamDirection === direction) return;
-    this.#streamDirection = direction;
-    const incoming: FloatCardState[] = [];
-    const outgoing: FloatCardState[] = [];
-    let totalHeight = 0;
-    let activeCount = 0;
-    for (const state of this.#cards) {
-      if (state.retiring) continue;
-      activeCount += 1;
-      totalHeight += state.card.targetHeight;
-      if (state.card.isInteractionActive) continue;
-      const footprint = floatCardFootprint(
-        Math.max(state.card.width, state.card.targetWidth),
-        Math.max(state.card.height, state.card.targetHeight),
-        state.card.baseRotation,
-        state.drift
-      );
-      const above = state.y + footprint.height / 2 < -24;
-      const below = state.y - footprint.height / 2 > this.#height + 24;
-      if (!above && !below) continue;
-      ((direction < 0 ? below : above) ? incoming : outgoing).push(state);
-    }
-    const meanHeight = totalHeight / Math.max(1, activeCount);
-    const bufferQuota = Math.ceil(
-      (this.#targetCount() * this.#streamBuffer()) /
-        (this.#height + this.#streamBuffer() * 2 + meanHeight)
-    );
-    // Keep reserves at both ends. Rebalance only fully off-screen cards,
-    // preferring already decoded textures and leaving visible cards intact.
-    const reserve = Math.min(bufferQuota, Math.floor((incoming.length + outgoing.length) / 2));
-    const needed = reserve - incoming.length;
-    if (needed <= 0) return;
-    outgoing.sort((left, right) => {
-      const readiness = Number(right.card.isTextureReady) - Number(left.card.isTextureReady);
-      return readiness || (direction < 0 ? left.y - right.y : right.y - left.y);
-    });
-    for (const state of outgoing.slice(0, needed)) {
-      state.targetY = null;
-      const height = Math.max(state.card.height, state.card.targetHeight);
-      state.y = this.#chooseStreamY(
-        height,
-        state.entryOffset,
-        this.#serial,
-        state,
-        true,
-        direction
-      );
-      const placement = this.#choosePlacement(
-        this.#serial,
-        Math.max(state.card.width, state.card.targetWidth),
-        height,
-        state.y,
-        state
-      );
-      state.xRatio = placement.xRatio;
-      state.x = state.xRatio * this.#width;
-      state.velocityX = 0;
-      this.#applyCardTransform(state);
-      this.#layoutRevision += 1;
-    }
-  }
-
-  #recycleOutsideStream() {
-    let recycled = false;
+  #removeOutsideStream() {
+    const top = -this.#streamBuffer();
+    const bottom = this.#height + this.#streamBuffer();
     for (let index = this.#cards.length - 1; index >= 0; index -= 1) {
       const state = this.#cards[index];
-      const direction: FloatStreamDirection | null =
-        state.y < this.#exitBoundary(state)
-          ? -1
-          : state.y > this.#entryBoundary(state) ? 1 : null;
-      if (direction === null) continue;
-      if (state.retiring && this.#cards.length > this.#targetCount()) {
-        this.#removeCard(index);
-      } else {
-        this.#assignState(state, false, direction);
-        this.#recycledSprites += 1;
-      }
-      recycled = true;
-    }
-    if (recycled) {
-      this.#refreshTexturePrefetches();
+      // A card held in view, or easing back to its slot, stays until both
+      // the card and its slot have left the band.
+      const half = Math.max(state.card.height, state.card.targetHeight) / 2;
+      const outside = (y: number) => y + half < top || y - half > bottom;
+      if (outside(state.y) && outside(this.#shownY(state))) this.#removeCard(index);
     }
   }
 
   #cancelVerticalInput() {
+    for (const pointerId of this.#pinch?.points.keys() ?? []) this.#releasePointer(pointerId);
+    this.#pinch = null;
     if (this.#dragPointerId !== null) {
       this.#releasePointer(this.#dragPointerId);
     }
@@ -842,44 +890,370 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     this.#inputListenerCount = 0;
   }
 
-  #fillInitialComposition() {
-    if (!this.#images.length) return;
-    const count = this.#targetCount();
-    for (let index = 0; index < count; index += 1) {
-      const state = this.#spawn(true);
-      if (!state) break;
-      if (this.#reducedMotion) {
-        this.#placeStaticState(state);
-        continue;
+  /**
+   * Bring the band up to the stream density wherever it falls short, by
+   * sweeping a floor down from its top exactly as the stream itself fills its
+   * incoming end. Cards are counted once their far edge passes the floor.
+   * Cards given to re-seat keep their order down the band: each takes the
+   * next opening once the sweep reaches it, new cards fill in between when the
+   * density needs more, and cards the sweep leaves behind fade out.
+   */
+  #fillStream(alpha: number, reseat: readonly FloatCardState[] = []) {
+    const top = -this.#streamBuffer();
+    const bottom = this.#height + this.#streamBuffer();
+    const side = this.#cardSide();
+    const travelPerCard = this.#travelPerCard();
+    const pending = [...reseat];
+    const waiting = new Set(pending);
+    const placed = this.#cards
+      .filter((state) => !state.retiring && !waiting.has(state))
+      .map((state) => this.#slotOf(state));
+    const shownBottom = (state: FloatCardState) =>
+      this.#shownY(state) + state.card.targetHeight / 2;
+    const step = travelPerCard / 4;
+    for (let floor = top + step; floor < bottom + step; floor += step) {
+      const edge = Math.min(floor, bottom);
+      const target = Math.round((edge - top) / travelPerCard);
+      while (pending.length && shownBottom(pending[0]!) < edge - side * 1.5) {
+        this.#retire(pending.shift()!);
       }
-      const exitBoundary = this.#exitBoundary(state);
-      const entryBoundary = this.#entryBoundary(state);
-      state.y =
-        exitBoundary +
-        ((index + 0.4 + noise(index, 19) * 0.2) / count) * (entryBoundary - exitBoundary);
-      const placement = this.#choosePlacement(
-        index + this.#serial,
-        state.card.targetWidth,
-        state.card.targetHeight,
-        state.y,
-        state,
-        ((entryBoundary - exitBoundary) / count) * 0.3
-      );
-      state.xRatio = placement.xRatio;
-      state.y = placement.y;
-      state.x = state.xRatio * this.#width;
-      this.#applyCardTransform(state);
+      let count = placed.filter((bounds) => bounds.y + bounds.height / 2 <= edge).length;
+      while (count < target) {
+        const next = pending[0];
+        const state = next && shownBottom(next) <= edge + side * 0.5
+          ? this.#reseatCard(next, edge, top, placed)
+          : this.#placeNext(-1, edge, top, alpha, placed);
+        if (!state) break;
+        if (state === next) pending.shift();
+        placed.push(this.#slotOf(state));
+        count += 1;
+      }
     }
-    this.#settleHorizontalDistribution();
-    this.#publishVisibleItems();
+    for (const state of pending) this.#retire(state);
+    this.#entryQuota = 0;
   }
 
-  #spawn(initial: boolean) {
-    if (!this.#images.length || this.#cards.length >= this.#maximumCards()) {
+  /**
+   * Add the cards owed for the distance the stream has moved, at its
+   * incoming end, so the band keeps the stream density. Because the stream
+   * moves as one sheet, the spacing settled there is what later passes
+   * through the viewport. Cards with no opening yet stay owed.
+   */
+  #replenish(direction: FloatStreamDirection) {
+    const buffer = this.#streamBuffer();
+    const floor = direction < 0 ? this.#height + buffer : -buffer;
+    const nearLimit = direction < 0 ? this.#height : 0;
+    const placed = this.#cards
+      .filter((state) => !state.retiring)
+      .map((state) => this.#slotOf(state));
+    let added = 0;
+    while (this.#entryQuota >= 1) {
+      const state = this.#placeNext(direction, floor, nearLimit, 0, placed);
+      if (!state) break;
+      placed.push(this.#slotOf(state));
+      this.#entryQuota -= 1;
+      added += 1;
+    }
+    return added > 0;
+  }
+
+  /**
+   * Owe cards for stream travel. Cards still waiting for an opening stay
+   * owed, up to twice what the incoming band holds.
+   */
+  #owe(distance: number) {
+    const travelPerCard = this.#travelPerCard();
+    this.#entryQuota = Math.min(
+      Math.max(3, (this.#streamBuffer() * 2) / travelPerCard),
+      this.#entryQuota + distance / travelPerCard
+    );
+  }
+
+  #setStreamDirection(direction: FloatStreamDirection) {
+    if (direction === this.#streamDirection) return;
+    // Cards owed at one end are not owed at the other.
+    this.#streamDirection = direction;
+    this.#entryQuota = 0;
+  }
+
+  /**
+   * Stream travel per card at the stream density, from the mean area of the
+   * candidates not yet consumed (or the whole pool once all are queued or
+   * shown): cards a viewport limit makes smaller leave room for more.
+   */
+  #travelPerCard() {
+    const upcoming = this.#images
+      .filter((image) => !this.#consumedIds.has(image.id))
+      .slice(0, 64);
+    const sample = upcoming.length ? upcoming : this.#images.slice(0, 64);
+    const meanArea = sample.length
+      ? sample.reduce((total, image) => {
+          const { width, height } = this.#cardSize(imageRatio(image), 1);
+          return total + width * height;
+        }, 0) / sample.length
+      : this.#cardSide() ** 2;
+    return meanArea / (showFloatPacking * this.#width);
+  }
+
+  /**
+   * Place the next planned image of a direction near the floor, the end of
+   * the band being filled. The plan stays queued, with its texture lease,
+   * until a slot opens for it.
+   */
+  #placeNext(
+    direction: FloatStreamDirection,
+    floor: number,
+    nearLimit: number,
+    alpha: number,
+    neighbors: readonly FloatSlotBounds[]
+  ) {
+    // The Sprite cap counts settled cards only. Cards fading out leave within
+    // moments and must not hold back the cards that fill their openings, so
+    // the total may briefly exceed the cap while the band is re-seated.
+    const settled = this.#cards.filter((state) => !state.retiring).length;
+    if (settled >= this.#maximumCards()) {
       if (this.#images.length) this.#rejectedSprites += 1;
       return null;
     }
-    const card = new ShowPixiCard(
+    const queue = this.#prefetchQueues[direction];
+    if (!queue.length) {
+      const plan = this.#createImagePlan();
+      if (!plan) {
+        this.#waitingForImages = true;
+        return null;
+      }
+      queue.push(plan);
+    }
+    const plan = queue[0]!;
+    const geometry = this.#planGeometry(plan);
+    const slot = this.#openSlot(geometry, floor, nearLimit, direction, neighbors);
+    if (!slot) return null;
+    queue.shift();
+    return this.#addCard(plan, geometry, slot.x, slot.y, alpha);
+  }
+
+  /** Move a card to an opening near the floor, close to where it is shown. */
+  #reseatCard(
+    state: FloatCardState,
+    floor: number,
+    nearLimit: number,
+    neighbors: readonly FloatSlotBounds[]
+  ) {
+    const image = state.card.image;
+    if (!image) return null;
+    const shownX = state.x + state.offsetX;
+    const shownY = this.#shownY(state);
+    const slot = this.#openSlot(
+      this.#cardGeometry(state, image),
+      floor,
+      nearLimit,
+      -1,
+      neighbors,
+      shownX
+    );
+    if (!slot) return null;
+    state.x = slot.x;
+    state.y = slot.y;
+    state.offsetX = shownX - slot.x;
+    state.offsetY = shownY - slot.y;
+    return state;
+  }
+
+  /**
+   * Choose the most open slot for a card with its far edge just inside the
+   * floor and, when it fits, its near edge beyond the limit. The unfilled side
+   * beyond the floor counts as occupied, so cards do not gather against it
+   * and leave openings behind. A card being re-seated prefers openings near
+   * its current column.
+   */
+  #openSlot(
+    geometry: FloatCardGeometry,
+    floor: number,
+    nearLimit: number,
+    direction: FloatStreamDirection,
+    neighbors: readonly FloatSlotBounds[],
+    nearX?: number
+  ) {
+    const { minimumX, maximumX } = this.#horizontalRange(geometry);
+    const side = Math.sqrt(geometry.width * geometry.height);
+    const half = geometry.height / 2;
+    // How far the far edge may sit from the floor. A card taller than the
+    // room before the limit is placed right at the floor.
+    const room = Math.abs(floor - nearLimit) - geometry.height;
+    const depth = Math.max(0, Math.min(this.#cardSide() * floatPlacementDepth, room));
+    const reach = side * 3 + depth;
+    const nearby = neighbors.filter((bounds) => Math.abs(bounds.y - floor) < reach + half);
+    let best: { x: number; y: number; score: number } | null = null;
+    for (let attempt = 0; attempt < floatPlacementCandidates; attempt += 1) {
+      const local = nearX !== undefined && attempt % 2 === 0;
+      const x = local
+        ? Math.max(minimumX, Math.min(maximumX, nearX + (Math.random() - 0.5) * 1.2 * side))
+        : minimumX + Math.random() * (maximumX - minimumX);
+      const y = floor + direction * (half + Math.random() * depth);
+      const spacing = floatSlotSpacing(
+        { x, y, width: geometry.width, height: geometry.height },
+        nearby
+      );
+      if (spacing < 0) continue;
+      const shift = nearX === undefined ? 0 : Math.abs(x - nearX) / side;
+      const score = Math.min(spacing, Math.abs(floor - y) / side + 0.5) - shift * 0.15;
+      if (!best || score > best.score) best = { x, y, score };
+    }
+    return best;
+  }
+
+  /**
+   * Re-seat the band after the card size or the viewport changed markedly:
+   * cards keep their order down the band and move to nearby openings at the
+   * current size. Held cards stay where they are shown.
+   */
+  #reflow() {
+    const reseat: FloatCardState[] = [];
+    for (const state of this.#cards) {
+      if (state.retiring) continue;
+      this.#retargetCard(state);
+      if (!state.card.isInteractionActive) {
+        reseat.push(state);
+        continue;
+      }
+      state.x += state.offsetX;
+      state.y = this.#shownY(state);
+      state.offsetX = 0;
+      state.offsetY = 0;
+    }
+    reseat.sort((left, right) => this.#shownY(left) - this.#shownY(right));
+    this.#seatedWidth = this.#width;
+    this.#seatedHeight = this.#height;
+    this.#fillStream(0, reseat);
+    this.#refreshTexturePrefetches();
+    this.#layoutRevision += 1;
+  }
+
+  /**
+   * Adjust the band after a small viewport change. Each card keeps its
+   * displayed position and eases into the nearest slot that keeps the spacing
+   * rules; cards without one fade out, and openings are refilled.
+   */
+  #relayout() {
+    const top = -this.#streamBuffer();
+    const bottom = this.#height + this.#streamBuffer();
+    const centerY = this.#height / 2;
+    const placed: FloatSlotBounds[] = [];
+    // Held cards stay where they are shown; the rest are re-seated outward
+    // from the middle of the viewport, so any cards that no longer fit are
+    // the ones farthest from view.
+    const ordered = this.#cards
+      .filter((state) => !state.retiring)
+      .sort((left, right) =>
+        Number(right.card.isInteractionActive) - Number(left.card.isInteractionActive)
+        || Math.abs(this.#shownY(left) - centerY) - Math.abs(this.#shownY(right) - centerY));
+    for (const state of ordered) {
+      const shownX = state.x + state.offsetX;
+      const shownY = this.#shownY(state);
+      const geometry = this.#retargetCard(state);
+      if (!geometry) continue;
+      const slot = state.card.isInteractionActive
+        ? { x: shownX, y: shownY }
+        : this.#nearestSlot(geometry, { x: state.x, y: state.y }, placed, top, bottom);
+      if (!slot) {
+        this.#retire(state);
+        continue;
+      }
+      state.x = slot.x;
+      state.y = slot.y;
+      state.offsetX = shownX - slot.x;
+      state.offsetY = shownY - slot.y;
+      placed.push(this.#slotOf(state));
+    }
+    this.#fillStream(0);
+    this.#refreshTexturePrefetches();
+    this.#layoutRevision += 1;
+  }
+
+  #nearestSlot(
+    geometry: FloatCardGeometry,
+    proposal: { x: number; y: number },
+    placed: readonly FloatSlotBounds[],
+    top: number,
+    bottom: number
+  ) {
+    const { minimumX, maximumX } = this.#horizontalRange(geometry);
+    // Any slot still overlapping the band, the bounds cards are removed by.
+    const minimumY = top - geometry.height / 2 + 1;
+    const maximumY = bottom + geometry.height / 2 - 1;
+    const side = Math.sqrt(geometry.width * geometry.height);
+    // Search rings around the proposal, nearest first.
+    for (let ring = 0; ring <= 6; ring += 1) {
+      const radius = ring * side * 0.15;
+      const points = ring ? ring * 8 : 1;
+      for (let point = 0; point < points; point += 1) {
+        const angle = ((point + ring * goldenRatioConjugate) / points) * Math.PI * 2;
+        const x = Math.max(minimumX, Math.min(maximumX, proposal.x + Math.cos(angle) * radius));
+        const y = proposal.y + Math.sin(angle) * radius;
+        if (y < minimumY || y > maximumY) continue;
+        const bounds = { x, y, width: geometry.width, height: geometry.height };
+        if (floatSlotSpacing(bounds, placed) >= 0) return { x, y };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Card centers keep the rotated, swaying card within the side edges, less
+   * the share of its width it may reach past them.
+   */
+  #horizontalRange(geometry: FloatCardGeometry) {
+    const footprintWidth = floatCardFootprintWidth(
+      geometry.width,
+      geometry.height,
+      geometry.rotation,
+      geometry.drift
+    );
+    const margin = footprintWidth / 2 + 8 - geometry.width * floatSideOverhang;
+    const minimumX = Math.min(this.#width / 2, margin);
+    return {
+      minimumX,
+      maximumX: Math.max(minimumX, this.#width - margin)
+    };
+  }
+
+  #slotOf(state: FloatCardState): FloatSlotBounds {
+    return {
+      x: state.x,
+      y: state.y,
+      width: state.card.targetWidth,
+      height: state.card.targetHeight
+    };
+  }
+
+  /** Apply the current card size, and any updated image, to a card. */
+  #retargetCard(state: FloatCardState, image = state.card.image) {
+    if (!image) return null;
+    const geometry = this.#cardGeometry(state, image);
+    state.drift = geometry.drift;
+    state.card.assign(
+      state.card.key,
+      image,
+      geometry.width,
+      geometry.height,
+      state.card.baseRotation,
+      true,
+      geometry.width
+    );
+    return geometry;
+  }
+
+  #addCard(
+    plan: FloatImagePlan,
+    geometry: FloatCardGeometry,
+    x: number,
+    y: number,
+    alpha: number
+  ) {
+    const { image, serial, sizeFactor } = plan;
+    // A card that left this frame takes the new image; a new key resets its
+    // focus, hover and depth.
+    const card = this.#spareCards.pop() ?? new ShowPixiCard(
       this.#textureCache,
       this.#onOpen,
       this.#renderer,
@@ -888,112 +1262,104 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     card.setInteractionEnabled(this.#inputEnabled);
     const state: FloatCardState = {
       card,
-      cruiseSpeed: 28,
-      drift: 0,
-      driftFactor: 0,
-      driftRate: 0,
-      entryOffset: 24,
-      phase: 0,
-      rotationPhase: 0,
-      rotationRate: 0,
+      x,
+      y,
+      offsetX: 0,
+      offsetY: 0,
+      heldY: null,
+      drift: geometry.drift,
+      driftFactor: this.#driftFactor(serial),
+      driftRate: 0.0001 + noise(serial, 6) * 0.00008,
+      phase: noise(serial, 4) * Math.PI * 2,
+      rotationPhase: noise(serial, 12) * Math.PI * 2,
+      rotationRate: (Math.PI * 2) / (24_000 + noise(serial, 13) * 16_000),
       hoverRotationFrom: null,
       hoverRotationElapsed: 0,
-      speed: 0,
-      widthFactor: 1,
-      x: this.#width / 2,
-      xRatio: 0.5,
-      velocityX: 0,
-      y: this.#height,
-      targetY: null,
+      sizeFactor,
       retiring: false
     };
-    this.#cards.push(state);
-    this.root.addChild(card.root);
-    this.#assignState(state, initial);
-    return state;
-  }
-
-  #assignState(
-    state: FloatCardState,
-    initial: boolean,
-    direction: FloatStreamDirection = this.#streamDirection
-  ) {
-    const plan =
-      (initial ? null : this.#prefetchQueues[direction].shift())
-        ?? this.#createImagePlan();
-    if (!plan) return false;
-    const { image, serial, widthFactor } = plan;
-    state.widthFactor = widthFactor;
-    const width = this.#cardWidth(state, image);
-    state.phase = noise(serial, 4) * Math.PI * 2;
-    state.driftFactor = 0.025 + noise(serial, 5) * 0.045;
-    state.drift = Math.min(16, width * state.driftFactor);
-    state.driftRate = 0.0001 + noise(serial, 6) * 0.00008;
-    state.rotationPhase = noise(serial, 12) * Math.PI * 2;
-    state.rotationRate = (Math.PI * 2) / (24_000 + noise(serial, 13) * 16_000);
-    state.hoverRotationFrom = null;
-    state.hoverRotationElapsed = 0;
-    state.velocityX = 0;
-    // Start near the configured speed; spacing feedback gently adjusts it
-    // during the journey so neighboring cards do not remain locked together.
-    state.cruiseSpeed = 28 * (0.85 + noise(serial, 7) * 0.3);
-    state.speed = state.cruiseSpeed;
-    state.entryOffset = 24 + noise(serial, 10) * Math.min(20, this.#height * 0.025);
-    state.retiring = false;
-    state.targetY = null;
-    state.card.root.alpha = 1;
-    state.card.setInteractionEnabled(this.#inputEnabled);
-    const height = width * imageRatio(image);
-    state.card.assign(
+    card.assign(
       `float:${serial}`,
       image,
-      width,
-      height,
-      (noise(serial, 11) - 0.5) * 0.17,
+      geometry.width,
+      geometry.height,
+      geometry.rotation,
       false,
-      width
+      geometry.width
     );
     // The card acquires the same image/size lease before prefetch releases it.
     this.#releaseImagePlan(plan);
-    state.y = initial
-      ? noise(serial, 9) * this.#height
-      : this.#chooseStreamY(height, state.entryOffset, serial, state, true, direction);
-    if (initial) {
-      state.xRatio = 0.5;
-    } else {
-      const placement = this.#choosePlacement(
-        serial,
-        width,
-        height,
-        state.y,
-        state,
-        Math.min(24, height * 0.2, this.#streamBuffer() * 0.1)
-      );
-      state.xRatio = placement.xRatio;
-      state.y = placement.y;
-    }
-    state.x = state.xRatio * this.#width;
+    card.root.alpha = alpha;
+    // A stable random depth lets overlapping neighbors alternate which one is
+    // on top, as cards at different depths do in the cluster.
+    const depth = Math.floor(noise(serial, 17) * (this.root.children.length + 1));
+    this.root.addChildAt(card.root, depth);
+    this.#cards.push(state);
     this.#applyCardTransform(state);
-    state.card.setVisible(true);
+    this.#updateVisibility(state);
     this.#layoutRevision += 1;
-    return true;
+    return state;
   }
 
-  #retargetSize(state: FloatCardState) {
-    const image = state.card.image;
-    if (!image) return;
-    const width = this.#cardWidth(state);
-    state.drift = Math.min(16, width * state.driftFactor);
-    state.card.assign(
-      state.card.key,
-      image,
-      width,
-      width * imageRatio(image),
-      state.card.baseRotation,
-      true,
-      width
+  #updateVisibility(state: FloatCardState) {
+    const y = state.card.root.y;
+    const buffer = Math.max(72, state.card.height * 0.35);
+    state.card.setVisible(
+      y + state.card.height / 2 >= -buffer &&
+      y - state.card.height / 2 <= this.#height + buffer
     );
-    this.#applyCardTransform(state);
+  }
+
+  #retire(state: FloatCardState) {
+    state.retiring = true;
+    state.card.setInteractionEnabled(false);
+  }
+
+  #driftFactor(serial: number) {
+    return 0.025 + noise(serial, 5) * 0.045;
+  }
+
+  #planGeometry(plan: FloatImagePlan): FloatCardGeometry {
+    const { width, height } = this.#cardSize(imageRatio(plan.image), plan.sizeFactor);
+    return {
+      width,
+      height,
+      rotation: (noise(plan.serial, 11) - 0.5) * 0.17,
+      drift: Math.min(16, width * this.#driftFactor(plan.serial))
+    };
+  }
+
+  #cardGeometry(state: FloatCardState, image: ShowImage): FloatCardGeometry {
+    const { width, height } = this.#cardSize(imageRatio(image), state.sizeFactor);
+    return {
+      width,
+      height,
+      rotation: state.card.baseRotation,
+      drift: Math.min(16, width * state.driftFactor)
+    };
+  }
+
+  #settleOffset(state: FloatCardState, elapsed: number) {
+    if (!state.offsetX && !state.offsetY) return;
+    if (this.#reducedMotion) {
+      state.offsetX = 0;
+      state.offsetY = 0;
+      return;
+    }
+    const progress = 1 - Math.exp(-elapsed / floatSettleMs);
+    let stepX = state.offsetX * progress;
+    let stepY = state.offsetY * progress;
+    // A long hover leaves the slot far away; return at a bounded speed.
+    const length = Math.hypot(stepX, stepY);
+    const limit = (floatSettleSpeed * elapsed) / 1_000;
+    if (length > limit) {
+      stepX *= limit / length;
+      stepY *= limit / length;
+    }
+    state.offsetX -= stepX;
+    state.offsetY -= stepY;
+    if (Math.abs(state.offsetX) < 0.1) state.offsetX = 0;
+    if (Math.abs(state.offsetY) < 0.1) state.offsetY = 0;
   }
 
   #straightenHoveredCard(state: FloatCardState, elapsed: number) {
@@ -1018,225 +1384,87 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     state.card.baseRotation = angle - swing;
   }
 
+  #shownY(state: FloatCardState) {
+    return state.heldY ?? state.y + state.offsetY;
+  }
+
   #applyCardTransform(state: FloatCardState) {
-    state.card.root.position.set(state.x, state.y);
+    state.card.root.position.set(
+      state.x + state.offsetX + Math.sin(state.phase) * state.drift,
+      this.#shownY(state)
+    );
     state.card.root.rotation =
       state.card.baseRotation +
       (this.#reducedMotion ? 0 : Math.sin(state.rotationPhase) * floatRotationAmplitude);
   }
 
-  #advanceHorizontalMotion(state: FloatCardState, elapsed: number) {
-    const targetX = state.xRatio * this.#width + Math.sin(state.phase) * state.drift;
-    const driftVelocity = Math.cos(state.phase) * state.drift * state.driftRate * 1_000;
-    const maximumVelocity = Math.min(12, Math.max(6, state.card.targetWidth * 0.025));
-    const desiredVelocity = Math.max(
-      -maximumVelocity,
-      Math.min(
-        maximumVelocity, (targetX - state.x) / 4 + driftVelocity
-      )
-    );
-    // Steer velocity continuously instead of rapidly chasing each new anchor.
-    // Each card owns its phases, so releasing hover/focus has no time catch-up.
-    const previousVelocity = state.velocityX;
-    state.velocityX += (desiredVelocity - state.velocityX) * (1 - Math.exp(-elapsed / 1_400));
-    state.x += (((previousVelocity + state.velocityX) / 2) * elapsed) / 1_000;
-  }
-
-  #cardWidth(state: FloatCardState, image = state.card.image) {
-    return this.#imageWidth(image ? imageRatio(image) : this.#meanImageRatio, state.widthFactor);
-  }
-
-  #imageWidth(ratio: number, factor: number) {
-    const base = showFloatDefaultWidth(this.#width);
+  #cardSize(ratio: number, factor: number) {
+    // Equal-area cards, as in the cluster, limited so the rotated card keeps
+    // room for viewing within the viewport.
+    const side = this.#cardSide() * factor;
     const angle = 0.085 + floatRotationAmplitude;
     const widthLimit = Math.max(24, this.#width - 56) / (Math.cos(angle) + ratio * Math.sin(angle));
     const heightLimit =
-      Math.max(24, this.#height - 128) / (ratio * Math.cos(angle) + Math.sin(angle));
-    const minimumBase = Math.sqrt(
-      (this.#width * (this.#height + this.#streamBuffer() * 2) * this.#densityFactor()) /
-        (this.#maximumCards() * floatMeanWidthSquared * this.#meanImageRatio)
+      Math.max(24, this.#height - showFloatViewingMargin) /
+      (ratio * Math.cos(angle) + Math.sin(angle));
+    const width = Math.min(side / Math.sqrt(ratio), widthLimit, heightLimit);
+    return { width, height: width * ratio };
+  }
+
+  #cardSide() {
+    // Small size steps stop where the band, two screens tall at such sizes,
+    // would outgrow the Sprite cap.
+    const minimum = Math.sqrt(
+      (showFloatPacking * this.#width * this.#height * 2) / (this.#maximumCards() * 0.9)
     );
-    return Math.min(
-      Math.max(base * showFloatSizeSteps[this.#sizeIndex], minimumBase) * factor,
-      widthLimit,
-      heightLimit
+    return Math.max(
+      showFloatStepSide(this.#sizeIndex, this.#width, this.#height),
+      minimum
     );
   }
 
-  #targetCount() {
-    // Cover the visible viewport plus the retained half-screen buffers above
-    // and below it. This keeps visible density stable while both off-screen
-    // bands remain populated and texture-ready. The existing hard Sprite cap
-    // still bounds the result at every size.
-    const retainedHeight = this.#height + this.#streamBuffer() * 2;
-    const sample = this.#images.slice(0, 64);
-    const meanArea = sample.length
-      ? sample.reduce((area, image, index) => {
-          const ratio = imageRatio(image);
-          return area + this.#imageWidth(ratio, floatWidthFactor(index)) ** 2 * ratio;
-        }, 0) / sample.length
-      : this.#imageWidth(1, 1) ** 2;
-    const estimate = Math.round(
-      ((this.#width * retainedHeight) / Math.max(1, meanArea)) * this.#densityFactor()
+  #expectedCount() {
+    return Math.min(
+      this.#maximumCards(),
+      Math.round(this.#streamHeight() / this.#travelPerCard())
     );
-    const minimum = 6;
-    return Math.min(this.#maximumCards(), Math.max(minimum, estimate));
   }
 
   #maximumCards() {
     return Math.floor(Math.min(180, 96 + Math.max(0, this.#width - 760) * 0.15));
   }
 
-  #densityFactor() {
-    return (0.52 + 0.16 * Math.max(0, Math.min(1, (this.#width - 360) / 1_080))) * 1.3;
-  }
-
   #streamBuffer() {
-    return this.#height * 0.5;
+    // Half a screen, and at least a 2:1 portrait card at the current size, so
+    // such cards enter hidden apart from a rotated corner; longer images fade
+    // in at the edge.
+    return Math.max(this.#height * 0.5, this.#cardSize(2, 1 + floatSizeSpread).height + 16);
   }
 
-  #entryBoundary(state: FloatCardState) {
-    return (
-      this.#height + this.#streamBuffer() + Math.max(state.card.height, state.card.targetHeight) / 2
-    );
+  #streamHeight() {
+    // The visible viewport plus the retained bands above and below it, which
+    // keep both scroll directions populated and texture-ready.
+    return this.#height + this.#streamBuffer() * 2;
   }
 
-  #exitBoundary(state: FloatCardState) {
-    return -(this.#streamBuffer() + Math.max(state.card.height, state.card.targetHeight) / 2);
+  #destroySpareCards() {
+    for (const card of this.#spareCards) card.destroy();
+    this.#spareCards.length = 0;
   }
 
-  #verticalSpeed(state: FloatCardState) {
-    // Keep lifecycle spacing independent of image height. Motion and layout
-    // prediction share this speed so placement follows the actual stream.
-    const streamDistance = this.#height + this.#streamBuffer() * 2;
-    const travelScale =
-      (this.#entryBoundary(state) - this.#exitBoundary(state)) / Math.max(1, streamDistance);
-    return (state.speed * travelScale * this.#speed) / 28;
-  }
-
-  #chooseStreamY(
-    height: number,
-    entryOffset: number,
-    serial: number,
-    ignoredState: FloatCardState,
-    bufferOnly = true,
-    direction: FloatStreamDirection = this.#streamDirection
-  ) {
-    const buffer = this.#streamBuffer();
-    const footprint = floatCardFootprint(
-      Math.max(ignoredState.card.width, ignoredState.card.targetWidth),
-      height,
-      ignoredState.card.baseRotation,
-      ignoredState.drift
-    );
-    const minimumDepth = Math.min(
-      buffer * 0.4,
-      Math.max(
-        entryOffset, (footprint.height - height) / 2 + 24
-      )
-    );
-    // Keep a margin from the outer recycle boundary so a small reversal does
-    // not immediately discard a card that has only just been replenished.
-    const outerMargin = Math.min(buffer * 0.25, Math.max(24, buffer * 0.15));
-    const exitY = -(buffer + height / 2);
-    const travelDistance = this.#height + buffer * 2 + height;
-    const endMargin = travelDistance / Math.max(2, this.#targetCount() * 2);
-    const minimumY = bufferOnly
-      ? this.#height + height / 2 + minimumDepth
-      : exitY + endMargin;
-    const availableDepth = bufferOnly
-      ? Math.max(1, buffer - minimumDepth - outerMargin)
-      : Math.max(1, travelDistance - endMargin * 2);
-    const phases = this.#cards
-      .filter((existing) => existing !== ignoredState && !existing.retiring)
-      .map((existing) => {
-        const exit = this.#exitBoundary(existing);
-        const phase = (existing.y - exit) / (this.#entryBoundary(existing) - exit);
-        return ((phase % 1) + 1) % 1;
-      });
-    let bestY = direction < 0 ? minimumY : this.#height - minimumY;
-    let bestGap = -1;
-    // Reuse the largest available lifecycle gap instead of injecting each
-    // recycled card at an unrelated random phase and forming dense cohorts.
-    for (let attempt = 0; attempt < 16; attempt += 1) {
-      const depth = ((attempt + noise(serial, 53)) / 16) * availableDepth;
-      const y = direction < 0 ? minimumY + depth : this.#height - minimumY - depth;
-      const phase = (y - exitY) / travelDistance;
-      let nearest = 1;
-      for (const existing of phases) {
-        const distance = Math.abs(phase - existing);
-        nearest = Math.min(nearest, distance, 1 - distance);
-      }
-      if (nearest <= bestGap) continue;
-      bestGap = nearest;
-      bestY = y;
-    }
-    return bestY;
-  }
-
-  #scheduleCountTransition() {
-    const target = this.#targetCount();
-    for (const state of this.#cards) this.#retargetSize(state);
-    const ordered = [...this.#cards].sort((left, right) => left.y - right.y);
-    const retained = new Set(ordered.filter((state) => state.card.isInteractionActive));
-    if (this.#cards.length > target) {
-      for (let index = 0; index < target && retained.size < target; index += 1) {
-        const position =
-          target === 1
-            ? Math.floor((ordered.length - 1) / 2)
-            : Math.round((index * (ordered.length - 1)) / (target - 1));
-        retained.add(ordered[position]);
-      }
-    }
-    for (const state of ordered) {
-      if (retained.size >= target) break;
-      retained.add(state);
-    }
+  #removeAllCards() {
     for (const state of this.#cards) {
-      state.retiring = !retained.has(state);
-      state.targetY = null;
-      state.card.setInteractionEnabled(this.#inputEnabled && !state.retiring);
+      state.card.root.parent?.removeChild(state.card.root);
+      state.card.destroy();
     }
-    const survivors = ordered.filter((state) => retained.has(state));
-    for (let index = 0; index < survivors.length; index += 1) {
-      const state = survivors[index];
-      if (state.card.isInteractionActive) continue;
-      const exit = this.#exitBoundary(state);
-      state.targetY = this.#reducedMotion
-        ? ((index + 0.5) / survivors.length) * this.#height
-        : exit + ((index + 0.5) / survivors.length) * (this.#entryBoundary(state) - exit);
-    }
-    this.#nextPathAt = this.#elapsed;
-    this.#nextSpacingAt = this.#elapsed;
-    this.#nextSpawnAt = Math.min(
-      this.#nextSpawnAt,
-      this.#lifecycleElapsed + 120
-    );
-  }
-
-  #placeStaticState(state: FloatCardState) {
-    const serial = this.#serial + this.#cards.length;
-    const halfHeight = state.card.targetHeight / 2;
-    const minimumY = Math.min(this.#height / 2, halfHeight + 12);
-    const maximumY = Math.max(minimumY, this.#height - halfHeight - 12);
-    state.y =
-      minimumY + ((serial * goldenRatioConjugate + noise(serial, 37)) % 1) * (maximumY - minimumY);
-    state.xRatio = this.#choosePlacement(
-      serial,
-      state.card.targetWidth,
-      state.card.targetHeight,
-      state.y,
-      state
-    ).xRatio;
-    state.x = state.xRatio * this.#width;
-    this.#applyCardTransform(state);
+    this.#cards.length = 0;
   }
 
   #removeCard(index: number) {
     const state = this.#cards[index];
     if (!state) return;
     state.card.root.parent?.removeChild(state.card.root);
-    state.card.destroy();
+    this.#spareCards.push(state.card);
     this.#cards.splice(index, 1);
     this.#recycledSprites += 1;
     this.#layoutRevision += 1;
@@ -1267,7 +1495,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     return {
       image,
       serial,
-      widthFactor: floatWidthFactor(serial),
+      sizeFactor: floatSizeFactor(serial),
       textureKey: "",
       lease: null
     };
@@ -1279,7 +1507,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
           this.#width <= 760 ? 18 : 36,
           Math.max(
             this.#width <= 760 ? 6 : 12,
-            Math.ceil(this.#targetCount() / 3)
+            Math.ceil(this.#expectedCount() / 3)
           )
         )
       : 0;
@@ -1300,9 +1528,9 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
         queue.push(plan);
       }
       for (const plan of queue) {
-        const { image, widthFactor } = plan;
+        const { image, sizeFactor } = plan;
         const ratio = imageRatio(image);
-        const width = this.#imageWidth(ratio, widthFactor);
+        const { width } = this.#cardSize(ratio, sizeFactor);
         const lod = showPixiTextureLod(image, width, ratio);
         const textureKey = `${image.id}:${imageVariantUrl(image, "small")}:${lod.pixelWidth}x${lod.pixelHeight}`;
         if (plan.textureKey === textureKey && plan.lease) continue;
@@ -1358,230 +1586,10 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     }
   }
 
-  #choosePlacement(
-    serial: number,
-    width: number,
-    height: number,
-    candidateY: number,
-    ignoredState: FloatCardState,
-    verticalSpread = 0,
-    local = false
-  ) {
-    const footprint = floatCardFootprint(
-      width,
-      height,
-      ignoredState.card.baseRotation,
-      ignoredState.drift
-    );
-    const margin = Math.min(0.5, footprint.width / 2 / this.#width);
-    const center = Math.max(margin, Math.min(1 - margin, ignoredState.xRatio));
-    const maximumShift = local ? Math.min(0.035, (width / this.#width) * 0.12) : 1;
-    const minimumX = Math.max(margin, center - maximumShift);
-    const maximumX = Math.min(1 - margin, center + maximumShift);
-    let best = { xRatio: center, y: candidateY };
-    let bestScore = Number.POSITIVE_INFINITY;
-    const candidateArea = Math.max(1, footprint.width * footprint.height);
-    const cardOrder = this.#cards.indexOf(ignoredState);
-    const predictMovement = this.#running && !this.#reducedMotion && !this.#hasManualMovement();
-    const candidateSpeed =
-      predictMovement && !ignoredState.card.isInteractionActive
-        ? this.#verticalSpeed(ignoredState)
-        : 0;
-    const existingCards = this.#cards
-      .filter((existing) => existing !== ignoredState && !existing.retiring)
-      .map((existing) => {
-        const targetX = existing.card.isInteractionActive
-          ? existing.x
-          : existing.xRatio * this.#width;
-        const bounds = floatCardFootprint(
-          existing.card.targetWidth,
-          existing.card.targetHeight,
-          existing.card.baseRotation,
-          existing.drift
-        );
-        return {
-          order: this.#cards.indexOf(existing),
-          currentX: existing.x,
-          x: (existing.x + targetX) / 2,
-          y: existing.y,
-          targetY: existing.targetY ?? existing.y,
-          width: bounds.width + Math.abs(targetX - existing.x),
-          height: bounds.height,
-          speed:
-            predictMovement && !existing.card.isInteractionActive
-              ? this.#verticalSpeed(existing)
-              : 0,
-          bucket: Math.min(5, Math.max(0, Math.floor(existing.xRatio * 6)))
-        };
-      });
-    for (let attempt = 0; attempt < (local ? 13 : 28); attempt += 1) {
-      const sequence =
-        (serial * goldenRatioConjugate +
-          attempt * 0.3819660112501051 +
-          noise(serial, attempt + 21) * 0.17) %
-        1;
-      const ratio = attempt === 0 ? center : minimumX + sequence * (maximumX - minimumX);
-      const y = candidateY + (((attempt + 1) % 3) - 1) * verticalSpread;
-      const targetY = ignoredState.targetY ?? y;
-      const sampleTimes = [0];
-      if (candidateSpeed > 0 && !local) {
-        const halfHeight = Math.min(this.#height / 2, footprint.height / 2);
-        // Check the path while the card can be fully viewed, as well as the
-        // near future when adjusting a card that is already on screen.
-        for (const centerY of [this.#height - halfHeight, this.#height / 2, halfHeight]) {
-          const seconds = (targetY - centerY) / candidateSpeed;
-          if (seconds > 0) sampleTimes.push(seconds);
-        }
-      }
-      // Nearby steering resolves what can obstruct viewing now; distant
-      // lifecycle predictions belong to entry placement.
-      if (candidateSpeed > 0 && local) sampleTimes.push(3);
-      const bucket = Math.min(5, Math.max(0, Math.floor(ratio * 6)));
-      let score = local
-        ? candidateArea * 0.4 * (((ratio - center) * this.#width) / Math.max(1, width)) ** 2
-        : 0;
-      for (const existing of existingCards) {
-        const sharedArea = Math.max(1, Math.min(
-          candidateArea,
-          existing.width * existing.height
-        ));
-        if (local) {
-          const currentOverlap =
-            rectanglesOverlap(
-              {
-                x: ignoredState.x,
-                y: ignoredState.y,
-                ...footprint
-              },
-              { ...existing, x: existing.currentX }
-            ) / sharedArea;
-          if (currentOverlap > 0.5) {
-            // Give coincident cards different escape directions while their
-            // normal velocity smoothing keeps the movement gradual.
-            const separationX = ignoredState.x - existing.currentX;
-            const direction =
-              Math.abs(separationX) > 1
-                ? Math.sign(separationX)
-                : cardOrder < existing.order
-                  ? -1
-                  : 1;
-            const movement = ((ratio - center) * this.#width) / Math.max(1, width);
-            score -= candidateArea * (currentOverlap - 0.5) * movement * direction * 12;
-          }
-        }
-        for (const seconds of sampleTimes) {
-          const overlapArea = rectanglesOverlap(
-            {
-              x: ratio * this.#width,
-              y: targetY - candidateSpeed * seconds + (y - targetY) * Math.exp(-seconds / 0.9),
-              ...footprint
-            },
-            {
-              ...existing,
-              y:
-                existing.targetY -
-                existing.speed * seconds +
-                (existing.y - existing.targetY) * Math.exp(-seconds / 0.9)
-            }
-          );
-          if (overlapArea <= 0) continue;
-          const occlusionRatio = overlapArea / sharedArea;
-          let penalty = overlapArea * (1 + occlusionRatio * 8);
-          if (occlusionRatio > 0.32) {
-            penalty += candidateArea * (occlusionRatio - 0.32) * 18;
-          }
-          score += penalty / sampleTimes.length;
-        }
-        if (existing.bucket === bucket) {
-          // Prefer a local opening, rather than treating a card at the other
-          // end of the stream as occupying this vertical band too.
-          const separation = Math.abs(existing.y - y) / Math.max(height, existing.height);
-          score += (candidateArea * 0.075) / (1 + separation * separation);
-        }
-      }
-      const minimumImprovement = local && attempt > 0 ? candidateArea * 0.01 : 0;
-      if (score >= bestScore - minimumImprovement) continue;
-      bestScore = score;
-      best = { xRatio: ratio, y };
-    }
-    return best;
-  }
-
-  #settleHorizontalDistribution() {
-    for (let index = 0; index < this.#cards.length; index += 1) {
-      const state = this.#cards[index];
-      state.xRatio = this.#choosePlacement(
-        index + this.#serial,
-        state.card.targetWidth,
-        state.card.targetHeight,
-        state.y,
-        state
-      ).xRatio;
-      state.x = state.xRatio * this.#width;
-      state.velocityX = 0;
-      this.#applyCardTransform(state);
-    }
-  }
-
-  #adjustHorizontalPath() {
-    const count = this.#cards.length;
-    if (!count) return;
-    const index = this.#pathCursor % count;
-    this.#pathCursor = (index + 1) % count;
-    const state = this.#cards[index];
-    if (state.retiring || state.card.isInteractionActive) return;
-    state.xRatio = this.#choosePlacement(
-      index + this.#serial,
-      state.card.targetWidth,
-      state.card.targetHeight,
-      state.y,
-      state,
-      0,
-      true
-    ).xRatio;
-  }
-
-  #balanceFlowSpacing() {
-    const cards = this.#cards
-      .filter((state) => !state.retiring)
-      .map((state) => {
-        const exit = this.#exitBoundary(state);
-        const phase = (state.y - exit) / (this.#entryBoundary(state) - exit);
-        const footprint = floatCardFootprint(
-          state.card.targetWidth,
-          state.card.targetHeight,
-          state.card.baseRotation,
-          state.drift
-        );
-        return { state, width: footprint.width, phase: ((phase % 1) + 1) % 1 };
-      });
-    if (cards.length < 2) return;
-    // Only neighbors whose horizontal footprints meet can obstruct viewing.
-    // Distant columns must not pull an overlapping pair back to equal speeds.
-    for (const { state, width, phase } of cards) {
-      if (state.card.isInteractionActive || state.targetY !== null) continue;
-      let gapAhead = 1;
-      let gapBehind = 1;
-      let neighbors = 0;
-      for (const other of cards) {
-        if (other.state === state
-          || Math.abs(other.state.x - state.x) >= (other.width + width) / 2)
-          continue;
-        neighbors += 1;
-        gapAhead = Math.min(gapAhead, (phase - other.phase + 1) % 1);
-        gapBehind = Math.min(gapBehind, (other.phase - phase + 1) % 1);
-      }
-      const targetGap = 1 / (neighbors + 1);
-      const adjustment = Math.max(-0.3, Math.min(
-        0.3, (gapAhead - gapBehind) / targetGap * 0.3
-      ));
-      state.speed += (state.cruiseSpeed * (1 + adjustment) - state.speed) * 0.2;
-    }
-  }
-
   #publishVisibleItems() {
+    // Fading cards are leaving and no longer accept input.
     const items = this.#cards
-      .filter((state) => state.card.visible && state.card.image)
+      .filter((state) => state.card.visible && !state.retiring && state.card.image)
       .map((state) => ({
         key: state.card.key,
         image: state.card.image as ShowImage
@@ -1611,8 +1619,8 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
         0,
         Math.min(
           this.#height,
-          left.y + height / 2
-        ) - Math.max(0, left.y - height / 2)
+          left.card.root.y + height / 2
+        ) - Math.max(0, left.card.root.y - height / 2)
       );
       totalArea += clippedWidth * clippedHeight;
       for (let other = index + 1; other < visible.length; other += 1) {
@@ -1620,13 +1628,13 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
         overlapArea += rectanglesOverlap(
           {
             x: left.card.root.x,
-            y: left.y,
+            y: left.card.root.y,
             width,
             height
           },
           {
             x: right.card.root.x,
-            y: right.y,
+            y: right.card.root.y,
             width: right.card.width,
             height: right.card.height
           }

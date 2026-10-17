@@ -32,8 +32,8 @@ import {
   clampShowWaterfallColumns,
   defaultShowFloatSizeIndex,
   largerShowWaterfallImages,
-  showFloatSizeSteps,
-  showFloatDefaultWidth,
+  showFloatSizeStepCount,
+  showFloatStepSide,
   showWaterfallDensity,
   smallerShowWaterfallImages
 } from "../../../packages/web/src/pages/show/pixi/show-pixi-layout.ts";
@@ -832,7 +832,7 @@ test("[Web/展映] Pixi 纹理策略在窄屏与宽屏执行 12 / 16 个真实�
   }
 });
 test("[Web/展映] Pixi float 只暴露有界图片尺寸档位", () => {
-  assert.deepEqual([...showFloatSizeSteps], [0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5]);
+  assert.equal(showFloatSizeStepCount, 11);
   assert.equal(defaultShowFloatSizeIndex, 5);
   assert.equal(clampShowFloatSizeIndex(-100), 0);
   assert.equal(clampShowFloatSizeIndex(100), 10);
@@ -1868,20 +1868,25 @@ test("[Web/展映] 展映稳定几何复用命中矩形，缩放和聚焦变化�
   assert.equal(card.root.hitArea, bounds);
   assert.equal(card.isInteractionActive, true);
 });
-test("[Web/展映] float 键盘聚焦卡片回收后不向新图片传递焦点", (t) => {
+test("[Web/展映] float 键盘聚焦卡片离开驻留带后不向新图片传递焦点", (t) => {
   const h = createFloatSceneHarness(t);
-  h.scene.focusCard(h.visibleItems()[0].key);
-  const focused = h.scene.root.children.find((card) => card.zIndex === 100_000);
-  assert.ok(focused);
-  h.dragBy(-6_000);
+  const key = h.visibleItems()[0]!.key;
+  h.scene.focusCard(key);
+  assert.ok(h.scene.root.children.some((card) => card.zIndex === 100_000));
+  h.dragBy(-2_000);
   assert.ok(h.scene.stats().recycledSprites > 0);
-  assert.equal(focused.zIndex, 1, "回收后的图片必须退出旧聚焦层级");
+  assert.ok(
+    h.scene.root.children.every((card) => card.zIndex !== 100_000),
+    "离开驻留带的卡片不把焦点带给新进入的图片"
+  );
   h.target.emit("pointerup", { timeStamp: 32 });
   h.advance(180);
-  const recycledY = focused.y;
+  assert.ok(h.visibleItems().every((item) => item.key !== key), "聚焦卡片随拖动离开驻留带");
+  const card = floatCardPositions(h.scene).find((item) => item.y > 200 && item.y < 700)!.root;
+  const settledY = card.y;
   h.scene.setMotion(true, false);
   h.advance(2);
-  assert.ok(focused.y < recycledY, "释放手动输入后新图片继续自动上浮");
+  assert.ok(card.y < settledY, "释放手动输入后新图片继续自动上浮");
 });
 test("[Web/展映] 高密度瀑布在像素预算内原位补齐全部驻留卡片", async (t) => {
   for (const width of [760, 1440]) {
@@ -2383,7 +2388,7 @@ test("[Web/展映] 两种场景和三种排序原位更新元数据并保持卡�
     });
   }
 });
-test("[Web/展映] float 导航位移保留拖动和惯性的指针类型，滚轮独立上报", async (t) => {
+test("[Web/展映] float 导航位移保留拖动和惯性的指针类型，滚轮独立上报，捏合只调尺寸", async (t) => {
   for (const pointerType of ["mouse", "touch"]) {
     await t.test(pointerType, (t) => {
       const h = createFloatSceneHarness(t);
@@ -2398,22 +2403,45 @@ test("[Web/展映] float 导航位移保留拖动和惯性的指针类型，滚�
       h.advance(1);
       assert.ok(h.movementPointerTypes.length > 0);
       assert.ok(h.movementPointerTypes.every((type) => type === undefined));
+      if (pointerType !== "touch") return;
+      // A second finger turns the drag into a pinch that only changes the size
+      // step; the finger left afterwards stays inert and no capture leaks.
+      h.movementPointerTypes.length = 0;
+      const sizeIndex = h.scene.stats().floatSizeIndex!;
+      h.target.emit("pointerdown", { pointerId: 1, clientX: 300, clientY: 400, timeStamp: 100, pointerType });
+      h.target.emit("pointerdown", { pointerId: 2, clientX: 400, clientY: 400, timeStamp: 110, pointerType });
+      h.target.emit("pointermove", { pointerId: 2, clientX: 600, clientY: 400, timeStamp: 400, pointerType });
+      assert.equal(h.scene.stats().floatSizeIndex, sizeIndex + 1);
+      assert.equal(h.scene.stats().activePointers, 2);
+      h.target.emit("pointerup", { pointerId: 2, timeStamp: 420, pointerType });
+      h.target.emit("pointermove", { pointerId: 1, clientX: 300, clientY: 600, timeStamp: 440, pointerType });
+      h.target.emit("pointerup", { pointerId: 1, timeStamp: 460, pointerType });
+      assert.deepEqual(h.movementPointerTypes, [], "捏合与剩余手指都不移动画面");
+      assert.equal(h.scene.stats().activePointers, 0);
+      assert.ok(!h.target.element.hasPointerCapture(1) && !h.target.element.hasPointerCapture(2));
     });
   }
 });
-test("[Web/展映] float 桌面三种尺寸保持混排宽度、卡片与候选上限、两端预取总预算", async (t) => {
-  for (const sizeIndex of [0, defaultShowFloatSizeIndex, showFloatSizeSteps.length - 1]) {
-    await t.test(`尺寸 ${showFloatSizeSteps[sizeIndex]}×`, (t) => {
+test("[Web/展映] float 桌面三种尺寸保持等面积混排、卡片与候选上限、两端预取总预算", async (t) => {
+  for (const sizeIndex of [0, defaultShowFloatSizeIndex, showFloatSizeStepCount - 1]) {
+    await t.test(`档位 ${sizeIndex + 1}`, (t) => {
       const h = createFloatSceneHarness(t, { sizeIndex });
       const stats = h.scene.stats();
       assert.equal(stats.retainedDtos, 500);
-      assert.ok(stats.activeSprites >= 8 && stats.activeSprites <= 180);
+      assert.ok(stats.activeSprites >= 4 && stats.activeSprites <= 180);
       const prefetches = h.activeLeases().length - stats.activeSprites;
       assert.ok(prefetches >= 12 && prefetches <= 36, "上下队列共享一个总预算");
-      const targetWidth = showFloatDefaultWidth(1440) * showFloatSizeSteps[sizeIndex];
-      const widths = floatCardPositions(h.scene).map((card) => card.width / targetWidth);
-      assert.ok(widths.every((width) => width >= 0.7 && width <= 1.2));
-      assert.ok(Math.min(...widths) < 0.8 && Math.max(...widths) > 1.1);
+      // Equal-area cards: the side varies within the size spread, and only a
+      // card that would not fit the viewport is smaller.
+      const side = showFloatStepSide(sizeIndex, 1440, 900);
+      const sides = floatCardPositions(h.scene).map(
+        (card) => Math.sqrt(card.width * card.height) / side
+      );
+      assert.ok(sides.every((ratio) => ratio <= 1.12 + 1e-9));
+      assert.ok(sides.some((ratio) => ratio >= 0.88));
+      if (sizeIndex === defaultShowFloatSizeIndex) {
+        assert.ok(Math.min(...sides) < 0.95 && Math.max(...sides) > 1.05, "同档大小错落");
+      }
       assert.ok(h.scene.stats().coverageRatio > 0);
     });
   }
@@ -2472,9 +2500,12 @@ test("[Web/展映] float 暂停时连续双向补图，保留反向预取并接�
   );
   for (const delta of [-450, 450, -3600, 3600, -900, 900]) {
     h.dragBy(delta);
-    assert.equal(h.scene.stats().activeSprites, initialCount);
-    assert.ok(h.scene.stats().visibleSprites > 0);
-    assert.ok(h.activeLeases().length <= initialCount + 36);
+    // Both ends refill to the stream density, so the band keeps about the
+    // same number of cards whichever way it moves.
+    const { activeSprites, visibleSprites } = h.scene.stats();
+    assert.ok(Math.abs(activeSprites - initialCount) <= Math.max(3, initialCount * 0.2));
+    assert.ok(visibleSprites > 0);
+    assert.ok(h.activeLeases().length <= activeSprites + 36);
   }
   assert.ok(h.movements.some((delta) => delta > 0));
   assert.ok(h.movements.some((delta) => delta < 0));
@@ -2497,11 +2528,12 @@ test("[Web/展映] float 快速反向直接响应新滚轮方向，屏内卡片�
     assert.equal((card.root.hitArea as Rectangle).width, card.width);
   }
   h.advance(120);
-  const settled = floatCardPositions(h.scene).map(({ x, y, rotation }) => ({ x, y, rotation }));
+  // Cards still owed may enter the hidden band; cards already shown stay put.
+  const settled = floatCardPositions(h.scene);
   h.advance(30);
   assert.deepEqual(
-    floatCardPositions(h.scene).map(({ x, y, rotation }) => ({ x, y, rotation })),
-    settled
+    settled.map(({ root }) => ({ x: root.x, y: root.y, rotation: root.rotation })),
+    settled.map(({ x, y, rotation }) => ({ x, y, rotation }))
   );
 });
 test("[Web/展映] float 自动上浮与轻旋转保留，手动输入让位后无需等待恢复", (t) => {
