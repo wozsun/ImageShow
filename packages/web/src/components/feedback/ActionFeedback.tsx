@@ -53,7 +53,6 @@ export function ActionFeedback({
   return (
     <div
       className={`action-feedback action-feedback-${feedback.status}${closing ? " is-closing" : ""}`}
-      data-feedback-id={feedback.id}
       role={feedback.status === "error" ? "alert" : "status"}
       title={text}
     >

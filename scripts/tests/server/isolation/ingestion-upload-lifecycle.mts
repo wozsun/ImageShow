@@ -2729,7 +2729,7 @@ await runIntegrationScenario(async (runtime) => {
     "终态收据不得再走 semantic mutation"
   );
   await database.pool.query(
-    `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),$2,'local','pc','dark',NULL,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
+    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
     [
         completedUpload.session.image_id,
         ingestionOwner,
@@ -2769,7 +2769,7 @@ await runIntegrationScenario(async (runtime) => {
   const statusBarrierRepository = repositoryWithOverrides(ingestionRepository, {
     async readSessions() {
       await database.pool.query(
-        `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),$2,'local','pc','dark',NULL,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
+        `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
         [
         statusBarrierImageId,
         ingestionOwner,
@@ -2828,7 +2828,7 @@ await runIntegrationScenario(async (runtime) => {
   }
   const pgOnlyImageId = randomUUIDv7();
   await database.pool.query(
-    `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),$2,'local','pc','dark',NULL,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
+    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
     [
         pgOnlyImageId,
         ingestionOwner,

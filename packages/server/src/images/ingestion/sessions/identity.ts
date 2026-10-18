@@ -55,13 +55,12 @@ export function createIngestionDisplayOrderKey(
   return `${compactUuid(batchKey)}:${inversePosition}:${sessionId}`;
 }
 
-export function inspectImageUuidV7(value: string) {
+function inspectImageUuidV7(value: string) {
   const compact = compactUuid(value);
-  const timestamp = Number.parseInt(compact.slice(0, 12), 16);
   const version = Number.parseInt(compact.slice(12, 13), 16);
   const randA = Number.parseInt(compact.slice(13, 16), 16);
   const variant = Number.parseInt(compact.slice(16, 17), 16) >> 2;
-  return { timestamp, version, variant, randA };
+  return { version, variant, randA };
 }
 
 export function assertImageIdentity(

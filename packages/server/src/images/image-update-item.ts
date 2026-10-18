@@ -1,4 +1,9 @@
-import type { Brightness, Device, ImageUpdateItemInputDto } from "@imageshow/shared/browser";
+import {
+  imageDevice,
+  type Brightness,
+  type Device,
+  type ImageUpdateItemInputDto
+} from "@imageshow/shared/browser";
 import type { PoolClient } from "pg";
 import { ensureAuthorWithMutationLockHeld } from "../vocab/authors/mutations.ts";
 import { ApiError } from "../core/api-error.ts";
@@ -16,7 +21,6 @@ import {
 import { replaceImageTagAssociations } from "../vocab/tags/mutations.ts";
 import { ensureThemeWithMutationLockHeld } from "../vocab/themes/mutations.ts";
 import {
-  invalidateOrCollectEntityCountCaches,
   refreshEntityVocabularies,
   type EntityCacheKind,
   type EntityCountCacheInvalidationBatch
@@ -24,15 +28,8 @@ import {
 import { vocabularyAssociationLockRequests } from "../vocab/mutation-sync.ts";
 import { detectBrightness } from "./brightness.ts";
 import { withNormalizationAdmission } from "./normalization-admission.ts";
-import {
-  deviceFromDimensions,
-  resolveOptionalDeviceWith
-} from "./classification.ts";
+import { resolveOptionalDeviceWith } from "./classification.ts";
 import { withImageMutationSync } from "./mutation-sync.ts";
-import {
-  reportReadyImageCacheFailure,
-  requestReadyImageCacheRebuildAfterMutation
-} from "./ready-cache/coordinator.ts";
 import { bumpReadyImageRevision } from "./ready-cache/revision.ts";
 
 type UpdateImageRecord = {
@@ -40,8 +37,8 @@ type UpdateImageRecord = {
   device: Device;
   brightness: Brightness;
   theme: string | null;
-  width: number | string | null;
-  height: number | string | null;
+  width: number;
+  height: number;
   s_byte_size: number | string;
   storage_slug: string;
   author: string | null;
@@ -85,15 +82,13 @@ const updateImageColumns = [
 ].join(", ");
 
 function detectImageDevice(image: UpdateImageRecord) {
-  if (image.status !== "ready") return undefined;
-  return deviceFromDimensions(image.width, image.height);
+  return imageDevice(image.width, image.height);
 }
 
 async function detectImageBrightness(
   image: UpdateImageRecord,
   signal: AbortSignal
 ) {
-  if (image.status !== "ready") return undefined;
   const storage = await resolveStorageAccess(image.storage_slug);
   signal.throwIfAborted();
   let smallVariant: Buffer;
@@ -121,16 +116,8 @@ async function repairDerivedCaches(
   outcome: ImageUpdateTransactionOutcome,
   options: ImageUpdateItemOptions
 ) {
+  options.entityCountInvalidationBatch.add(outcome.changedEntityKinds);
   const tasks: Array<{ label: string; promise: Promise<unknown> }> = [];
-  if (outcome.changedEntityKinds.size) {
-    tasks.push({
-      label: "entity_count",
-      promise: invalidateOrCollectEntityCountCaches(
-        outcome.changedEntityKinds,
-        options.entityCountInvalidationBatch
-      )
-    });
-  }
   if (outcome.createdEntityKinds.size) {
     tasks.push({
       label: "vocabulary",
@@ -330,63 +317,41 @@ async function mutateImageItem(
       || item.theme !== undefined;
   let sourceImage: UpdateImageRecord | null = null;
   let detectedBrightness: Brightness | undefined;
-  const commitState: {
-    outcome: ImageUpdateTransactionOutcome | null;
-  } = { outcome: null };
-
-  try {
-    if (item.brightness === "auto") {
-      signal.throwIfAborted();
-      sourceImage =
-        ((await pool.query(
-          `SELECT ${updateImageColumns} FROM metadata WHERE id=$1`,
-          [item.id]
-        ))
-          .rows[0] as UpdateImageRecord | undefined) ?? null;
-      signal.throwIfAborted();
-      if (!sourceImage) throw new ApiError(404, "not_found", "Image not found");
-      if (sourceImage.status !== "ready") {
-        throw new ApiError(
-          409,
-          "invalid_image_state",
-          "Only ready images can change category"
-        );
-      }
-      detectedBrightness = await detectImageBrightness(sourceImage, signal);
-      signal.throwIfAborted();
+  if (item.brightness === "auto") {
+    signal.throwIfAborted();
+    sourceImage =
+      ((await pool.query(
+        `SELECT ${updateImageColumns} FROM metadata WHERE id=$1`,
+        [item.id]
+      ))
+        .rows[0] as UpdateImageRecord | undefined) ?? null;
+    signal.throwIfAborted();
+    if (!sourceImage) throw new ApiError(404, "not_found", "Image not found");
+    if (sourceImage.status !== "ready") {
+      throw new ApiError(
+        409,
+        "invalid_image_state",
+        "Only ready images can change category"
+      );
     }
-
-    const outcome = await withImageMutationSync(async (mutationSyncBatch) => {
-      const transactionOutcome = await commitImageUpdate({
-        item,
-        tagSlugs,
-        sourceImage,
-        detectedBrightness,
-        classificationRequested,
-        signal
-      });
-      commitState.outcome = transactionOutcome;
-      if (transactionOutcome.changed) mutationSyncBatch.add({ id: item.id });
-      return transactionOutcome;
-    });
-    await repairDerivedCaches(outcome, options);
-    return outcome;
-  } catch (error) {
-    const committedOutcome = commitState.outcome;
-    if (committedOutcome) {
-      reportReadyImageCacheFailure(error);
-      logger.warn("image_update_cache_handoff_failed_after_commit", {
-        image_id: item.id,
-        error: error
-      });
-      if (committedOutcome.changed) {
-        requestReadyImageCacheRebuildAfterMutation(1);
-      }
-      await repairDerivedCaches(committedOutcome, options);
-      return committedOutcome;
-    }
-    throw error;
+    detectedBrightness = await detectImageBrightness(sourceImage, signal);
+    signal.throwIfAborted();
   }
+
+  const outcome = await withImageMutationSync(async (mutationSyncBatch) => {
+    const transactionOutcome = await commitImageUpdate({
+      item,
+      tagSlugs,
+      sourceImage,
+      detectedBrightness,
+      classificationRequested,
+      signal
+    });
+    if (transactionOutcome.changed) mutationSyncBatch.add({ id: item.id });
+    return transactionOutcome;
+  });
+  await repairDerivedCaches(outcome, options);
+  return outcome;
 }
 
 export function prepareImageUpdateItem(

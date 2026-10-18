@@ -136,7 +136,7 @@ body:has(.admin > .workspace-contained) {
     color 0.16s ease,
     background-color 0.16s ease,
     border-color 0.16s ease,
-    transform var(--pressable-transition-duration, 0.08s) ease,
+    transform 0.08s ease,
     filter 0.16s ease;
 }
 
@@ -278,7 +278,7 @@ body:has(.admin > .workspace-contained) {
   transition:
     color 0.16s ease,
     opacity 0.16s ease,
-    transform var(--pressable-transition-duration, 0.08s) ease;
+    transform 0.08s ease;
 }
 .admin .admin-color-scheme-toggle:hover {
   color: var(--admin-color-navigation-text);

@@ -166,13 +166,12 @@ await runIntegrationScenario(async (runtime) => {
     );
     for (const [i, row] of rows.entries()) {
       await pool.query(
-        `INSERT INTO metadata (id,status,storage_slug,device,brightness,image_time,created_by,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'ready','local',$2,$3,$5,'integration-admin',1,1,GREATEST(1,1),$4,1,1,GREATEST(1,1),$4,1,1,GREATEST(1,1),$4)`,
+        `INSERT INTO metadata (id,status,storage_slug,device,brightness,created_by,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'ready','local',$2,$3,'integration-admin',1,1,GREATEST(1,1),$4,1,1,GREATEST(1,1),$4,1,1,GREATEST(1,1),$4)`,
         [
           row.id,
           row.device,
           row.brightness,
-          i.toString(16).padStart(32, "0"),
-          new Date(1_700_000_000_000 + i)
+          i.toString(16).padStart(32, "0")
         ]
       );
       if (row.tagged)

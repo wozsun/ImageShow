@@ -1,8 +1,20 @@
-import {
-  storageBackendDeletionStateFromBlockers,
-  type StorageBackendDeleteBlocker,
-  type StorageBackendDeletionState
+import type {
+  StorageBackendDeleteBlocker,
+  StorageBackendDeletionState
 } from "@imageshow/shared/browser";
+
+function storageBackendDeletionStateFromBlockers(
+  blockers: readonly StorageBackendDeleteBlocker[]
+): StorageBackendDeletionState {
+  return {
+    action: blockers.includes("images")
+      ? "migrate"
+      : blockers.length
+        ? "blocked"
+        : "delete",
+    blockers: [...blockers]
+  };
+}
 
 type StorageBackendDeletionInput = {
   slug: string;

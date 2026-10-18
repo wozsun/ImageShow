@@ -1,27 +1,21 @@
 import type { ApiSuccessResponseDto } from "./api.ts";
 
-export type StorageBackendDeleteBlocker =
-  "built_in" | "default" | "images" | "ingestion_sessions" | "cleanup_jobs";
+export const storageBackendDeleteBlockers = [
+  "built_in",
+  "default",
+  "images",
+  "ingestion_sessions",
+  "cleanup_jobs"
+] as const;
+export type StorageBackendDeleteBlocker = (typeof storageBackendDeleteBlockers)[number];
 
-export type StorageBackendDeleteAction = "delete" | "migrate" | "blocked";
+export const storageBackendDeleteActions = ["delete", "migrate", "blocked"] as const;
+export type StorageBackendDeleteAction = (typeof storageBackendDeleteActions)[number];
 
 export type StorageBackendDeletionState = {
   action: StorageBackendDeleteAction;
   blockers: StorageBackendDeleteBlocker[];
 };
-
-export function storageBackendDeletionStateFromBlockers(
-  blockers: readonly StorageBackendDeleteBlocker[]
-): StorageBackendDeletionState {
-  return {
-    action: blockers.includes("images")
-      ? "migrate"
-      : blockers.length
-        ? "blocked"
-        : "delete",
-    blockers: [...blockers]
-  };
-}
 
 export type ImageStorageMigrationItemResultDto =
   | { id: string; status: "migrated" | "unchanged" }

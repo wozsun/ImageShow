@@ -36,7 +36,7 @@ await runIntegrationScenario(async (runtime) => {
   try {
     for (const [index, id] of duplicateIds.entries()) {
       await database.pool.query(
-        `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','local','pc','dark',NULL,$3,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)`,
+        `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','local','pc','dark',NULL,$3,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)`,
         [
           id,
           duplicateMd5,
@@ -85,12 +85,11 @@ await runIntegrationScenario(async (runtime) => {
   );
   for (const [position, id] of paginationIds.entries()) {
     await database.pool.query(
-      `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,author,image_time,deleted_at,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','deleted','local','pc','dark',NULL,$3,$4,now(),$5,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)`,
+      `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,author,deleted_at,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','deleted','local','pc','dark',NULL,$3,now(),$4,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)`,
       [
         id,
         String(position + 4).repeat(32),
         position === 2 ? "bob" : "alice",
-        position === 2 ? paginationOlder : paginationNewest,
         "pagination-" + String(position)
       ]
     );
@@ -174,7 +173,7 @@ await runIntegrationScenario(async (runtime) => {
       snapshotRead.then(() => assert.fail("snapshot count must be intercepted"))
     ]);
     await database.pool.query(
-      `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,author,image_time,deleted_at,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','deleted','local','pc','dark',NULL,'alice','2026-08-16T00:00:00.000Z',now(),'pagination-concurrent',1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)`,
+      `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,author,deleted_at,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','deleted','local','pc','dark',NULL,'alice',now(),'pagination-concurrent',1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)`,
       [
           concurrentPaginationId,
           "8".repeat(32)
@@ -264,7 +263,7 @@ await runIntegrationScenario(async (runtime) => {
   for (const [position, id] of matrixIds.entries()) {
     const [device, brightness] = matrixAxes[position];
     await database.pool.query(
-      `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,author,image_time,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','ready','local',$2,$3,$4,$6,$7,$8,1,1,GREATEST(1,1),$5,1,1,GREATEST(1,1),$5,1,1,GREATEST(1,1),$5)`,
+      `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,author,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','ready','local',$2,$3,$4,$6,$7,1,1,GREATEST(1,1),$5,1,1,GREATEST(1,1),$5,1,1,GREATEST(1,1),$5)`,
       [
         id,
         device,
@@ -272,7 +271,6 @@ await runIntegrationScenario(async (runtime) => {
         matrixTheme,
         createHash("md5").update(id).digest("hex"),
         matrixAuthor,
-        matrixTime,
         "pagination-matrix-" + String(position)
       ]
     );

@@ -127,16 +127,6 @@ export function ingestionAttributeDefaultsActionMetadata(
   };
 }
 
-export function canApplyIngestionAttributeDefaults(
-  job: IngestionJob,
-  defaults: IngestionAttributeDefaults
-) {
-  return imageDraftPatchChanges(
-    job.draft,
-    ingestionAttributeDefaultsPatch(job, defaults)
-  );
-}
-
 export function canClearIngestionAttribute(job: IngestionJob) {
   return (
     !job.commitIntent &&

@@ -72,8 +72,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.check-status-note {
-  margin-top: 10px !important;
+.check-status-card .check-status-note {
+  margin-top: 10px;
 }
 .ready-cache-panel {
   margin-bottom: 16px;

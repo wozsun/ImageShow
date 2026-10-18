@@ -28,6 +28,7 @@ import {
   ingestionSessionIncarnationMismatch,
   type IngestionSessionRepository
 } from "../repository.ts";
+import { isIngestionVersionConflict } from "../sessions/replies.ts";
 import { semanticIngestionSession } from "../sessions/transitions.ts";
 import { updateIngestionSessions } from "./session-update.ts";
 
@@ -92,10 +93,6 @@ function failed(session: StoredIngestionSession, error: unknown): ActionItem {
 }
 
 const queueActionMutationAttempts = 8;
-
-function isIngestionVersionConflict(error: unknown) {
-  return error instanceof ApiError && error.code === "ingestion_version_conflict";
-}
 
 function metadataForAction(
   session: IngestionSessionSnapshot,

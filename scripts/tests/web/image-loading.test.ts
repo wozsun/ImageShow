@@ -32,7 +32,12 @@ function imageHarness(t: TestContext) {
     container,
     scheduler,
     root,
-    async render(props: React.ComponentProps<typeof ProgressiveImage>) {
+    /** onParentClick stands in for an enclosing close or zoom handler. */
+    async render(
+      props: React.ComponentProps<typeof ProgressiveImage>,
+      onParentClick?: () => void
+    ) {
+      const image = React.createElement(ProgressiveImage, props);
       await React.act(async () => {
         root.render(
           React.createElement(ImageLoadSchedulerProvider, {
@@ -40,7 +45,9 @@ function imageHarness(t: TestContext) {
             children: React.createElement(
               React.StrictMode,
               null,
-              React.createElement(ProgressiveImage, props)
+              onParentClick
+                ? React.createElement("div", { onClick: onParentClick }, image)
+                : image
             )
           })
         );
@@ -63,12 +70,14 @@ for (const thumbSrc of ["", "/thumb.webp"]) {
   test(`[Web/图片加载] 完整图失败可显式重试且保留可用图层 / ${thumbSrc ? "有缩略图" : "无缩略图"}`, async (t) => {
     const h = imageHarness(t);
     let parentClicks = 0;
-    await h.render({
-      imageKey: "a",
-      fullSrc: "/full.jpg",
-      thumbSrc,
-      onClick: () => parentClicks++
-    });
+    await h.render(
+      {
+        imageKey: "a",
+        fullSrc: "/full.jpg",
+        thumbSrc
+      },
+      () => parentClicks++
+    );
     const thumbnail = h.container.querySelector<HTMLImageElement>(".progressive-image-thumb");
     if (thumbSrc) {
       assert.ok(thumbnail);

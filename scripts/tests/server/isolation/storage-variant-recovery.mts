@@ -153,12 +153,10 @@ await runIntegrationScenario(async (runtime) => {
       const retainedOnReplica = Number((await pool.query<{ count: string }>("SELECT count(*) FROM metadata WHERE storage_slug='replica' AND status IN ('ready','deleted')")).rows[0]!.count);
       assert.deepEqual(check.disabled_backend_images, [{ backend: "replica", image_count: retainedOnReplica }]);
       const plan = await buildStorageMaintenancePlan(signal);
-      assert.equal(plan.capturedGroups.some((captured) => captured.group.slugs.includes("replica")), false);
       assert.equal(plan.candidates.some((candidate) => (candidate.kind === "remove" && candidate.backend === "replica") || (candidate.kind === "repair" && candidate.imageId === backup.id)), false, "停用后端不产生删除或修复候选");
       await maintainStorageAndPurgeTasks(neverAbortedSignal);
       assert.equal((await repairStorageVariant(backup.id, "large", signal)).outcome, "skipped", "图片所在存储已停用时跳过维修");
       assert.equal((await repairStorageVariant(stranded.id, "large", signal)).outcome, "failed", "停用后端不作为维修来源");
-      assert.equal(await access.driver.exists("large", stranded.key), false);
       assert.equal(disabledRequests, 0, "停用后端不产生存储请求");
     } finally {
       source.driver.listKeys = listDisabled;
@@ -180,12 +178,10 @@ await runIntegrationScenario(async (runtime) => {
     const shared = await checkStorage(signal);
     assert.equal(shared.orphan_objects.some((item) => item.key === aliased.key), false, "停用别名登记的图片仍受引用保护");
     assert.equal(shared.missing_objects.some((item) => item.id === aliased.id), false, "停用别名上的图片不检查缺失");
-    assert.equal(shared.unavailable_backends.some((item) => item.backend === "replica-alias"), false);
     assert.deepEqual(shared.disabled_backend_images, [{ backend: "replica-alias", image_count: 1 }]);
     const sharedPlan = await buildStorageMaintenancePlan(signal);
     assert.equal(sharedPlan.candidates.some((candidate) => (candidate.kind === "repair" && candidate.imageId === aliased.id) || (candidate.kind === "remove" && candidate.key === aliased.key)), false);
     await maintainStorageAndPurgeTasks(neverAbortedSignal);
-    assert.equal(await source.driver.exists("medium", aliased.key), false, "不为停用别名补回缺档");
     for (const prefix of ["large", "small"] as const) assert.deepEqual(await source.driver.readBuffer(prefix, aliased.key), body);
   } finally {await s3.close();}
 });

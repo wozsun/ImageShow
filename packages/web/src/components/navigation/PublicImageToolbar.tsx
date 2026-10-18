@@ -75,7 +75,6 @@ export function PublicToolbarPopover({
   iconOnly = false,
   minWidth = 280,
   autoFocus = true,
-  openerRef,
   children
 }: {
   label: string;
@@ -83,11 +82,9 @@ export function PublicToolbarPopover({
   iconOnly?: boolean;
   minWidth?: number;
   autoFocus?: boolean;
-  openerRef?: RefObject<HTMLButtonElement | null>;
   children: (close: () => void) => ReactNode;
 }) {
-  const ownTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const triggerRef = openerRef ?? ownTriggerRef;
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
   const contentRef = useRef<HTMLElement | null>(null);
   const id = useId();
   const menu = useAnchoredMenu({

@@ -100,7 +100,7 @@ function GroupDetailContent({ slug, settings }: { slug: string; settings: AdminS
     group: { slug, mode: view }, enabled: Boolean(group)
   });
   const selection = useImageAdminSelection(navigation.items);
-  const feedbackTarget = useActionFeedbackTarget("group-detail");
+  const feedbackTarget = useActionFeedbackTarget();
   const [feedback, setFeedback] = useState<ActionFeedbackState | null>(null);
   const [writing, setWriting] = useState(false);
   const listAction = useAsyncActionStatus({ minimumPendingMs: 0, resultDurationMs: null });
@@ -135,7 +135,6 @@ function GroupDetailContent({ slug, settings }: { slug: string; settings: AdminS
     setSort(next);
     if (next.sort_by !== sort.sort_by) setSortBy(next.sort_by);
     if (next.order !== sort.order) setSortOrder(next.order);
-    clearSelection();
     setFeedback(null);
   };
 

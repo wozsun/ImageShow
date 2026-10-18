@@ -1835,13 +1835,7 @@ test("[Web/共享交互] 共享页面锁计数化冻结根节点并按层级归�
     document.body.append(strictReturnTarget);
     strictReturnTarget.focus();
     const strictReturnFocusRef = { current: strictReturnTarget };
-    function StrictDialogProbe({
-      active,
-      escapeVersion
-    }: {
-      active: boolean;
-      escapeVersion: number;
-    }) {
+    function StrictDialogProbe({ escapeVersion }: { escapeVersion: number }) {
       const frameRef = React.useRef<HTMLDivElement | null>(null);
       const closeRef = React.useRef<HTMLButtonElement | null>(null);
       useDialogFocus({
@@ -1850,8 +1844,7 @@ test("[Web/共享交互] 共享页面锁计数化冻结根节点并按层级归�
         returnFocusRef: strictReturnFocusRef,
         onEscape() {
           escapeVersions.push(escapeVersion);
-        },
-        active
+        }
       });
       return React.createElement(
         "div",
@@ -1866,11 +1859,11 @@ test("[Web/共享交互] 共享页面锁计数化冻结根节点并按层级归�
         )
       );
     }
-    const strictDialogTree = (active: boolean, escapeVersion: number) =>
+    const strictDialogTree = (open: boolean, escapeVersion: number) =>
       React.createElement(
         React.StrictMode,
         null,
-        React.createElement(StrictDialogProbe, { active, escapeVersion })
+        open ? React.createElement(StrictDialogProbe, { escapeVersion }) : null
       );
     const strictCountsBeforeMount = {
       adds: keydownListenerAdds,

@@ -216,7 +216,7 @@
     background: var(--admin-color-canvas);
   }
   :is(.admin, [data-admin-dialog]) button:not(:disabled) {
-    transition-duration: var(--pressable-transition-duration, 0.08s);
+    transition-duration: 0.08s;
   }
   :is(.admin, [data-admin-dialog])
     button:not(:disabled):not(.select-trigger):not(.password-toggle):not(

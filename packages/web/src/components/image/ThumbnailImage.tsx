@@ -19,12 +19,10 @@ function initialLoadState(src: string): ThumbnailLoadState {
 export function ThumbnailImage({
   src,
   alt = "",
-  className = "",
   retainLoadedWhenEmpty = false
 }: {
   src: string;
   alt?: string;
-  className?: string;
   retainLoadedWhenEmpty?: boolean;
 }) {
   const pendingImageRef = useRef<HTMLImageElement | null>(null);
@@ -114,7 +112,7 @@ export function ThumbnailImage({
   if (state.status === "failed" && !state.visibleSrc) {
     return (
       <span
-        className={`thumb-fallback ${className}`.trim()}
+        className="thumb-fallback"
         role="img"
         aria-label={alt || "缩略图加载失败"}
       >
@@ -131,7 +129,7 @@ export function ThumbnailImage({
   ].filter(Boolean);
 
   return (
-    <span className={`thumb-image ${state.visibleSrc ? "is-ready" : ""} ${className}`.trim()}>
+    <span className={state.visibleSrc ? "thumb-image is-ready" : "thumb-image"}>
       {layerSources.map((layerSrc) => {
         const visible = layerSrc === state.visibleSrc;
         return (

@@ -5,21 +5,25 @@ export async function assertRequiredTablesAndColumns(database: DatabaseReader) {
     await database.query<{
       table_name: string;
       relation_kind: string;
-      persistence: string;
       column_name: string;
       type_name: string;
       type_modifier: number;
       not_null: boolean;
       default_value: string | null;
+      requires_insert_value: boolean;
     }>(
       `SELECT relation.relname AS table_name,
             relation.relkind::text AS relation_kind,
-            relation.relpersistence::text AS persistence,
             attribute.attname AS column_name,
             type.typname AS type_name,
             attribute.atttypmod::int AS type_modifier,
             attribute.attnotnull AS not_null,
-            pg_get_expr(defaults.adbin, defaults.adrelid) AS default_value
+            pg_get_expr(defaults.adbin, defaults.adrelid) AS default_value,
+            (attribute.attnotnull OR type.typnotnull)
+              AND defaults.oid IS NULL
+              AND type.typdefaultbin IS NULL
+              AND attribute.attidentity = ''
+              AND attribute.attgenerated = '' AS requires_insert_value
        FROM pg_class relation
        JOIN pg_namespace namespace ON namespace.oid=relation.relnamespace
        JOIN pg_attribute attribute
@@ -48,6 +52,7 @@ export async function assertRequiredTablesAndColumns(database: DatabaseReader) {
 
   const actualColumns = new Map(rows.map((row) => [`${row.table_name}.${row.column_name}`, row]));
   const incompatible: string[] = [];
+  const requiredExtraColumns: string[] = [];
   for (const [table, readiness] of Object.entries(databaseReadiness)) {
     for (const [column, expectedType] of Object.entries(readiness.columns)) {
       const actual = actualColumns.get(`${table}.${column}`);
@@ -58,6 +63,15 @@ export async function assertRequiredTablesAndColumns(database: DatabaseReader) {
         incompatible.push(`${table}.${column}`);
       }
     }
+    if (readiness.privileges.some((privilege) => privilege === "INSERT")) {
+      for (const actual of rows) {
+        if (actual.table_name === table
+          && !Object.hasOwn(readiness.columns, actual.column_name)
+          && actual.requires_insert_value) {
+          requiredExtraColumns.push(`${table}.${actual.column_name}`);
+        }
+      }
+    }
   }
   const theme = actualColumns.get("metadata.theme");
   if (theme && (theme.not_null || theme.default_value !== null)) {
@@ -66,6 +80,11 @@ export async function assertRequiredTablesAndColumns(database: DatabaseReader) {
   if (incompatible.length) {
     throw new Error(
       `required columns are missing or have incompatible types: ${incompatible.join(", ")}`
+    );
+  }
+  if (requiredExtraColumns.length) {
+    throw new Error(
+      `extra columns require values not supplied by application INSERTs: ${requiredExtraColumns.join(", ")}`
     );
   }
 }

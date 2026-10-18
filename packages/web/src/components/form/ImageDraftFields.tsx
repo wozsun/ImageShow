@@ -28,7 +28,6 @@ export function ImageDraftFields({
   brightnessOptions,
   disabled = false,
   ariaPrefix,
-  title,
   changed = {},
   deferredEditing
 }: {
@@ -41,7 +40,6 @@ export function ImageDraftFields({
   brightnessOptions: readonly SelectOption[];
   disabled?: boolean;
   ariaPrefix: string;
-  title?: { value: string; placeholder: string; disabled: boolean };
   changed?: Partial<
     Record<
       | "title"
@@ -66,9 +64,7 @@ export function ImageDraftFields({
         <input
           id={`${fieldGroupId}-title`}
           className={`image-fields-title${changedFields.title ? " is-changed" : ""}`}
-          value={title
-            ? title.value
-            : deferredEditing?.values.title ?? draft.title}
+          value={deferredEditing?.values.title ?? draft.title}
           onFocus={deferredEditing
             ? () => deferredEditing.onFocus("title")
             : undefined}
@@ -83,8 +79,8 @@ export function ImageDraftFields({
             ? () => deferredEditing.onBlur("title")
             : undefined}
           maxLength={imageTitleMaxLength}
-          placeholder={title?.placeholder ?? "标题"}
-          disabled={title ? title.disabled : disabled}
+          placeholder="标题"
+          disabled={disabled}
         />
         <SelectMenu
           className={`image-fields-device${changedFields.device ? " is-changed" : ""}`}

@@ -74,7 +74,6 @@ export type IngestionJob = {
   file?: File;
   fileFingerprint?: string;
   md5?: string;
-  preparedOrder?: number;
   downloadUrl?: string;
   // 当前前端处理尝试，同时作为 create 请求幂等键；重试时会更新。
   attemptKey: string;
@@ -121,8 +120,6 @@ export type IngestionJob = {
   // 字段和客户端状态集中派生，不直接展示服务端正常阶段 message。
   serverStatus?: ServerIngestionStatusDto | "missing";
   serverPhase?: string;
-  serverError?: string;
-  serverProgress?: number;
   serverAttemptKey?: string;
   serverSessionId?: string;
   serverImageId?: string;

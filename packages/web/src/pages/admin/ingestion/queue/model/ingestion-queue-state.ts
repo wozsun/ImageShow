@@ -328,8 +328,6 @@ function patchJob(job: IngestionJob, patch: Partial<IngestionJob>) {
       ...patch,
       serverStatus: undefined,
       serverPhase: undefined,
-      serverError: undefined,
-      serverProgress: undefined,
       serverAttemptKey: undefined,
       serverSessionId: undefined,
       serverImageId: undefined,
@@ -352,9 +350,7 @@ function patchJob(job: IngestionJob, patch: Partial<IngestionJob>) {
     return changes ? { ...job, ...nextPatch } : job;
   }
 
-  const authorityPatch =
-    has("serverStatus") || has("serverPhase")
-      || has("serverError") || has("serverProgress");
+  const authorityPatch = has("serverStatus") || has("serverPhase");
   if (
     authorityPatch &&
     (patch.serverAttemptKey !== job.attemptKey ||

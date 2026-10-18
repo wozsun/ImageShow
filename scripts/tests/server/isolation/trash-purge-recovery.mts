@@ -20,8 +20,6 @@ await runIntegrationScenario(async (runtime) => {
   const jobs = await import("../../../../packages/server/src/jobs/repository.ts");
   const registry = await import("../../../../packages/server/src/storage/backends/registry.ts");
   const trash = await import("../../../../packages/server/src/images/trash/purge.ts");
-  const trashProgress =
-    await import("../../../../packages/server/src/images/trash/purge-progress.ts");
   const trashMutations = await import("../../../../packages/server/src/images/trash/mutations.ts");
   const trashMembershipLock =
     await import("../../../../packages/server/src/images/trash/membership-lock.ts");
@@ -37,7 +35,7 @@ await runIntegrationScenario(async (runtime) => {
   const localAccess = await registry.resolveStorageAccess("local");
   const foregroundImage = randomUUIDv7();
   await database.pool.query(
-    `INSERT INTO metadata (id,image_time,created_by,status,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','ready','local','pc','dark',NULL,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)`,
+    `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','ready','local','pc','dark',NULL,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)`,
     [
      foregroundImage,
      "0".repeat(32)
@@ -63,7 +61,7 @@ await runIntegrationScenario(async (runtime) => {
   const uncertainFull = Buffer.from("uncertain-purge-full");
   const uncertainThumbnail = Buffer.from("uncertain-purge-thumbnail");
   await database.pool.query(
-    `INSERT INTO metadata (id,image_time,created_by,status,storage_slug,device,brightness,theme,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','deleted','local','pc','dark',NULL,now(),1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
+    `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','deleted','local','pc','dark',NULL,now(),1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
     [
       uncertainImage,
       createHash("md5").update(uncertainFull).digest("hex"),
@@ -160,7 +158,7 @@ await runIntegrationScenario(async (runtime) => {
   const queuedFull = Buffer.from("queued-purge-full");
   const queuedThumbnail = Buffer.from("queued-purge-thumbnail");
   await database.pool.query(
-    `INSERT INTO metadata (id,image_time,created_by,status,storage_slug,device,brightness,theme,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','deleted','local','pc','dark',NULL,now(),1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
+    `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','deleted','local','pc','dark',NULL,now(),1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
     [
       queuedImage,
       createHash("md5").update(queuedFull).digest("hex"),
@@ -243,7 +241,7 @@ await runIntegrationScenario(async (runtime) => {
   const concurrentFull = Buffer.from("concurrent-trash-full");
   const concurrentThumbnail = Buffer.from("concurrent-trash-thumbnail");
   await database.pool.query(
-    `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','local','pc','dark',NULL,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
+    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','local','pc','dark',NULL,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
     [
       concurrentImage,
       createHash("md5").update(concurrentFull).digest("hex"),
@@ -336,7 +334,7 @@ await runIntegrationScenario(async (runtime) => {
     const full = Buffer.from("watermark-full-" + id);
     const thumbnail = Buffer.from("watermark-thumb-" + id);
     await database.pool.query(
-      `INSERT INTO metadata (id,image_time,created_by,status,storage_slug,device,brightness,theme,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','deleted','local','pc','dark',NULL,clock_timestamp() - ($4 || ' seconds')::interval,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
+      `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','deleted','local','pc','dark',NULL,clock_timestamp() - ($4 || ' seconds')::interval,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
       [
         id,
         createHash("md5").update(full).digest("hex"),
@@ -422,7 +420,6 @@ await runIntegrationScenario(async (runtime) => {
   const failedItem = await createTrashImage(0);
   const independentItem = await createTrashImage(0);
   await trash.purgeImages({ scope: "selected", ids: [failedItem.id, independentItem.id] });
-  assert.deepEqual(await trashProgress.readTrashPurgeProgress(), { pending: 2, failed: 0 });
   const { Hono } = await import("hono");
   const { handleApiError } = await import("../../../../packages/server/src/core/http/responses.ts");
   const { registerPublicAuthRoutes } = await import("../../../../packages/server/src/routes/auth.ts");
@@ -464,7 +461,7 @@ await runIntegrationScenario(async (runtime) => {
     // that stays open past the deadline reports ended: false.
     return async (untilEnd: boolean) => {
       let text = "";
-      const deadline = delay(5_000, null);
+      const deadline = delay(5_000, null, { ref: false });
       for (;;) {
         const chunk = await Promise.race([reader.read(), deadline]);
         if (!chunk) {
@@ -530,14 +527,9 @@ await runIntegrationScenario(async (runtime) => {
     true
   );
   assert.deepEqual(
-    await trashProgress.readTrashPurgeProgress(),
-    { pending: 0, failed: 1 },
-    "进度只统计仍有图片的删除意图，并区分待处理与失败"
-  );
-  assert.deepEqual(
     await (await openProgressStream())(true),
     { text: 'event: progress\ndata: {"pending":0,"failed":1}\n\n', ended: true },
-    "没有待处理删除时只发送一次状态即结束"
+    "进度只统计仍有图片的删除意图并区分待处理与失败；没有待处理删除时只发送一次状态即结束"
   );
   const retryingTrashCheck = await databaseCheck.checkTrash();
   assert.equal(

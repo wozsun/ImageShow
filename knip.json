@@ -33,7 +33,7 @@
       "includeEntryExports": true
     },
     "packages/server": {
-      "entry": ["src/healthcheck-cli.ts"]
+      "entry": ["src/index.ts", "src/healthcheck-cli.ts"]
     },
     "packages/web": {
       "ignoreDependencies": ["remixicon"]

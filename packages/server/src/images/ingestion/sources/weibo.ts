@@ -24,7 +24,6 @@ import {
 
 type WeiboManifestOptions = {
   signal: AbortSignal;
-  timeZone?: string;
   sourceEnabled: boolean;
   /** Receives a snapshot whenever a stage is entered, with the counts so far. */
   onProgress?: (progress: WeiboImportProgressDto) => void;
@@ -54,7 +53,7 @@ const weiboRequestScheduler = createWeiboRequestScheduler({
 export function weiboPostToJsonl(
   post: ExtractedWeiboPost,
   sourceEnabled: boolean,
-  authorSlugs: ReadonlyMap<string, string> = new Map()
+  authorSlugs: ReadonlyMap<string, string>
 ) {
   const publicationYear = post.published_at.slice(0, 4);
   return post.images
@@ -180,7 +179,6 @@ export async function createWeiboImportBatchManifest(
     if (extraction?.error) errors.push(extraction.error);
   }
 
-  assertWeiboImageCountWithinHardLimit(posts.reduce((total, post) => total + post.image_count, 0));
   const authorSlugs = await resolveWeiboAuthorSlugs(
     posts.flatMap((post) => post.images.flatMap((image) => (image.user_id ? [image.user_id] : [])))
   );
@@ -190,10 +188,7 @@ export async function createWeiboImportBatchManifest(
       options.sourceEnabled,
       authorSlugs
     )).join("\n"),
-    {
-      maxItems: appConfig.ingestion.weiboImageHardLimit,
-      timeZone: options.timeZone
-    }
+    { maxItems: appConfig.ingestion.weiboImageHardLimit }
   );
 
   return {

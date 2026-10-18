@@ -19,7 +19,7 @@ export function notifyTrashPurgeProgress() {
   for (const listener of progressListeners) listener();
 }
 
-export async function readTrashPurgeProgress(): Promise<TrashPurgeProgressDto> {
+async function readTrashPurgeProgress(): Promise<TrashPurgeProgressDto> {
   const row = (
     await pool.query(
       `SELECT count(*) FILTER (WHERE job.status IN ('pending', 'running'))::int AS pending,

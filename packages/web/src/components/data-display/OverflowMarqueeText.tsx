@@ -4,7 +4,6 @@ import { reducedMotionQuery } from "../../lib/ui/reduced-motion.js";
 type OverflowMarqueeTextProps = {
   text: string;
   as?: "span" | "strong" | "small";
-  className?: string;
   children?: ReactNode;
 };
 
@@ -38,7 +37,6 @@ function observeVisibility(
 export function OverflowMarqueeText({
   text,
   as: Element = "span",
-  className = "",
   children
 }: OverflowMarqueeTextProps) {
   const viewportRef = useRef<HTMLElement>(null);
@@ -165,8 +163,7 @@ export function OverflowMarqueeText({
       className={[
         "overflow-marquee-text",
         overflowing ? "is-overflowing" : "",
-        animating ? "is-animating" : "",
-        className
+        animating ? "is-animating" : ""
       ]
         .filter(Boolean)
         .join(" ")}

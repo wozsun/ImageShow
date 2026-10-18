@@ -19,7 +19,6 @@ export function AdminPagination({
   ariaLabel,
   className,
   disabled = false,
-  previousDisabled = false,
   nextDisabled = false
 }: {
   page: number;
@@ -28,7 +27,6 @@ export function AdminPagination({
   ariaLabel: string;
   className?: string;
   disabled?: boolean;
-  previousDisabled?: boolean;
   nextDisabled?: boolean;
 }) {
   const [pageInput, setPageInput] = useState(String(page));
@@ -79,7 +77,7 @@ export function AdminPagination({
     <nav className={`admin-pagination${className ? ` ${className}` : ""}`} aria-label={ariaLabel}>
       <button
         type="button"
-        disabled={disabled || previousDisabled || page <= 1}
+        disabled={disabled || page <= 1}
         onPointerDown={preservePageInputFocus}
         onClick={() => onPageChange(page - 1)}
       >

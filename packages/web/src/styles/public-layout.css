@@ -234,8 +234,8 @@
     padding: 0 max(16px, calc(var(--public-safe-area-right) + 12px)) 0
       max(16px, calc(var(--public-safe-area-left) + 12px));
   }
-  .desktop-nav {
-    display: none !important;
+  .topbar .desktop-nav {
+    display: none;
   }
 }
 

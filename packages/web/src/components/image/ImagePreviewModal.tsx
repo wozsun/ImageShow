@@ -6,7 +6,6 @@ import { DialogFrame } from "../dialog/DialogFrame.js";
 export function ImagePreviewModal({
   src,
   thumbSrc,
-  alt = "图片预览",
   width,
   height,
   onClose,
@@ -14,7 +13,6 @@ export function ImagePreviewModal({
 }: {
   src: string;
   thumbSrc?: string;
-  alt?: string;
   width?: number;
   height?: number;
   onClose: () => void;
@@ -43,7 +41,7 @@ export function ImagePreviewModal({
             imageKey={src}
             thumbSrc={thumbSrc || src}
             fullSrc={src}
-            alt={alt}
+            alt="图片预览"
             className="image-preview-image"
             style={previewStyle}
           />

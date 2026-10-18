@@ -5,6 +5,8 @@ import {
 } from "@tanstack/react-query";
 import {
   adminApiBasePath,
+  adminTrashCheckIssueKinds,
+  trashPurgeJobStates,
   type AdminCheckStatusDto,
   type AdminTrashCheckDto
 } from "@imageshow/shared/browser";
@@ -40,18 +42,6 @@ type TrashMaintenancePreview = {
   issues: TrashMaintenanceIssue[];
 };
 
-const trashPurgeJobStates = [
-  "pending",
-  "running",
-  "retrying",
-  "exhausted"
-] as const;
-const trashCheckIssueKinds = [
-  "succeeded_target_remaining",
-  "target_not_deleted",
-  "stalled_job"
-] as const;
-
 function isCount(value: unknown): value is number {
   return Number.isSafeInteger(value) && Number(value) >= 0;
 }
@@ -74,7 +64,7 @@ function isTrashMaintenancePreview(value: unknown): value is TrashMaintenancePre
       }
       const record = issue as Record<string, unknown>;
       return (
-        trashCheckIssueKinds.includes(record.kind as (typeof trashCheckIssueKinds)[number]) &&
+        adminTrashCheckIssueKinds.includes(record.kind as (typeof adminTrashCheckIssueKinds)[number]) &&
         isCount(record.count)
       );
     })

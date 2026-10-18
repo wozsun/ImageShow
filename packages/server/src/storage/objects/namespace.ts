@@ -103,14 +103,3 @@ export function groupStorageNamespaces<T extends StorageConfig>(configs: readonl
   }
   return groups;
 }
-
-/** Stable only while every current and historical identity in a group agrees. */
-export function storageNamespaceGroupIdentity(configs: readonly StorageConfig[]) {
-  return JSON.stringify(
-    [
-      ...new Set(configs.flatMap((config) => [
-        ...storageNamespaceIdentities(config)
-      ]))
-    ].toSorted()
-  );
-}

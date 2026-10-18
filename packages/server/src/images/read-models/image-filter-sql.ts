@@ -32,7 +32,11 @@ function selectedValues(group: ImageSelectorGroup) {
 }
 
 /** A single value compares with "=" so PostgreSQL can walk a (value, id) index in ID order; "= ANY" cannot promise that order even for one element. */
-function textMatch(column: string, values: readonly string[], bind: (value: unknown) => string) {
+function textMatch(
+  column: string,
+  values: readonly string[],
+  bind: (value: unknown) => string
+) {
   return values.length === 1
     ? `${column}=${bind(values[0])}`
     : `${column}=ANY(${bind(values)}::text[])`;

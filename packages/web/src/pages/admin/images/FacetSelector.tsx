@@ -45,7 +45,6 @@ export function FacetSelector({
   disabled = false,
   ariaLabel,
   controlId,
-  menuClassName,
   selectionMode = "include-exclude"
 }: {
   selectionMode?: "include-exclude" | "any-all";
@@ -56,7 +55,6 @@ export function FacetSelector({
   disabled?: boolean;
   ariaLabel?: string;
   controlId?: string;
-  menuClassName?: string;
 }) {
   const resolvedAriaLabel = ariaLabel ?? noun;
   const isTag = selectionMode === "any-all";
@@ -196,7 +194,6 @@ export function FacetSelector({
       id={menuId}
       className={[
         "facet-select-menu",
-        menuClassName,
         opensUp ? "opens-up" : "",
         closing ? "is-closing" : ""
       ]

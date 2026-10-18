@@ -55,7 +55,6 @@ import {
 import { useWorkspaceToolbarCollapse } from "../../../hooks/useWorkspaceToolbarCollapse.js";
 import { WorkspaceToolbarScrollbar } from "../../../components/layout/WorkspaceToolbarScrollbar.js";
 import { WorkspaceToolbar } from "../../../components/layout/WorkspaceToolbar.js";
-import { workspaceScrollContainer } from "../../../lib/ui/workspace-scroll.js";
 import {
   imageAdminConfirmationCopy,
   useImageAdminOperations,
@@ -112,7 +111,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
   const permissions = useAdminPermissions();
   const canPurgeImage = permissions.includes(adminPermissions.imageTrashPurge);
 
-  const feedbackTarget = useActionFeedbackTarget("image-admin");
+  const feedbackTarget = useActionFeedbackTarget();
   const workspaceToolbarRef = useWorkspaceToolbarCollapse();
   const gridRef = useRef<HTMLDivElement | null>(null);
   const frozenBatchTrashIdsRef = useRef<string[]>([]);
@@ -219,11 +218,8 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
   useEffect(() => {
     if (routeView === view) return;
     setView(routeView);
-    clearImageSelection();
     resetTransientState();
-    workspaceScrollContainer(gridRef.current)?.scrollTo({ top: 0, left: 0 });
   }, [
-    clearImageSelection,
     resetTransientState,
     routeView,
     view
@@ -241,10 +237,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
       imageAdminPaginationScopeKey(view, nextFilters, pageSize, sort);
     setFilters(nextFilters);
     if (unchangedQuery) return;
-    navigation.resetPage();
-    clearImageSelection();
     resetTransientState();
-    workspaceScrollContainer(gridRef.current)?.scrollTo({ top: 0, left: 0 });
   };
   const changeFilter = (
     key: keyof ImageAdminFilterValues,
@@ -257,13 +250,10 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
   };
   const changeSort = (next: AdminImageSort) => {
     if (interfaceBusy) return;
-    navigation.resetPage();
     setSort(next);
     if (next.sort_by !== sort.sort_by) setPreferredSortBy(next.sort_by);
     if (next.order !== sort.order) setPreferredOrder(next.order);
-    clearImageSelection();
     resetTransientState();
-    workspaceScrollContainer(gridRef.current)?.scrollTo({ top: 0, left: 0 });
   };
   const changeView = (next: typeof view) => {
     if (next === routeView || interfaceBusy) return;

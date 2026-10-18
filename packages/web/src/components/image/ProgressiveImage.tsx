@@ -4,8 +4,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-  type CSSProperties,
-  type MouseEventHandler
+  type CSSProperties
 } from "react";
 import { useImageLoadScheduler } from "./ImageLoadSchedulerContext.js";
 import {
@@ -30,7 +29,6 @@ export function ProgressiveImage({
   fullSrc = "",
   alt = "",
   className = "",
-  onClick,
   style
 }: {
   imageKey: string;
@@ -38,7 +36,6 @@ export function ProgressiveImage({
   fullSrc?: string;
   alt?: string;
   className?: string;
-  onClick?: MouseEventHandler<HTMLDivElement>;
   style?: CSSProperties;
 }) {
   const scheduler = useImageLoadScheduler();
@@ -181,7 +178,6 @@ export function ProgressiveImage({
     <div
       className={`progressive-image ${className} ${stateClass}`.trim()}
       style={{ ...style, aspectRatio: intrinsicAspectRatio ?? style?.aspectRatio }}
-      onClick={onClick}
     >
       {thumbRendered && (
         <img

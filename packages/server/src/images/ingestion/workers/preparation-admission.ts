@@ -19,10 +19,6 @@ const ingestionPreparationAdmission = new DynamicConcurrencyLimiter(
 
 onRuntimeConfigChange(() => ingestionPreparationAdmission.refresh());
 
-export function ingestionPreparationAdmissionSnapshot() {
-  return ingestionPreparationAdmission.snapshot();
-}
-
 export function withIngestionPreparationAdmission<Result>(
   signal: AbortSignal,
   work: () => Promise<Result>

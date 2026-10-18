@@ -11,7 +11,7 @@ export type PublicDatabaseAdmission = {
   snapshot(): { active: number; queued: number };
 };
 
-export type PublicDatabaseAdmissionConfig = Pick<
+type PublicDatabaseAdmissionConfig = Pick<
   typeof appConfig.publicPgFallback,
   "totalConcurrency" | "queueLimit" | "queueTimeoutMs" | "retryAfterSeconds"
 >;

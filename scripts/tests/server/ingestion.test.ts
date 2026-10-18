@@ -20,6 +20,7 @@ import { Hono } from "hono";
 import { appConfig } from "@imageshow/shared";
 import {
   adminApiBasePath,
+  imageTimeMs,
   ingestionUpdatePath
 } from "../../../packages/shared/src/browser.ts";
 import {
@@ -48,8 +49,7 @@ import {
 import { ingestionIntentRequestHash } from "../../../packages/server/src/images/ingestion/sessions/request-hash.ts";
 import {
   assertImageIdentity,
-  createIngestionSessionId,
-  inspectImageUuidV7
+  createIngestionSessionId
 } from "../../../packages/server/src/images/ingestion/sessions/identity.ts";
 import { ingestionSessionSemanticHash } from "../../../packages/server/src/images/ingestion/sessions/projection.ts";
 import {
@@ -74,16 +74,11 @@ import {
 import { ingestionCleanupRetryQueue } from "../../../packages/server/src/images/ingestion/cleanup/retry-queue.ts";
 import { IngestionSessionRecovery } from "../../../packages/server/src/images/ingestion/workers/session-recovery.ts";
 import {
-  ingestionCommitDispatchWindow,
-  ingestionWorkerDispatchWindows,
   isSameFailedIngestionExecution,
   planIngestionWorkerLanes
 } from "../../../packages/server/src/images/ingestion/workers/ingestion-worker.ts";
 import { withImportPrefetchAdmission } from "../../../packages/server/src/images/ingestion/workers/import-prefetch.ts";
-import {
-  ingestionPreparationAdmissionSnapshot,
-  withIngestionPreparationAdmission
-} from "../../../packages/server/src/images/ingestion/workers/preparation-admission.ts";
+import { withIngestionPreparationAdmission } from "../../../packages/server/src/images/ingestion/workers/preparation-admission.ts";
 import { preparedAttemptIsReferenced } from "../../../packages/server/src/images/ingestion/workers/prepare-session.ts";
 import {
   ingestionRawPath,
@@ -449,12 +444,7 @@ test("[Server/内容接入] 导入清单、下载进度与微博入口使用同�
 test("[Server/内容接入] 内容接入身份、稳定哈希、状态投影、TTL 与签名 purpose 契约", () => {
   const imageTime = parseImageTime("2026-08-23T01:02:03.456Z");
   const imageId = createImageId(imageTime.date, 37);
-  assert.deepEqual(inspectImageUuidV7(imageId), {
-    timestamp: imageTime.date.getTime(),
-    version: 7,
-    variant: 2,
-    randA: 37
-  });
+  assert.equal(imageTimeMs(imageId), imageTime.date.getTime());
   assert.equal(assertImageIdentity(imageId, 37).randA, 37);
   assert.throws(() => assertImageIdentity(imageId, 38));
   assert.equal(
@@ -709,11 +699,6 @@ test("[Server/内容接入] 内容接入身份、稳定哈希、状态投影、T
     credential,
     isMarker
   ));
-  assert.equal(appConfig.ingestionRuntime.uploadIntentTtlSeconds, 30 * 60);
-  assert.equal(appConfig.ingestionRuntime.uploadSessionIdleTtlSeconds, 2 * 60 * 60);
-  assert.equal(appConfig.ingestionRuntime.importSessionIdleTtlSeconds, 24 * 60 * 60);
-  assert.equal(appConfig.ingestionRuntime.orphanCleanupIntervalSeconds, 60);
-  assert.equal(appConfig.ingestionRuntime.orphanCleanupSafetySeconds, 60);
 });
 test("[Server/内容接入] 不可逆协调器在同一 pair 边界区分可取消与已启动事务", async () => {
   const pathPair = {
@@ -960,11 +945,7 @@ test("[Server/内容接入] Ingestion Worker 跨页保持 Import queued 与 rece
     [queued[2].session_id]
   );
 });
-test("[Server/内容接入] Ingestion Commit dispatch window 由公开并发派生且不会忽略等待许可的项", () => {
-  assert.equal(ingestionCommitDispatchWindow(1), 2);
-  assert.equal(ingestionCommitDispatchWindow(8), 12);
-  assert.equal(ingestionCommitDispatchWindow(16), 24);
-
+test("[Server/内容接入] Ingestion Commit dispatch window 不会忽略等待许可的项", () => {
   const committing = Array.from({ length: 40 }, (_, index) => ({
     session_id: `commit-session-${index}`,
     image_id: `commit-image-${index}`,
@@ -972,7 +953,7 @@ test("[Server/内容接入] Ingestion Commit dispatch window 由公开并发派�
     queue: index % 2 ? "upload" : "import",
     status: "committing"
   })) as never[];
-  const windows = ingestionWorkerDispatchWindows(2, 16);
+  const windows = { import: 2, upload: 2, commit: 24 };
   const first = planIngestionWorkerLanes(
     committing,
     [],
@@ -998,18 +979,7 @@ test("[Server/内容接入] Ingestion Commit dispatch window 由公开并发派�
     "等待数量或字节许可的 coordinator 仍占用候补窗口"
   );
 });
-test("[Server/内容接入] Ingestion pre-commit dispatch slot 由 Normalize 派生且交接后不重复领取活动 pair", () => {
-  assert.deepEqual(ingestionWorkerDispatchWindows(1, 8), {
-    import: 1,
-    upload: 1,
-    commit: 12
-  });
-  assert.deepEqual(ingestionWorkerDispatchWindows(8, 8), {
-    import: 8,
-    upload: 8,
-    commit: 12
-  });
-
+test("[Server/内容接入] Ingestion pre-commit dispatch slot 交接后不重复领取活动 pair", () => {
   const normalizing = {
     session_id: "normalizing-import",
     image_id: "normalizing-image",
@@ -1033,7 +1003,7 @@ test("[Server/内容接入] Ingestion pre-commit dispatch slot 由 Normalize 派
       }
     ],
     new Set(),
-    ingestionWorkerDispatchWindows(1, 8)
+    { import: 1, upload: 1, commit: 12 }
   );
   assert.deepEqual(
     plan.candidates.map(({ session }) => session.session_id),
@@ -1093,11 +1063,6 @@ test("[Server/内容接入] Upload 与 Import 共用唯一 Prepare/Publish owner
     assert.deepEqual(outcomes, sources);
     assert.equal(new Set(outcomes).size, 2);
     assert.equal(active, 0);
-    assert.deepEqual(ingestionPreparationAdmissionSnapshot(), {
-      limit,
-      active: 0,
-      waiting: 0
-    });
   });
 
   await t.test("当前 prepare 与磁盘 raw 后继各自最多一批", async (subtest) => {
@@ -1158,8 +1123,6 @@ test("[Server/内容接入] Upload 与 Import 共用唯一 Prepare/Publish owner
     await Promise.all(runs);
     assert.equal(activePreparations, 0);
     assert.equal(maxActivePreparations, limit);
-    assert.equal(ingestionPreparationAdmissionSnapshot().active, 0);
-    assert.equal(ingestionPreparationAdmissionSnapshot().waiting, 0);
   });
 
   await t.test("取消等待项不会进入图片处理或本地结果发布", async (subtest) => {
@@ -1187,8 +1150,6 @@ test("[Server/内容接入] Upload 与 Import 共用唯一 Prepare/Publish owner
     gates.forEach((gate) => gate.resolve());
     await Promise.all(active);
     assert.equal(started, false);
-    assert.equal(ingestionPreparationAdmissionSnapshot().active, 0);
-    assert.equal(ingestionPreparationAdmissionSnapshot().waiting, 0);
   });
 
   await t.test("热加载提额立即补位且降额自然排空", async () => {

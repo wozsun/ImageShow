@@ -162,7 +162,7 @@ function VocabularyAdminContent({
   const slug = draft.slug;
   const [link, setLink] = useState("");
   const [mutation, setMutation] = useState<VocabularyMutation>("");
-  const feedbackTarget = useActionFeedbackTarget(`${kind}-admin`);
+  const feedbackTarget = useActionFeedbackTarget();
   const workspaceToolbarRef = useWorkspaceToolbarCollapse();
   const [createError, setCreateError] = useState("");
   const createAction = useAsyncActionStatus({ resultDurationMs: null });

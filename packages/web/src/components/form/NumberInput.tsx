@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { flushSync } from "react-dom";
 
 type FormSubmitter = HTMLButtonElement | HTMLInputElement;
 
@@ -22,7 +23,6 @@ type NumberInputProps = {
   step?: number | "any";
   placeholder?: string;
   disabled?: boolean;
-  className?: string;
   ariaLabel?: string;
   ariaInvalid?: boolean;
 };
@@ -35,7 +35,6 @@ export function NumberInput({
   step,
   placeholder,
   disabled,
-  className,
   ariaLabel,
   ariaInvalid
 }: NumberInputProps) {
@@ -64,7 +63,6 @@ export function NumberInput({
     <input
       type="number"
       inputMode={step === "any" ? "decimal" : "numeric"}
-      className={className}
       aria-label={ariaLabel}
       aria-invalid={ariaInvalid || undefined}
       min={min}
@@ -85,17 +83,17 @@ export function NumberInput({
         }
 
         event.preventDefault();
-        commit(event.currentTarget.value);
-        window.setTimeout(() => {
-          if (!form.isConnected) return;
-          const submitter = defaultFormSubmitter(form);
-          if (submitter) {
-            if (submitter.matches(":disabled") || submitter.form !== form) return;
-            form.requestSubmit(submitter);
-            return;
-          }
-          form.requestSubmit();
-        });
+        const value = event.currentTarget.value;
+        // Settle the draft into the form state before submitting, as the settings page does.
+        flushSync(() => commit(value));
+        if (!form.isConnected) return;
+        const submitter = defaultFormSubmitter(form);
+        if (submitter) {
+          if (submitter.matches(":disabled") || submitter.form !== form) return;
+          form.requestSubmit(submitter);
+          return;
+        }
+        form.requestSubmit();
       }}
       onBlur={(event) => commit(event.target.value)}
     />

@@ -2,11 +2,6 @@ import { imageVariants, type ImageVariantByteSizesDto } from "./image-variants.t
 import { slugMaxLength, slugPattern } from "./vocabulary.ts";
 import { type Brightness, type Device } from "./image-classification.ts";
 
-/** Stable physical identity, independent of editable image classification. */
-export function storageObjectKey(id: string) {
-  return `${id.slice(-2)}/${id}.webp`;
-}
-
 /** Image time is the UUIDv7 timestamp of the image ID (hyphenated lowercase form): its first 12 hex digits are Unix milliseconds, so ordering by ID orders by image time. */
 export function imageTimeMs(id: string) {
   return Number.parseInt(id.slice(0, 8) + id.slice(9, 13), 16);

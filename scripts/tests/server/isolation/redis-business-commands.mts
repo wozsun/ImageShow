@@ -681,10 +681,12 @@ await runIntegrationScenario(async () => {
     [1, 2]
   );
 
+  // A fresh client instance carries no custom commands; like production, register them on the instance that runs them.
   const firstSampleConnection = redisClient.redis.duplicate({
     lazyConnect: true,
     retryStrategy: () => 1
   }) as BusinessRedis;
+  readyCacheRedisClient.registerReadyImageRedisCommands(firstSampleConnection);
   try {
     await firstSampleConnection.connect();
     await firstSampleConnection.ping();
@@ -701,6 +703,7 @@ await runIntegrationScenario(async () => {
   const replacementSampleConnection = redisClient.redis.duplicate({
     lazyConnect: true
   }) as BusinessRedis;
+  readyCacheRedisClient.registerReadyImageRedisCommands(replacementSampleConnection);
   try {
     await replacementSampleConnection.connect();
     assert.deepEqual(

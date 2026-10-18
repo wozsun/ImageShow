@@ -74,13 +74,13 @@ type ActiveIngestion = {
   promise: Promise<void>;
 };
 
-export function ingestionCommitDispatchWindow(concurrency: number) {
+function ingestionCommitDispatchWindow(concurrency: number) {
   // Keep only half a batch ready. This hides Redis discovery handoff without
   // turning tasks waiting on count/byte admission into another worker pool.
   return concurrency + Math.ceil(concurrency / 2);
 }
 
-export function ingestionWorkerDispatchWindows(
+function ingestionWorkerDispatchWindows(
   normalizeConcurrency: number,
   commitConcurrency: number
 ) {

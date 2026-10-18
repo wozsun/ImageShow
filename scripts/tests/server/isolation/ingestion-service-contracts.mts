@@ -25,15 +25,14 @@ await runIntegrationScenario(async (runtime) => {
   const { readCommittedIngestionResultsByImageIds } =
     await import("../../../../packages/server/src/images/read-models/ingestion-results.ts");
 
-  const committedFixtures = async (ids: readonly string[], owners: string[], imageTime: string) => {
+  const committedFixtures = async (ids: readonly string[], owners: string[]) => {
     for (const [index, id] of ids.entries()) {
       await runtime.databasePools.pool.query(
-        `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,image_time,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,$4,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
+        `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
         [
         id,
         owners[index],
-        "a".repeat(32),
-        imageTime
+        "a".repeat(32)
       ]
       );
     }
@@ -429,11 +428,7 @@ await runIntegrationScenario(async (runtime) => {
     serviceTokens(),
     serviceDependencies(async (ids) => {
       queriedCanonicalIds = [...ids];
-      return committedFixtures(
-        ids,
-        ["service-owner", "different-owner"],
-        "2026-08-20T00:00:00.000Z"
-      );
+      return committedFixtures(ids, ["service-owner", "different-owner"]);
     })
   );
   const canonicalBatchResult = await canonicalBatchService.createUploadIntents(
@@ -485,7 +480,7 @@ await runIntegrationScenario(async (runtime) => {
     }),
     serviceTokens(),
     serviceDependencies(async (ids) =>
-      committedFixtures(ids, ["service-owner"], "2026-08-20T00:00:02.000Z")
+      committedFixtures(ids, ["service-owner"])
     )
   );
   const [exactCompletedResult] = await exactCompletedService.createUploadIntents(

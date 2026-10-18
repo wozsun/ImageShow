@@ -139,7 +139,7 @@ const allowedWebLayerDependencies = {
   lib: new Set(["lib"]),
   pages: new Set(["pages", "components", "hooks", "lib"])
 };
-const allowedCoreDependencies = new Set(["core", "config", "types"]);
+const allowedCoreDependencies = new Set(["core", "config"]);
 function webLayer(path) {
   return /^packages\/web\/src\/(pages|components|hooks|lib)(?:\/|$)/.exec(path)?.[1]
     ?? null;

@@ -175,7 +175,7 @@ button.state-toggle-button:focus-visible {
 .async-action-button:is(.is-success, .is-error),
 :is(.admin, [data-admin-dialog]) button.async-action-button:is(.is-success, .is-error) {
   transition:
-    transform var(--pressable-transition-duration, 0.08s) ease,
+    transform 0.08s ease,
     filter 0.16s ease;
 }
 .async-action-label-slot {

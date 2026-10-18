@@ -3,7 +3,7 @@ import { pool } from "../../core/database/pools.ts";
 import {
   adminImageListItemsWithTags,
   adminImageListPresentationColumns,
-  adminImageListPresentationColumnsWithTags,
+  imageTagsPresentationColumn,
   type ImageRecordWithTags
 } from "../presenter.ts";
 
@@ -24,17 +24,17 @@ export async function readDuplicateSnapshotsByMd5(md5s: readonly string[]) {
   const rows = (
     await pool.query(
       `WITH ranked AS (
-       SELECT ${adminImageListPresentationColumnsWithTags}, l_md5,
+       SELECT ${adminImageListPresentationColumns}, ${imageTagsPresentationColumn}, l_md5,
               count(*) OVER (PARTITION BY l_md5) AS duplicate_match_count,
               row_number() OVER (
                 PARTITION BY l_md5
-                ORDER BY status ASC, created_at DESC
+                ORDER BY created_at DESC
               ) AS duplicate_rank
          FROM metadata
         WHERE l_md5 = ANY($1::text[])
           AND status = 'ready'
      )
-     SELECT ${adminImageListPresentationColumns}, l_md5, purge_pending, tags, duplicate_match_count
+     SELECT ${adminImageListPresentationColumns}, l_md5, false AS purge_pending, tags, duplicate_match_count
        FROM ranked
       WHERE duplicate_rank <= 20
       ORDER BY l_md5 ASC, duplicate_rank ASC`,

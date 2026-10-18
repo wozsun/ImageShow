@@ -77,7 +77,7 @@ PowerShell 中使用 `$env:IMAGESHOW_DATABASE_SCENARIO = "cold-redis"`、`$env:I
 | 后台任务 | `background-job-history` |
 | 图片写入与分类 | `image-update-consistency`、`image-update-locking`、`image-snapshot-cancellation`、`image-classification-consistency`、`vocabulary-order` |
 | 查询与缓存 | `image-read-consistency`、`tag-filter-consistency`、`device-index`、`derived-cache-budgets`、`random-size`、`public-request-access`、`public-image-browse`、`public-gallery-concurrency`、`ready-cache-read-model`、`ready-cache-recovery`、`redis-business-commands` |
-| 存储与回收站 | `local-io-lifecycle`、`storage-registry-lifecycle`、`storage-migration-recovery`、`storage-cleanup-recovery`、`storage-lock-admission`、`trash-purge-recovery` |
+| 存储与回收站 | `local-io-lifecycle`、`storage-registry-lifecycle`、`storage-registry-cache`、`storage-migration-recovery`、`storage-cleanup-recovery`、`storage-lock-admission`、`trash-purge-recovery` |
 | 存储维护 | `storage-variant-recovery`、`storage-maintenance-cancellation` |
 | 接入服务与队列 | `ingestion-service-contracts`、`ingestion-action-protocol`、`ingestion-upload-lifecycle`、`ingestion-import-queue`、`ingestion-queue-actions`、`ingestion-http-boundaries`、`redis-canonical` |
 | 正式提交 | `ingestion-commit-guards`、`commit-success`、`commit-conflict`、`commit-recovery` |

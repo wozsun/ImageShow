@@ -1,7 +1,4 @@
 @media (max-width: 760px) {
-  .gallery-page {
-    --gallery-toolbar-height: 61px;
-  }
   .gallery-toolbar {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 10px;

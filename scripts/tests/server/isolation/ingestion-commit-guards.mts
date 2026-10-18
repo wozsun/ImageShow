@@ -607,14 +607,13 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(commitWriteCalls, 0, "候选 guard 未落库前不得开始正式写入");
   const conflictingCommitActor = "current-conflicting-actor-" + randomUUID();
   await database.pool.query(
-    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,image_time,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,$6,$7,1200,800,GREATEST(1,$4),$3,1200,800,GREATEST(1,$4),$3,1200,800,GREATEST(1,$5),$3)`,
+    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,$6,1200,800,GREATEST(1,$4),$3,1200,800,GREATEST(1,$4),$3,1200,800,GREATEST(1,$5),$3)`,
     [
       commitImageId,
       conflictingCommitActor,
       realPrepared.variants.large.md5,
       commitImageBody.length,
       commitThumbnailBody.length,
-      commitImageTime.iso,
       "conflicting owner"
     ]
   );
@@ -819,13 +818,12 @@ await runIntegrationScenario(async (runtime) => {
   }
   const committedActorRow = (
     await database.pool.query(
-      "SELECT created_by, image_time, title, source, original FROM metadata WHERE id=$1",
+      "SELECT created_by, title, source, original FROM metadata WHERE id=$1",
       [commitImageId]
     )
   ).rows[0];
   assert.deepEqual(committedActorRow, {
     created_by: commitActor,
-    image_time: commitImageTime.date,
     title: "committed by frozen actor",
     source: "",
     original: ""

@@ -58,7 +58,7 @@ async function executeConsistencyCheck<T>(
   }
 }
 
-function parsedItem(raw: string | null, expectedMember: string) {
+export function parsedReadyImageCoreItem(raw: string | null, expectedMember: string) {
   const item = parseReadyImageCacheItem(raw);
   if (!item || readyImageMember(item.id) !== expectedMember) {
     throw new ReadyImageCoreCacheError("Ready-image cache returned a corrupt core item");
@@ -127,6 +127,6 @@ export async function readReadyImageOrderedWindow(
       () => dependencies.assertDerivedItems(members, raws)
     );
   }
-  const items = raws.map((raw, position) => parsedItem(raw, members[position]!));
+  const items = raws.map((raw, position) => parsedReadyImageCoreItem(raw, members[position]!));
   return (await indexIsValid()) ? { items, total } : null;
 }

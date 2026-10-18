@@ -1,10 +1,9 @@
 {
   "name": "@imageshow/web",
-  "version": "6.8.15",
+  "version": "6.8.16",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
     "icons:generate": "node ../../scripts/build/generate-web-icons.mjs",
     "icons:check": "node ../../scripts/build/generate-web-icons.mjs --check",
     "build": "tsc -p tsconfig.json && vite build",

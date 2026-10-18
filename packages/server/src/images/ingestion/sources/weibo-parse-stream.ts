@@ -30,7 +30,7 @@ export function streamWeiboImportParse(
   context: Context,
   session: AdminSession,
   urls: string[],
-  options: Readonly<{ sourceEnabled: boolean; timeZone?: string }>
+  options: Readonly<{ sourceEnabled: boolean }>
 ) {
   return streamAdminSse(
     context,

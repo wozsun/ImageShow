@@ -44,7 +44,7 @@ await runIntegrationScenario(async (runtime) => {
   ];
   for (const [index, id] of ids.entries()) {
     await pool.query(
-      `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,image_time,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','ready','local','pc','dark',NULL,uuid_extract_timestamp($1::uuid),$3,1600,900,GREATEST(1,1),$2,1600,900,GREATEST(1,1),$2,1600,900,GREATEST(1,1),$2)`,
+      `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','ready','local','pc','dark',NULL,$3,1600,900,GREATEST(1,1),$2,1600,900,GREATEST(1,1),$2,1600,900,GREATEST(1,1),$2)`,
       [
         id,
         createHash("md5").update(id).digest("hex"),
@@ -75,10 +75,7 @@ await runIntegrationScenario(async (runtime) => {
   ].sort();
   const expected = (order: "latest" | "oldest" | "random") => {
     if (order !== "random") {
-      const result = [...ids].sort(
-        (a, b) =>
-          Math.floor(ids.indexOf(a) / 2) - Math.floor(ids.indexOf(b) / 2) || a.localeCompare(b)
-      );
+      const result = [...ids].sort();
       return order === "latest" ? result.reverse() : result;
     }
     const cut = createHash("sha256").update("browse:2026-09-08").digest("hex").slice(0, 12);
@@ -322,6 +319,18 @@ await runIntegrationScenario(async (runtime) => {
         );
       }
       assert.equal(connections, 0, "所有两档页与尾段碰撞均在热 Redis 命中");
+      const nonRecentSample = await sampleReadyImages(
+        allPlan,
+        1,
+        new Set(ids.slice(0, -1)),
+        neverAbortedSignal
+      );
+      assert.ok(nonRecentSample.cached, "无 seed 的核心抽样须命中真实 Redis");
+      assert.deepEqual(
+        nonRecentSample.value.map((item) => item.id),
+        [ids.at(-1)],
+        "核心抽样排除近期图片后只返回剩余候选"
+      );
       for (const seed of seedCases) {
         for (const mode of ["json", "redirect", "proxy"]) {
           assert.deepEqual(
@@ -353,7 +362,7 @@ await runIntegrationScenario(async (runtime) => {
         await targeted("seed=wallpaper&device=all&limit=200", desktopAgent, "another-client"),
         targetedSeed
       );
-      assert.equal(connections, 0, "固定 seed 热路径与 PostgreSQL 冷路径选图相同且不查询数据库");
+      assert.equal(connections, 0, "普通抽样与固定 seed 热路径均不查询数据库");
     } finally {
       restoreConnections();
     }

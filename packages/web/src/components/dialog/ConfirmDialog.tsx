@@ -11,8 +11,6 @@ export function ConfirmDialog({
   busy = false,
   confirmDisabled = false,
   requireFinalConfirmation = false,
-  finalConfirmationLabel = "确认删除",
-  finalConfirmationIcon = "delete-bin-2-line",
   closeOnBackdrop = false,
   danger = true,
   confirmIcon = "delete-bin-line",
@@ -22,7 +20,6 @@ export function ConfirmDialog({
   errorLabel = "操作失败",
   errorMessage = "",
   pendingProgress,
-  backgroundLabel = "转入后台",
   onBackground,
   returnFocusRef,
   onClose,
@@ -34,8 +31,6 @@ export function ConfirmDialog({
   busy?: boolean;
   confirmDisabled?: boolean;
   requireFinalConfirmation?: boolean;
-  finalConfirmationLabel?: string;
-  finalConfirmationIcon?: AdminIconName;
   closeOnBackdrop?: boolean;
   danger?: boolean;
   confirmIcon?: AdminIconName;
@@ -49,7 +44,6 @@ export function ConfirmDialog({
    * divider under the title fills, so the dialog keeps its height.
    */
   pendingProgress?: { value: number; max: number; label: string };
-  backgroundLabel?: string;
   /**
    * Lets the user leave a pending action running in the background; the
    * caller settles onConfirm so the dialog closes normally.
@@ -74,8 +68,8 @@ export function ConfirmDialog({
   const progress = confirmStatus.pending ? pendingProgress : undefined;
   const confirmPresentation = {
     idle: {
-      icon: finalConfirmationActive ? finalConfirmationIcon : confirmIcon,
-      label: finalConfirmationActive ? finalConfirmationLabel : confirmLabel
+      icon: finalConfirmationActive ? "delete-bin-2-line" : confirmIcon,
+      label: finalConfirmationActive ? "确认删除" : confirmLabel
     },
     pending: { icon: pendingIcon, label: pendingLabel },
     success: { icon: "check-line", label: successLabel },
@@ -154,7 +148,7 @@ export function ConfirmDialog({
           <footer>
             {confirmStatus.pending && onBackground ? (
               <button type="button" onClick={onBackground}>
-                {backgroundLabel}
+                转入后台
               </button>
             ) : (
               <button

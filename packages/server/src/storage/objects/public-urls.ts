@@ -2,11 +2,7 @@ import { imageVariantUrl, type ImageVariant } from "@imageshow/shared/browser";
 import { imageResourceBaseUrl } from "../../config/site-host.ts";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { assertLocalPublicUrlDomain, type StorageConfig } from "../backends/config.ts";
-import {
-  getStorageBackend,
-  publishedStorageBackends,
-  type StorageRegistryAccess
-} from "../backends/registry.ts";
+import { publishedStorageBackends } from "../backends/registry.ts";
 import { storageS3ObjectName, type ReadablePrefix } from "./keys.ts";
 
 function encodeKeyPath(key: string) {
@@ -56,8 +52,4 @@ export function publishedPublicImageOrigins() {
 
 export function publicImageUrlForConfig(image: { id: string }, config: StorageConfig, variant: ImageVariant) {
   return imageVariantUrl({ id: image.id, base_url: publicImageBaseUrl(config) }, variant);
-}
-
-export async function publicImageUrl(image: { id: string }, slug: string, variant: ImageVariant, access: StorageRegistryAccess) {
-  return publicImageUrlForConfig(image, await getStorageBackend(slug, access), variant);
 }

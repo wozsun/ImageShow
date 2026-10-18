@@ -94,6 +94,10 @@ const mutationConflicts: Readonly<Record<number, readonly [410 | 409, string, st
   [-6]: [409, "ingestion_session_not_expired", "内容接入任务的有效期已经刷新"]
 };
 
+export function isIngestionVersionConflict(error: unknown) {
+  return error instanceof ApiError && error.code === "ingestion_version_conflict";
+}
+
 export function parseCanonicalReply(
   raw: unknown,
   operation: "create" | "mutate"

@@ -83,7 +83,6 @@ export function PublicImageNavigation({
         <>
           <div
             className="public-mobile-controls is-leading public-floating-controls"
-            data-show-control=""
             data-public-navigation-visible={controls.headerVisible || controls.toolbarVisible}
             role="group"
             aria-label={mode === "cluster" ? "星群缩放" : "图片大小"}
@@ -93,7 +92,6 @@ export function PublicImageNavigation({
           </div>
           <div
             className="public-mobile-controls is-trailing public-floating-controls"
-            data-show-control=""
             data-public-navigation-visible={controls.headerVisible || controls.toolbarVisible}
             role="group"
             aria-label="展映播放、顺序与模式"

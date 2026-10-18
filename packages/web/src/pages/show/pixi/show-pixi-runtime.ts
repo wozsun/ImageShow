@@ -48,7 +48,6 @@ type ShowPixiRuntimeOptions = {
   waterfallColumns: number;
   floatSizeIndex: number;
   running: boolean;
-  reducedMotion: boolean;
   speed: number;
   statsElement: HTMLOutputElement | null;
   onClusterFocusChange: (focus: ShowClusterFocus | null, entry?: ShowClusterEntry) => void;
@@ -242,7 +241,8 @@ export class ShowPixiRuntime {
     this.#waterfallColumns = options.waterfallColumns;
     this.#floatSizeIndex = options.floatSizeIndex;
     this.#running = options.running;
-    this.#reducedMotion = options.reducedMotion;
+    this.#motionQuery = window.matchMedia(reducedMotionQuery);
+    this.#reducedMotion = this.#motionQuery.matches;
     this.#speed = options.speed;
     this.#statsElement = options.statsElement;
     const initialWidth = host.clientWidth || window.innerWidth;
@@ -311,7 +311,6 @@ export class ShowPixiRuntime {
     app.ticker.add(this.#tick);
     this.#resizeObserver = new ResizeObserver(() => this.#resize());
     this.#resizeObserver.observe(host);
-    this.#motionQuery = window.matchMedia(reducedMotionQuery);
     const onMotionChange = () => {
       this.#reducedMotion = this.#motionQuery.matches;
       this.#applyMotionState();

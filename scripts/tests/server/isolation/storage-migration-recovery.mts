@@ -57,7 +57,7 @@ await runIntegrationScenario(async (runtime) => {
     const key = storageObjectKey(id);
 
     await database.pool.query(
-      `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,status,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin',$2,'pc','dark',NULL,'deleted',now(),1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3)`,
+      `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin',$2,'pc','dark',NULL,'deleted',now(),1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3)`,
       [
         id,
         storageSlug,
@@ -151,7 +151,7 @@ await runIntegrationScenario(async (runtime) => {
   const thumbnailMissingMigrationKey = storageObjectKey(thumbnailMissingMigrationId);
   const thumbnailMissingMigrationBody = Buffer.from("migration-without-thumbnail");
   await database.pool.query(
-    `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','local','pc','dark',NULL,1,1,GREATEST(1,$3),$2,1,1,GREATEST(1,$3),$2,1,1,GREATEST(1,0),$2)`,
+    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','local','pc','dark',NULL,1,1,GREATEST(1,$3),$2,1,1,GREATEST(1,$3),$2,1,1,GREATEST(1,0),$2)`,
     [
       thumbnailMissingMigrationId,
       createHash("md5").update(thumbnailMissingMigrationBody).digest("hex"),
@@ -334,7 +334,7 @@ await runIntegrationScenario(async (runtime) => {
     for (const [index, id] of existingTargetIds.entries()) {
       const expectedBody = "existing-target-" + index;
       await database.pool.query(
-        `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,status,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin',$2,'pc','dark',NULL,'deleted',now(),1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3)`,
+        `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin',$2,'pc','dark',NULL,'deleted',now(),1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3)`,
         [
           id,
           existingTargetSource,
@@ -472,7 +472,7 @@ await runIntegrationScenario(async (runtime) => {
 
     const body = Buffer.from("migration-abort-" + storageSlug + "-" + id);
     await database.pool.query(
-      `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,status,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin',$2,'pc','dark',NULL,'deleted',now(),1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3)`,
+      `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin',$2,'pc','dark',NULL,'deleted',now(),1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3)`,
       [
         id,
         storageSlug,

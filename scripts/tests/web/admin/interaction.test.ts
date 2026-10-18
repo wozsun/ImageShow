@@ -1115,7 +1115,6 @@ test("[Web/后台] 共享 FacetSelector 在原按钮位置内联搜索并保持 
           value,
           noun: "主题",
           ariaLabel: "主题",
-          menuClassName: "public-gallery-menu",
           onChange: (next: string) => {
             observedValues.push(next);
             setValue(next);

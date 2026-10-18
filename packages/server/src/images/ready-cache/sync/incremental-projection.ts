@@ -133,8 +133,6 @@ async function queueAddition(
         );
       }
     );
-  }
-  if (!previous) {
     await writer.queue(
       estimatedRedisBytes(READY_IMAGE_ALL_INDEX_KEY, readyImageTimeScore(item), member),
       (pipeline) => {

@@ -2,15 +2,14 @@ import assert from "node:assert/strict";
 import { setImmediate as nextTurn, setTimeout as delay } from "node:timers/promises";
 
 /**
- * Re-reads every 20 ms until `settled` accepts the value or `timeoutMs`
- * elapses, then returns the last value for the caller to assert.
+ * Re-reads every 20 ms until `settled` accepts the value or five seconds
+ * elapse, then returns the last value for the caller to assert.
  */
 export async function pollUntil<Value>(
   read: () => Promise<Value>,
-  settled: (value: Value) => boolean,
-  timeoutMs = 5_000
+  settled: (value: Value) => boolean
 ) {
-  const deadline = Date.now() + timeoutMs;
+  const deadline = Date.now() + 5_000;
   let value = await read();
   while (!settled(value) && Date.now() < deadline) {
     await delay(20);

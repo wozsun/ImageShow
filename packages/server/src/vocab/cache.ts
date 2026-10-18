@@ -411,10 +411,7 @@ export async function invalidateEntityCountCaches(kinds: Iterable<EntityCacheKin
   }
 }
 
-/**
- * Collects entity-list invalidations across a multi-image mutation.
- * Single-image callers omit the batch and keep immediate invalidation behavior.
- */
+/** Collects entity-list invalidations across a multi-image mutation. */
 export function createEntityCountCacheInvalidationBatch(): EntityCountCacheInvalidationBatch {
   const pending = new Set<EntityCacheKind>();
   return {
@@ -431,17 +428,6 @@ export function createEntityCountCacheInvalidationBatch(): EntityCountCacheInval
       return pending.size > 0;
     }
   };
-}
-
-export async function invalidateOrCollectEntityCountCaches(
-  kinds: Iterable<EntityCacheKind>,
-  batch?: EntityCountCacheInvalidationBatch
-) {
-  if (batch) {
-    batch.add(kinds);
-    return;
-  }
-  await invalidateEntityCountCaches(kinds);
 }
 
 export type { EntityCountCacheInvalidationBatch };

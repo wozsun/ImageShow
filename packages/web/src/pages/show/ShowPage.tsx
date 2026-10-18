@@ -417,8 +417,6 @@ export function ShowPage({
   return (
     <main
       className={`page gallery-page show-page show-pixi-page${embedded ? " is-embedded" : ""}`}
-      data-show-renderer="pixi"
-      data-show-navigation-visible={headerVisible || toolbarVisible}
       data-public-navigation-visible={headerVisible || toolbarVisible}
       style={
         {
@@ -546,7 +544,6 @@ export function ShowPage({
         onNeedImages={data.loadMore}
         onOpen={openImageDetail}
         order={data.committedOrder}
-        reducedMotion={reducedMotion}
         running={playbackRunning}
         scene={scene}
         speed={settings.drift_speed}

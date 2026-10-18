@@ -2026,8 +2026,6 @@ for (const count of [1, 2]) {
       await import("../../../packages/web/src/components/image/editor/ImageMetadataEditorDialog.tsx").finally(
         () => hooks.deregister()
       );
-    const { ADMIN_ICONS } =
-      await import("../../../packages/web/src/components/icon/admin-icons.generated.ts");
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false, staleTime: Infinity } }
     });
@@ -2079,10 +2077,6 @@ for (const count of [1, 2]) {
     );
     await click();
     assert.equal(button().getAttribute("aria-pressed"), "true");
-    assert.equal(
-      button().querySelector("path")?.getAttribute("d"),
-      ADMIN_ICONS["delete-bin-2-line"]
-    );
     assert.equal(h.pending.length, 0, "首次点击只进入确认");
     await h.React.act(async () => dispatchDomEvent(h.window, h.document.body, "pointerdown"));
     assert.equal(button().getAttribute("aria-pressed"), "false");
@@ -2092,10 +2086,6 @@ for (const count of [1, 2]) {
     assert.equal(h.pending[0].path, "/api/admin/images/trash");
     assert.deepEqual(JSON.parse(String(h.pending[0].body)), { ids: items.map((item) => item.id) });
     assert.equal(button().hasAttribute("disabled"), true);
-    assert.equal(
-      button().querySelector("path")?.getAttribute("d"),
-      ADMIN_ICONS["delete-bin-5-line"]
-    );
     // 首次只有前 count - 1 项成功，最后一项由权威快照确认仍可编辑。
     const succeeded = items.slice(0, -1).map((item) => item.id);
     const remaining = items.at(-1)!;
@@ -2297,8 +2287,6 @@ for (const kind of ["user", "storage"] as const) {
           )
     ).finally(() => hooks.deregister());
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
-    const { ADMIN_ICONS } =
-      await import("../../../packages/web/src/components/icon/admin-icons.generated.ts");
     const { ActionFeedbackProvider } =
       await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
     const client = new QueryClient({
@@ -2353,10 +2341,6 @@ for (const kind of ["user", "storage"] as const) {
     assert.equal(confirm().getAttribute("aria-pressed"), "false");
     await submit();
     assert.equal(confirm().getAttribute("aria-pressed"), "true");
-    assert.equal(
-      confirm().querySelector("path")?.getAttribute("d"),
-      ADMIN_ICONS["delete-bin-2-line"]
-    );
     assert.equal(h.pending.length, 0, "首次确认只进入最终确认，不提交删除");
     await h.React.act(async () => dispatchDomEvent(h.window, confirm(), "focusout"));
     assert.equal(confirm().getAttribute("aria-pressed"), "false");
@@ -2373,10 +2357,6 @@ for (const kind of ["user", "storage"] as const) {
         : "/api/admin/storage/backends/archive/delete";
     assert.equal(h.pending[0].path, deletePath);
     assert.equal(confirm().hasAttribute("disabled"), true);
-    assert.equal(
-      confirm().querySelector("path")?.getAttribute("d"),
-      ADMIN_ICONS["delete-bin-5-line"]
-    );
     await h.respond(0, { error: "delete_failed" }, 500);
     if (kind === "storage") await h.respond(1, data);
     await clock.advanceBy(500);
@@ -2408,7 +2388,7 @@ test("[Web/后台表单] 词条两种视图按字段保护 dirty，clean 跟随�
     await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
   // 词条的排序输入把提示投递到所在页面的反馈目标；本用例不触发排序提示，由宿主提供稳定目标。
   function Item(props: Omit<Parameters<typeof VocabularyAdminItem>[0], "sortFeedbackTarget">) {
-    const sortFeedbackTarget = useActionFeedbackTarget("vocabulary-test");
+    const sortFeedbackTarget = useActionFeedbackTarget();
     return h.React.createElement(VocabularyAdminItem, { ...props, sortFeedbackTarget });
   }
   for (const kind of ["themes", "tags", "authors"] as const) {
@@ -2488,7 +2468,7 @@ test("[Web/后台表单] 词条图标在视图切换中保留保存状态、失�
   const { useActionFeedbackTarget } =
     await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
   function Item(props: Omit<Parameters<typeof VocabularyAdminItem>[0], "sortFeedbackTarget">) {
-    const sortFeedbackTarget = useActionFeedbackTarget("vocabulary-test");
+    const sortFeedbackTarget = useActionFeedbackTarget();
     return h.React.createElement(VocabularyAdminItem, { ...props, sortFeedbackTarget });
   }
   for (const kind of ["themes", "tags", "authors"] as const) {

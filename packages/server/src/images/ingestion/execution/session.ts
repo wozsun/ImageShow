@@ -1,12 +1,9 @@
 import { ApiError } from "../../../core/api-error.ts";
 import type { IngestionSessionSnapshot, PendingIngestionSession } from "../sessions/model.ts";
+import { isIngestionVersionConflict } from "../sessions/replies.ts";
 import { IngestionSessionRepository } from "../repository.ts";
 
 const executionMutationAttempts = 8;
-
-function isIngestionVersionConflict(error: unknown) {
-  return error instanceof ApiError && error.code === "ingestion_version_conflict";
-}
 
 function canAdoptIngestionExecutionVersion(
   current: IngestionSessionSnapshot,

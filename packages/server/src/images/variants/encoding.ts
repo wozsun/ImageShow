@@ -9,10 +9,21 @@ import {
   imageVariants,
   type ImageVariant,
   type NormalizeProfile,
-  type PreparedVariantFacts,
   type VariantSettings
 } from "@imageshow/shared/browser";
 import { digestLocalFile, syncFile } from "../../storage/drivers/local-publication.ts";
+
+export type PreparedVariantFacts = {
+  bytes: number;
+  width: number;
+  height: number;
+  md5: string;
+  sha256: string;
+  quality: number | null;
+  effort: number | null;
+  passthrough: boolean;
+  over_target: boolean;
+};
 
 const pixelLimit = 268402689;
 const webpEffort = 4;

@@ -8,7 +8,7 @@ import {
   touchReadyImageStatsResultScript
 } from "./scripts.ts";
 
-export const readyImageRedisScripts = Object.freeze({
+const readyImageRedisScripts = Object.freeze({
   imageshowTouchReadyImageIndexedResult: {
     lua: touchReadyImageIndexedResultScript,
     numberOfKeys: 6,
@@ -47,8 +47,7 @@ export type ReadyImageRedisClient = Readonly<
   Record<ReadyImageRedisCommandName, ReadyImageRedisCommand>
 >;
 
-export type ReadyImageRedisRegistrar = Pick<Redis, "defineCommand"> &
-  Partial<Pick<Redis, "options">>;
+type ReadyImageRedisRegistrar = Pick<Redis, "defineCommand">;
 
 export type ReadyImageRedisCommandSource<Name extends ReadyImageRedisCommandName> =
   Readonly<Record<Name, ReadyImageRedisCommand>> | ReadyImageRedisRegistrar;
@@ -57,36 +56,9 @@ function readyImageRedisCandidate(client: object) {
   return client as Record<string, unknown>;
 }
 
-function hasReadyImageRedisCommands(
-  client: ReadyImageRedisClient | ReadyImageRedisRegistrar
-): client is ReadyImageRedisClient {
-  const candidate = readyImageRedisCandidate(client);
-  return Object.keys(readyImageRedisScripts).every((name) => typeof candidate[name] === "function");
-}
-
-function isReadyImageRedisRegistrar(
-  client: ReadyImageRedisClient | ReadyImageRedisRegistrar
-): client is ReadyImageRedisRegistrar {
-  return typeof readyImageRedisCandidate(client).defineCommand === "function";
-}
-
-function persistReadyImageRedisScripts(client: ReadyImageRedisRegistrar) {
-  if (!client.options) return;
-  client.options.scripts = {
-    ...client.options.scripts,
-    ...readyImageRedisScripts
-  };
-}
-
 export function registerReadyImageRedisCommands(
-  client: ReadyImageRedisClient | ReadyImageRedisRegistrar
+  client: ReadyImageRedisRegistrar
 ): ReadyImageRedisClient {
-  if (!isReadyImageRedisRegistrar(client)) {
-    if (hasReadyImageRedisCommands(client)) return client;
-    throw new Error("Ready-image Redis client cannot register commands");
-  }
-
-  persistReadyImageRedisScripts(client);
   const candidate = readyImageRedisCandidate(client);
   for (const [name, definition] of Object.entries(readyImageRedisScripts)) {
     if (typeof candidate[name] !== "function") {

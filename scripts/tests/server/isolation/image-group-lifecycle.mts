@@ -16,9 +16,9 @@ await runIntegrationScenario(async (runtime) => {
   const [first, second, missing] = [randomUUIDv7(), randomUUIDv7(), randomUUIDv7()];
   for (const id of [first, second]) {
     await pool.query(
-      `INSERT INTO metadata(id,image_time,created_by,storage_slug,device,brightness,
+      `INSERT INTO metadata(id,created_by,storage_slug,device,brightness,
          l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5)
-       VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','local','pc','dark',1,1,1,$2,1,1,1,$2,1,1,1,$2)`,
+       VALUES ($1,'integration-admin','local','pc','dark',1,1,1,$2,1,1,1,$2,1,1,1,$2)`,
       [id, "a".repeat(32)]
     );
   }
@@ -227,12 +227,12 @@ await runIntegrationScenario(async (runtime) => {
   await pool.query("INSERT INTO theme(slug) VALUES('group-theme')");
   await pool.query("INSERT INTO author(slug) VALUES('group-author')");
   await pool.query("INSERT INTO tag(slug) VALUES('group-tag')");
-  for (const [i, row] of rows.entries()) {
+  for (const row of rows) {
     await pool.query(
-      `INSERT INTO metadata(id,created_by,storage_slug,device,brightness,image_time,theme,author,
+      `INSERT INTO metadata(id,created_by,storage_slug,device,brightness,theme,author,
         l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5)
-       VALUES($1,'integration-admin','local',$2,$3,$4,'group-theme','group-author',1,1,1,$5,1,1,1,$5,1,1,1,$5)`,
-      [row.id, row.device, row.brightness, new Date(1700000000000 + i), "a".repeat(32)]
+       VALUES($1,'integration-admin','local',$2,$3,'group-theme','group-author',1,1,1,$4,1,1,1,$4,1,1,1,$4)`,
+      [row.id, row.device, row.brightness, "a".repeat(32)]
     );
     await pool.query("INSERT INTO image_tag VALUES($1,'group-tag')", [row.id]);
   }

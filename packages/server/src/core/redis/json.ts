@@ -1,37 +1,19 @@
 import { appConfig } from "@imageshow/shared";
 import { redis } from "./client.ts";
 import {
-  getRedisOperationalState,
+  redisIsUnavailable,
   requireOperationalRedis,
   runRequiredRedisCommand
 } from "../runtime-availability.ts";
 
-type RedisJsonLookup<T> =
-  { status: "hit"; value: T } | { status: "miss" } | { status: "unavailable" };
-
-function publicRedisIsUnavailable() {
-  return !getRedisOperationalState().available;
-}
-
-async function getRedisJsonLookup<T>(key: string): Promise<RedisJsonLookup<T>> {
-  if (publicRedisIsUnavailable()) return { status: "unavailable" };
-  let raw: string | null;
-  try {
-    raw = await redis.get(key);
-  } catch {
-    return { status: "unavailable" };
-  }
-  if (!raw) return { status: "miss" };
-  try {
-    return { status: "hit", value: JSON.parse(raw) as T };
-  } catch {
-    return { status: "miss" };
-  }
-}
-
 export async function getRedisJson<T>(key: string): Promise<T | null> {
-  const result = await getRedisJsonLookup<T>(key);
-  return result.status === "hit" ? result.value : null;
+  if (redisIsUnavailable()) return null;
+  try {
+    const raw = await redis.get(key);
+    return raw ? JSON.parse(raw) as T : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Redis JSON read for request paths where Redis is a hard dependency. */
@@ -51,7 +33,7 @@ export async function setRedisJson(
   value: unknown,
   ttlSeconds = appConfig.derivedCacheTtlSeconds
 ) {
-  if (publicRedisIsUnavailable()) return false;
+  if (redisIsUnavailable()) return false;
   try {
     await redis.set(key, JSON.stringify(value), "EX", ttlSeconds);
     return true;
@@ -74,7 +56,7 @@ export async function setRequiredRedisJson(
 
 export async function deleteRedisKeys(...keys: string[]) {
   if (!keys.length) return false;
-  if (publicRedisIsUnavailable()) return false;
+  if (redisIsUnavailable()) return false;
   try {
     await redis.unlink(...keys);
     return true;

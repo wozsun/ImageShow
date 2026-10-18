@@ -5,7 +5,6 @@ import { brightnesses, devices } from "./browser/image-classification.ts";
 import { imageDescriptionMaxLength, imageTitleMaxLength, type RandomFallbackDimension } from "./browser/images.ts";
 import { ingestionBatchHardLimit, ingestionQueueSnapshotMaxItems, type ImportSourceTypeDto } from "./browser/ingestion.ts";
 import { randomQueryLimits } from "./browser/random-limits.ts";
-import { slugMaxLength } from "./browser/vocabulary.ts";
 
 const shutdownHardExitMs = 8_000;
 const shutdownCleanupReserveMs = 2_000;
@@ -15,7 +14,6 @@ export const appConfig = {
   applicationPort: 5518,
   devices,
   brightnesses,
-  themeMaxLength: slugMaxLength,
   imageMetadata: {
     titleMaxLength: imageTitleMaxLength,
     descriptionMaxLength: imageDescriptionMaxLength
@@ -70,9 +68,6 @@ export const appConfig = {
   derivedCacheTtlSeconds: 60 * 60,
   storageRegistry: {
     ttlSeconds: 24 * 60 * 60
-  },
-  imageLookup: {
-    ttlSeconds: 6 * 60 * 60
   },
   pgPool: {
     max: 30,

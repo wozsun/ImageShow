@@ -76,9 +76,5 @@ export function parseImageTime(value?: string | null, options: ParseImageTimeOpt
 
 export function createImageId(imageTime: Date, batchPosition?: number) {
   assertAllowedImageTime(imageTime);
-  if (batchPosition === undefined) return randomUuidV7At(imageTime);
-  if (!Number.isInteger(batchPosition) || batchPosition < 0 || batchPosition > 0xfff) {
-    throw new RangeError("batch_position must fit in 12 bits");
-  }
   return randomUuidV7At(imageTime, batchPosition);
 }

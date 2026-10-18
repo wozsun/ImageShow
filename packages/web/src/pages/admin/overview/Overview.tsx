@@ -78,7 +78,7 @@ function OverviewMetricCards({ items }: { items: OverviewMetric[] }) {
 }
 
 export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
-  const feedbackTarget = useActionFeedbackTarget("overview");
+  const feedbackTarget = useActionFeedbackTarget();
   const [detailLoadError, setDetailLoadError] = useState<ActionFeedbackState | null>(null);
   const detailCapability = useAdminImageDetailCapability<AdminOverviewDto["recent"][number]>(
     (error) => {

@@ -1,7 +1,7 @@
 import type { CompletedIngestionImageDto } from "@imageshow/shared/browser";
 import { ApiError } from "../../core/api-error.ts";
 import { databaseConnectionFailureReason } from "../../core/database/connection-error.ts";
-import { pool, type DatabaseReader } from "../../core/database/pools.ts";
+import { pool } from "../../core/database/pools.ts";
 import { logger } from "../../core/logger.ts";
 import {
   ingestionImageItemsWithTags,
@@ -24,17 +24,14 @@ export function committedIngestionResultForOwner(
   return result?.created_by === owner ? result : undefined;
 }
 
-export async function readCommittedIngestionResultsByImageIds(
-  imageIds: readonly string[],
-  reader: DatabaseReader = pool
-) {
+export async function readCommittedIngestionResultsByImageIds(imageIds: readonly string[]) {
   const uniqueIds = [...new Set(imageIds.map((imageId) => imageId.toLowerCase()))];
   if (!uniqueIds.length) return new Map<string, CommittedIngestionResult>();
   let rows: Array<IngestionImageRecordWithTags & { created_by: string }>;
   let items: CompletedIngestionImageDto[];
   try {
     rows = (
-      await reader.query<IngestionImageRecordWithTags & { created_by: string }>(
+      await pool.query<IngestionImageRecordWithTags & { created_by: string }>(
         `SELECT ${ingestionImagePresentationColumnsWithTags}, created_by
          FROM metadata
         WHERE id = ANY($1::uuid[])`,

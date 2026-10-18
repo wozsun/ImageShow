@@ -1,5 +1,5 @@
 import { appConfig } from "@imageshow/shared";
-import { getRedisOperationalState } from "../../../core/runtime-availability.ts";
+import { redisIsUnavailable } from "../../../core/runtime-availability.ts";
 import { logger } from "../../../core/logger.ts";
 import { cleanupIngestionTempOrphans } from "../raw/orphan-scanner.ts";
 import { ingestionOrphanCutoffs } from "./retention.ts";
@@ -7,7 +7,7 @@ import { activeIngestionStorageReferences } from "./storage-references.ts";
 
 export async function cleanupIngestionOrphans(now: number, signal: AbortSignal) {
   signal.throwIfAborted();
-  if (!getRedisOperationalState().available) {
+  if (redisIsUnavailable()) {
     return { skipped: true, temp_removed: 0, incomplete_temp_scans: 0 };
   }
   const timeoutMs = appConfig.ingestionRuntime.orphanCleanupCycleTimeoutSeconds * 1000;

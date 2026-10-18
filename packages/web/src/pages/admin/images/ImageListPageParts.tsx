@@ -1,4 +1,4 @@
-import { useEffect, type RefObject } from "react";
+import { useLayoutEffect, type RefObject } from "react";
 import { QueryErrorState } from "../../../components/feedback/QueryErrorState.js";
 import { workspaceScrollContainer } from "../../../lib/ui/workspace-scroll.js";
 import type { useImageAdminSelection } from "./useImageAdminSelection.js";
@@ -100,14 +100,14 @@ export function ImageGridStatus({
   );
 }
 
-/** 每个数字页与筛选范围都清空选择并从顶部开始，避免首屏卡片只露出残片。 */
+/** 每个数字页与筛选范围都在绘制前清空选择并回到顶部，避免首屏卡片只露出残片；入口不再各自重置。 */
 export function useImageListPageReset(
   clearSelection: () => void,
   gridRef: RefObject<HTMLElement | null>,
   scopeKey: string,
   pageNumber: number
 ) {
-  useEffect(() => {
+  useLayoutEffect(() => {
     clearSelection();
     workspaceScrollContainer(gridRef.current)?.scrollTo({ top: 0, left: 0 });
   }, [clearSelection, gridRef, pageNumber, scopeKey]);

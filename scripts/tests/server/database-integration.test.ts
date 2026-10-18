@@ -1241,12 +1241,48 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
           /required unique indexes.*author\(identity_provider,\s*identity_id\)/i
         );
 
+        const requiredExtraColumn = databaseName("requiredextracolumn");
+        await createCurrentDatabase(requiredExtraColumn);
+        await withClient(requiredExtraColumn, async (client) => {
+          await client.query(`ALTER TABLE tag ADD COLUMN deployment_required text NOT NULL`);
+          await assert.rejects(
+            client.query(`INSERT INTO tag(slug) VALUES('blocked-extra-column')`),
+            { code: "23502", column: "deployment_required" }
+          );
+        });
+        const requiredExtraColumnBefore = await Promise.all([
+          schemaDump(requiredExtraColumn),
+          dataDump(requiredExtraColumn)
+        ]);
+        const requiredExtraColumnResult = await initialize(requiredExtraColumn, true);
+        assert.notEqual(requiredExtraColumnResult.code, 0);
+        assert.match(
+          processResultText(requiredExtraColumnResult),
+          /extra columns require values.*tag\.deployment_required/i
+        );
+        assert.deepEqual(
+          await Promise.all([
+            schemaDump(requiredExtraColumn),
+            dataDump(requiredExtraColumn)
+          ]),
+          requiredExtraColumnBefore,
+          "阻止写入的额外必填列须在启动时拒绝，且不得改写部署方结构或数据"
+        );
+
         const compatibleSuperset = databaseName("superset");
         const supersetRole = `imageshow_superset_${randomUUID().replaceAll("-", "")}`;
         const supersetPassword = randomUUID();
         await createCurrentDatabase(compatibleSuperset);
         await withClient(compatibleSuperset, async (client) => {
           await client.query(`
+        CREATE DOMAIN deployment_note AS text DEFAULT 'domain default';
+        ALTER TABLE tag
+          ADD COLUMN deployment_nullable text,
+          ADD COLUMN deployment_default text NOT NULL DEFAULT 'column default',
+          ADD COLUMN deployment_identity bigint GENERATED ALWAYS AS IDENTITY,
+          ADD COLUMN deployment_generated text GENERATED ALWAYS AS (slug) STORED NOT NULL,
+          ADD COLUMN deployment_domain deployment_note NOT NULL;
+        INSERT INTO tag(slug) VALUES('compatible-extra-columns');
         CREATE ROLE "${supersetRole}" LOGIN PASSWORD '${supersetPassword}';
         GRANT CONNECT ON DATABASE "${compatibleSuperset}" TO "${supersetRole}";
         GRANT USAGE ON SCHEMA public TO "${supersetRole}";
@@ -1392,7 +1428,7 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
         const incompatibleTypeModifier = databaseName("typemod");
         await createCurrentDatabase(incompatibleTypeModifier);
         await withClient(incompatibleTypeModifier, async (client) => {
-          await client.query("ALTER TABLE metadata ALTER COLUMN image_time TYPE timestamptz(0)");
+          await client.query("ALTER TABLE metadata ALTER COLUMN deleted_at TYPE timestamptz(0)");
         });
         const incompatibleModifierResult = await initialize(
           incompatibleTypeModifier,
@@ -1401,7 +1437,7 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
         assert.notEqual(incompatibleModifierResult.code, 0);
         assert.match(
           processResultText(incompatibleModifierResult),
-          /required columns.*metadata\.image_time/i
+          /required columns.*metadata\.deleted_at/i
         );
 
         const readOnlyDatabase = databaseName("readonly");

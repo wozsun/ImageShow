@@ -45,7 +45,7 @@ await runIntegrationScenario(async (runtime) => {
     imageUpdateIds.fourth
   ].entries()) {
     await database.pool.query(
-      `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','local','pc','dark',NULL,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)`,
+      `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','local','pc','dark',NULL,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)`,
       [
         id,
         String(index + 1).repeat(32)
@@ -595,7 +595,7 @@ await runIntegrationScenario(async (runtime) => {
   const readThemeImage = async () =>
     (
       await database.pool.query(
-        "SELECT theme, l_md5, m_md5, s_md5, image_time, author FROM metadata WHERE id=$1",
+        "SELECT theme, l_md5, m_md5, s_md5, author FROM metadata WHERE id=$1",
         [imageUpdateIds.first]
       )
     ).rows[0];

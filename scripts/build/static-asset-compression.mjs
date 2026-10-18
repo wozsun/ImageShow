@@ -19,10 +19,7 @@ export const staticAssetCompression = Object.freeze({
 });
 
 export function staticAssetIsCompressible(fileName) {
-  return (
-    staticAssetCompression.precompressPattern.test(fileName)
-      && !/\.(?:br|zst|gz)$/.test(fileName)
-  );
+  return staticAssetCompression.precompressPattern.test(fileName);
 }
 
 function compressionResult(rawBytes, { brotli = null, zstd = null, gzip = null } = {}) {

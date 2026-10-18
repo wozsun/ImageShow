@@ -84,7 +84,7 @@ function SettingsPageContent({ snapshot }: { snapshot: RuntimeConfigResponseDto 
   const [fieldErrors, setFieldErrors] = useState<ReadonlyMap<SettingsFieldPath, string>>(
     () => new Map()
   );
-  const feedbackTarget = useActionFeedbackTarget("settings");
+  const feedbackTarget = useActionFeedbackTarget();
   const [confirmation, setConfirmation] = useState<SettingsAction | null>(null);
   const actionRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);

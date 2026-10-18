@@ -226,7 +226,7 @@ docker run -d --name imageshow --restart unless-stopped \
 - Redis 请给 ImageShow 单独使用一个逻辑库（`REDIS_DB`），不要与其他程序共用。
 - 外部 Redis 需要密码时使用 `REDIS_PASSWORD`。
 - 数据库账号需要对应用使用的表有 `SELECT`、`INSERT`、`UPDATE`、`DELETE` 权限，初始化空数据库时还需要建表权限。外部 PostgreSQL 需要支持 `client_connection_check_interval`。
-- 空数据库会在一个事务中自动初始化。已有数据的数据库只做只读检查，结构调整按 Release 说明处理。额外的表、列和索引会被忽略。
+- 空数据库会在一个事务中自动初始化。已有数据的数据库只做只读检查，结构调整按 Release 说明处理。额外的表和索引不影响启动；应用会写入的表中，额外列必须允许省略值（允许空值、有默认值或由数据库自动生成），否则启动失败并在日志中报告列名。遇到 `extra columns require values` 时，先备份，在备份副本上调整日志中列出的列并确认新版本能启动，再对正式数据库做同样调整并启动新版本。
 
 ### 独立图片与静态资源域名
 

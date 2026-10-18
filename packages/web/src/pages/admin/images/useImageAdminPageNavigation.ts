@@ -1,6 +1,5 @@
 import {
   useCallback,
-  useEffect,
   useState
 } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -12,7 +11,6 @@ import {
   effectiveImageAdminPage,
   imageAdminPaginationScopeKey,
   imageAdminTotalPages,
-  resetImageAdminPage,
   resolveImageAdminScopeTotal,
   type ImageAdminGroupScope,
   type ImageAdminPageState
@@ -61,7 +59,7 @@ export function useImageAdminPageNavigation({
   const retainedTotalUpdatedAt = state.scopeKey === scopeKey
     ? state.totalUpdatedAt
     : 0;
-  const { currentQueryHasObservedSuccessfulData, queryTotal, total } = resolveImageAdminScopeTotal({
+  const { queryTotal, total } = resolveImageAdminScopeTotal({
     retainedTotal,
     retainedUpdatedAt: retainedTotalUpdatedAt,
     queryData: query.data,
@@ -71,51 +69,28 @@ export function useImageAdminPageNavigation({
   });
   const totalPages = imageAdminTotalPages(total, pageSize);
 
-  useEffect(() => {
-    setState((current) =>
-      current.scopeKey === scopeKey
-        ? current
-        : {
-            scopeKey,
-            page: 1,
-            total: null,
-            totalUpdatedAt: 0
-          }
-    );
-  }, [scopeKey]);
-
-  useEffect(() => {
-    if (queryTotal === null) return;
-    const successfulTotalPages = imageAdminTotalPages(queryTotal, pageSize);
-    setState((current) => {
-      if (
-        current.scopeKey !== scopeKey ||
-        (current.total !== null &&
-          query.dataUpdatedAt <= current.totalUpdatedAt &&
-          !currentQueryHasObservedSuccessfulData)
-      )
-        return current;
-      const nextPage = Math.min(current.page, successfulTotalPages);
-      if (
-        current.page === nextPage &&
-        current.total === queryTotal &&
-        current.totalUpdatedAt === query.dataUpdatedAt
-      )
-        return current;
-      return {
+  // Adjust the owner before committing this render, so an out-of-range response
+  // cannot briefly render an empty gallery before the valid page is requested.
+  if (state.scopeKey !== scopeKey) {
+    setState({
+      scopeKey,
+      page: 1,
+      total: queryTotal,
+      totalUpdatedAt: queryTotal === null ? 0 : query.dataUpdatedAt
+    });
+  } else if (queryTotal !== null) {
+    const nextPage = Math.min(state.page, totalPages);
+    if (state.page !== nextPage
+      || state.total !== queryTotal
+      || state.totalUpdatedAt !== query.dataUpdatedAt) {
+      setState({
         scopeKey,
         page: nextPage,
         total: queryTotal,
         totalUpdatedAt: query.dataUpdatedAt
-      };
-    });
-  }, [
-    currentQueryHasObservedSuccessfulData,
-    pageSize,
-    query.dataUpdatedAt,
-    queryTotal,
-    scopeKey
-  ]);
+      });
+    }
+  }
 
   const loadPage = useCallback(
     (targetPage: number, blocked: boolean) => {
@@ -139,10 +114,6 @@ export function useImageAdminPageNavigation({
     [pageNumber, scopeKey, totalPages]
   );
 
-  const resetPage = useCallback(() => {
-    setState((current) => resetImageAdminPage(current, scopeKey));
-  }, [scopeKey]);
-
   return {
     items: query.data?.items ?? [],
     hasCurrentPageData: query.data !== undefined,
@@ -154,7 +125,6 @@ export function useImageAdminPageNavigation({
     scopeKey,
     pageNumber,
     totalPages,
-    loadPage,
-    resetPage
+    loadPage
   };
 }

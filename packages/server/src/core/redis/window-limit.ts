@@ -32,7 +32,7 @@ for index = 1, #KEYS do
 end
 return output`;
 
-export const redisWindowScripts = Object.freeze({
+const redisWindowScripts = Object.freeze({
   imageshowReserveWindows: {
     lua: reserveRedisWindowsScript,
     readOnly: false
@@ -60,43 +60,22 @@ export type RedisWindowCommandClient = Readonly<{
   imageshowReserveWindows: RedisWindowCommand;
 }>;
 
-type RedisWindowRegistrar = Pick<Redis, "defineCommand"> & Partial<Pick<Redis, "options">>;
-type RedisWindowCommandSource = RedisWindowCommandClient | RedisWindowRegistrar;
-
-function redisWindowCandidate(client: object) {
-  return client as Record<string, unknown>;
-}
+type RedisWindowCommandSource = RedisWindowCommandClient | Pick<Redis, "defineCommand">;
 
 function hasRedisWindowCommand(
   client: RedisWindowCommandSource
 ): client is RedisWindowCommandClient {
-  return typeof redisWindowCandidate(client).imageshowReserveWindows === "function";
-}
-
-function isRedisWindowRegistrar(client: RedisWindowCommandSource): client is RedisWindowRegistrar {
-  return typeof redisWindowCandidate(client).defineCommand === "function";
+  return typeof (client as Record<string, unknown>).imageshowReserveWindows === "function";
 }
 
 export function registerRedisWindowCommand(
   client: RedisWindowCommandSource
 ): RedisWindowCommandClient {
-  if (!isRedisWindowRegistrar(client)) {
-    if (hasRedisWindowCommand(client)) return client;
-    throw new Error("Redis window client cannot register its command");
-  }
-
-  if (client.options) {
-    client.options.scripts = {
-      ...client.options.scripts,
-      ...redisWindowScripts
-    };
-  }
-  if (!hasRedisWindowCommand(client)) {
-    client.defineCommand(
-      "imageshowReserveWindows",
-      redisWindowScripts.imageshowReserveWindows
-    );
-  }
+  if (hasRedisWindowCommand(client)) return client;
+  client.defineCommand(
+    "imageshowReserveWindows",
+    redisWindowScripts.imageshowReserveWindows
+  );
   return client as unknown as RedisWindowCommandClient;
 }
 
@@ -112,10 +91,7 @@ export async function reserveRedisWindowsCommand(
   client: RedisWindowCommandSource,
   windows: readonly RedisWindow[]
 ): Promise<RedisWindowReservation[]> {
-  const commandClient = hasRedisWindowCommand(client)
-    ? client
-    : registerRedisWindowCommand(client);
-  const raw = await commandClient.imageshowReserveWindows(
+  const raw = await registerRedisWindowCommand(client).imageshowReserveWindows(
     String(windows.length),
     ...windows.map((window) => window.key),
     ...windows.flatMap((window) => [
@@ -172,12 +148,9 @@ function assertWindow(window: RedisWindow) {
  * INCREX owns each cap and initial TTL; TTL reads never extend the window.
  */
 export function reserveRedisWindows(
-  windows: readonly RedisWindow[],
-  client: RedisWindowCommandSource = redis
+  windows: readonly RedisWindow[]
 ): Promise<RedisWindowReservation[]> {
   if (!windows.length) return Promise.resolve([]);
   windows.forEach(assertWindow);
-  return client === redis
-    ? runRequiredRedisCommand(() => reserveRedisWindowsCommand(client, windows))
-    : reserveRedisWindowsCommand(client, windows);
+  return runRequiredRedisCommand(() => reserveRedisWindowsCommand(redis, windows));
 }

@@ -1,5 +1,5 @@
 import { hash } from "node:crypto";
-import { imageTimeMs, type PublicImageOrder } from "@imageshow/shared/browser";
+import type { PublicImageOrder } from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
 import { normalizedUuidSchema } from "../core/uuid.ts";
 
@@ -41,10 +41,9 @@ export type ImageBrowseContext = {
   start: number;
 };
 
-/** Ordered positions score by image time and random positions by the ID suffix. */
+/** Ordered positions are the ID itself; random positions are in phase 1 once the ID suffix falls below the day's start. */
 export type ImageBrowsePosition = {
   id: string;
-  sortScore: number;
   phase: 0 | 1;
 };
 
@@ -94,12 +93,11 @@ export function decodeImageCursor(
     }
     const id = uuidFromBytes(payload.subarray(random ? 3 : 0));
     if (!id) throw new Error();
-    if (!random) return { id, sortScore: imageTimeMs(id), phase: 0 };
+    if (!random) return { id, phase: 0 };
     if (payload.readIntBE(0, 3) !== context.period) {
       throw new ApiError(409, "cursor_expired", "Image browse cursor has expired");
     }
-    const sortScore = Number.parseInt(id.slice(-12), 16);
-    return { id, sortScore, phase: sortScore < context.start ? 1 : 0 };
+    return { id, phase: Number.parseInt(id.slice(-12), 16) < context.start ? 1 : 0 };
   } catch (error) {
     if (error instanceof ApiError && error.code === "cursor_expired") throw error;
     throw new ApiError(400, "invalid_cursor", "Invalid image list cursor");

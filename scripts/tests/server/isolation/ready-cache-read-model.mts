@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash, randomUUIDv7 } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 import { pollUntil } from "../../support/polling.ts";
@@ -12,6 +12,8 @@ type PublicImagesReadModelModule =
   typeof import("../../../../packages/server/src/images/read-models/public-images.ts");
 type PublicUrlsModule =
   typeof import("../../../../packages/server/src/storage/objects/public-urls.ts");
+type StorageRegistryModule =
+  typeof import("../../../../packages/server/src/storage/backends/registry.ts");
 type ReadyCacheCoordinatorModule =
   typeof import("../../../../packages/server/src/images/ready-cache/coordinator.ts");
 type ReadyCacheFilterIndexModule =
@@ -31,6 +33,9 @@ await runIntegrationScenario(async (runtime) => {
   const publicUrls = (await import(
     runtime.moduleUrl("packages/server/src/storage/objects/public-urls.ts")
   )) as PublicUrlsModule;
+  const storageRegistry = (await import(
+    runtime.moduleUrl("packages/server/src/storage/backends/registry.ts")
+  )) as StorageRegistryModule;
   const coreUuid = (await import(
     runtime.moduleUrl("packages/server/src/core/uuid.ts")
   )) as CoreUuidModule;
@@ -90,7 +95,7 @@ await runIntegrationScenario(async (runtime) => {
     return id;
   };
 
-  const suffix = randomUUIDv7().slice(0, 8);
+  const suffix = randomUUID().slice(0, 8);
   const theme = `cache-theme-${suffix}`;
   const tag = `cache-tag-${suffix}`;
   const author = `cache-author-${suffix}`;
@@ -122,7 +127,7 @@ await runIntegrationScenario(async (runtime) => {
     );
     for (const [position, imageId] of imageIds.entries()) {
       await runtime.databasePools.pool.query(
-        `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,author,image_time,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','ready','local',$2,$3,$4,$6,$7,$8,1,1,GREATEST(1,1),$5,1,1,GREATEST(1,1),$5,1,1,GREATEST(1,1),$5)`,
+        `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,author,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','ready','local',$2,$3,$4,$6,$7,1,1,GREATEST(1,1),$5,1,1,GREATEST(1,1),$5,1,1,GREATEST(1,1),$5)`,
         [
           imageId,
           position === 1 ? "mb" : "pc",
@@ -130,7 +135,6 @@ await runIntegrationScenario(async (runtime) => {
           theme,
           createHash("md5").update(imageId).digest("hex"),
           author,
-          imageDate,
           `cache item ${position}`
         ]
       );
@@ -145,8 +149,10 @@ await runIntegrationScenario(async (runtime) => {
       site: { domain: "images.example", public_original: false },
       altcha: { enabled: false }
     });
-    const displayed = await publicUrls.publicImageUrl(
-      { id: imageIds[2]! }, "local", "large", { mode: "internal" }
+    const displayed = publicUrls.publicImageUrlForConfig(
+      { id: imageIds[2]! },
+      await storageRegistry.getStorageBackend("local", { mode: "internal" }),
+      "large"
     );
     originalUrls.add(`${displayed}#original`);
     await runtime.databasePools.pool.query(

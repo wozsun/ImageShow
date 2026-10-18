@@ -68,7 +68,6 @@ import { storageConfigFromRow } from "../../../packages/server/src/storage/backe
 import {
   groupStorageNamespaces,
   shareStorageNamespace,
-  storageNamespaceGroupIdentity,
   storageNamespaceIdentity
 } from "../../../packages/server/src/storage/objects/namespace.ts";
 import {
@@ -2382,18 +2381,6 @@ test("[Server/存储] local 与 S3 对象命名、当前类型和物理命名空
       .map((group) => group.map((config) => config.slug).toSorted())
       .toSorted((left, right) => left[0].localeCompare(right[0])),
     [["historical-a", "historical-b", "historical-c"], ["unrelated"]]
-  );
-  const historicalGroup = historicalGroups.find((group) =>
-    group.some((config) => config.slug === historicalAliasA.slug)
-  );
-  assert.ok(historicalGroup);
-  assert.equal(
-    storageNamespaceGroupIdentity(historicalGroup),
-    storageNamespaceGroupIdentity([
-      historicalAliasB,
-      transitiveAlias,
-      historicalAliasA
-    ])
   );
 
   const canonicalKey = storageObjectKey(imageId);

@@ -4,7 +4,7 @@ import type { ImageBrowseContext, ImageBrowsePosition } from "../cursor.ts";
 import { ReadyImageCoreCacheError } from "./cache-errors.ts";
 import { READY_IMAGE_ALL_INDEX_KEY, READY_IMAGE_ID_SUFFIX_LOOKUP_KEY } from "./keys.ts";
 import type { ReadyImageFilterIndex } from "./indexes/filter.ts";
-import { readyImageMember } from "./model.ts";
+import { readyImageIdSuffixScore, readyImageMember } from "./model.ts";
 
 const scanLimit = 4_096;
 const scanBatch = 256;
@@ -56,17 +56,18 @@ export async function readReadyImageRandomMembers(
       start = rank + 1;
     } else {
       // Continue across a deleted boundary without relying on a member rank.
+      const boundaryScore = readyImageIdSuffixScore(position);
       const peers = await redis.zrangebyscore(
         key,
-        position.sortScore,
-        position.sortScore,
+        boundaryScore,
+        boundaryScore,
         "LIMIT",
         0,
         scanBatch
       );
       if (peers.length === scanBatch) return null;
       start =
-        (await redis.zcount(key, "-inf", `(${position.sortScore}`)) +
+        (await redis.zcount(key, "-inf", `(${boundaryScore}`)) +
         peers.filter((id) => id <= boundaryMember).length;
     }
   }

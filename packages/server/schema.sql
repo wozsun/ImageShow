@@ -119,7 +119,6 @@ CREATE TABLE metadata (
   description TEXT NOT NULL DEFAULT '',
   source TEXT NOT NULL DEFAULT '',
   original TEXT NOT NULL DEFAULT '',
-  image_time TIMESTAMPTZ NOT NULL,
   created_by TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),

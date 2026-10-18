@@ -14,7 +14,6 @@ const actionFeedbackTargetBrand = Symbol("ActionFeedbackTarget");
 
 export type ActionFeedbackTarget = {
   readonly [actionFeedbackTargetBrand]: true;
-  readonly label: string;
 };
 
 type ActionFeedbackRegionRegistry = {
@@ -24,15 +23,14 @@ type ActionFeedbackRegionRegistry = {
 
 const ActionFeedbackRegionContext = createContext<ActionFeedbackRegionRegistry | null>(null);
 
-function createActionFeedbackTarget(label = "action-feedback"): ActionFeedbackTarget {
+function createActionFeedbackTarget(): ActionFeedbackTarget {
   return Object.freeze({
-    [actionFeedbackTargetBrand]: true as const,
-    label
+    [actionFeedbackTargetBrand]: true as const
   });
 }
 
-export function useActionFeedbackTarget(label?: string) {
-  const [target] = useState(() => createActionFeedbackTarget(label));
+export function useActionFeedbackTarget() {
+  const [target] = useState(createActionFeedbackTarget);
   return target;
 }
 
@@ -92,7 +90,7 @@ export function ActionFeedbackRegion({
     [register, target]
   );
   const classes = ["action-feedback-region", className].filter(Boolean).join(" ");
-  return <div ref={bindHost} className={classes} data-feedback-region={target.label} />;
+  return <div ref={bindHost} className={classes} />;
 }
 
 export function ActionFeedbackOutlet({

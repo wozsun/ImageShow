@@ -3,7 +3,6 @@ import { ThumbnailImage } from "./ThumbnailImage.js";
 
 export function ImageThumbnailFrame({
   src,
-  alt = "",
   size = "normal",
   className = "",
   onClick,
@@ -11,7 +10,6 @@ export function ImageThumbnailFrame({
   retainLoadedWhenEmpty = false
 }: {
   src: string;
-  alt?: string;
   size?: "normal" | "small";
   className?: string;
   onClick?: (opener: HTMLElement) => void;
@@ -37,7 +35,7 @@ export function ImageThumbnailFrame({
           : undefined
       }
     >
-      <ThumbnailImage src={src} alt={alt} retainLoadedWhenEmpty={retainLoadedWhenEmpty} />
+      <ThumbnailImage src={src} retainLoadedWhenEmpty={retainLoadedWhenEmpty} />
       {showLoadingIndicator && (
         <span className="image-thumbnail-loading" aria-hidden="true">
           <AdminIcon name="image-download-line" />

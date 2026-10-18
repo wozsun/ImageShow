@@ -3,9 +3,9 @@ import type {
   CompletedIngestionDisplayDto,
   ActiveServerIngestionItemDto,
   IngestionSessionPairDto,
-  IngestionStatusItemDto,
-  PreparedVariantFacts
+  IngestionStatusItemDto
 } from "@imageshow/shared/browser";
+import type { PreparedVariantFacts } from "../../variants/encoding.ts";
 import { ApiError } from "../../../core/api-error.ts";
 import { privateNoStoreCacheControl } from "../../../core/http/headers.ts";
 import { readIngestionPreparedFile } from "../raw/prepared.ts";

@@ -1,22 +1,14 @@
-import type {
-  StorageBackendDeleteAction,
-  StorageBackendDeleteBlocker,
-  StorageBackendAdminDto
+import {
+  storageBackendDeleteActions,
+  storageBackendDeleteBlockers,
+  type StorageBackendDeleteAction,
+  type StorageBackendDeleteBlocker,
+  type StorageBackendAdminDto
 } from "@imageshow/shared/browser";
 import { isApiClientError } from "../../../lib/api/client.js";
 
-const storageBackendDeleteBlockers = new Set<StorageBackendDeleteBlocker>([
-  "built_in",
-  "default",
-  "images",
-  "ingestion_sessions",
-  "cleanup_jobs"
-]);
-const storageBackendDeleteActions = new Set<StorageBackendDeleteAction>([
-  "delete",
-  "migrate",
-  "blocked"
-]);
+const deleteBlockers = new Set<StorageBackendDeleteBlocker>(storageBackendDeleteBlockers);
+const deleteActions = new Set<StorageBackendDeleteAction>(storageBackendDeleteActions);
 
 function countFromDetails(
   details: Record<string, unknown>,
@@ -69,14 +61,14 @@ export function storageBackendAfterDeleteRejection(
       : {};
   const action =
     typeof deletion.action === "string" &&
-    storageBackendDeleteActions.has(deletion.action as StorageBackendDeleteAction)
+    deleteActions.has(deletion.action as StorageBackendDeleteAction)
       ? (deletion.action as StorageBackendDeleteAction)
       : null;
   const blockers = Array.isArray(deletion.blockers)
     ? deletion.blockers.filter(
         (blocker): blocker is StorageBackendDeleteBlocker =>
           typeof blocker === "string" &&
-          storageBackendDeleteBlockers.has(blocker as StorageBackendDeleteBlocker)
+          deleteBlockers.has(blocker as StorageBackendDeleteBlocker)
       )
     : [];
   if (!action || (action !== "delete" && !blockers.length)) return null;

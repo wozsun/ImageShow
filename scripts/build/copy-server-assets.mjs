@@ -37,23 +37,17 @@ async function precompressDir(dir) {
     if (file === "index.html" || !staticAssetIsCompressible(entry.name)) continue;
     const buffer = await readFile(full);
     const compressed = await compressStaticAsset(entry.name, buffer);
+    // serverPublic is recreated from the Web build, so there are no stale copies to remove.
     await Promise.all([
-      compressed.brotli
-        ? writeFile(`${full}.br`, compressed.brotli)
-        : rm(`${full}.br`, { force: true }),
-      compressed.zstd
-        ? writeFile(`${full}.zst`, compressed.zstd)
-        : rm(`${full}.zst`, { force: true }),
-      compressed.gzip
-        ? writeFile(`${full}.gz`, compressed.gzip)
-        : rm(`${full}.gz`, { force: true })
+      compressed.brotli && writeFile(`${full}.br`, compressed.brotli),
+      compressed.zstd && writeFile(`${full}.zst`, compressed.zstd),
+      compressed.gzip && writeFile(`${full}.gz`, compressed.gzip)
     ]);
     const { brotli, zstd, gzip, ...sizes } = compressed;
     compressedAssets.push({ file, ...sizes });
   }
 }
 
-await mkdir(serverDist, { recursive: true });
 await cp(resolve(serverPackageDirectory, "schema.sql"), resolve(serverDist, "schema.sql"));
 // The server preloads each document's page files; the list stays out of public assets.
 await cp(
@@ -65,10 +59,7 @@ await cp(webDist, serverPublic, {
   recursive: true,
   filter(source) {
     const path = relative(webDist, source).replaceAll("\\", "/");
-    return (
-      path !== ".vite" && !path.startsWith(".vite/")
-        && !/^index\.html\.(?:br|zst|gz)$/.test(path)
-    );
+    return path !== ".vite" && !path.startsWith(".vite/");
   }
 });
 if (existsSync(resolve(serverPublic, ".vite"))) {

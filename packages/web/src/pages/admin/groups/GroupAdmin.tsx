@@ -50,7 +50,7 @@ function GroupAdminContent({ settings }: { settings: AdminSettings }) {
   const createAction = useAsyncActionStatus({ resultDurationMs: null });
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<ImageGroupDto | null>(null);
-  const feedbackTarget = useActionFeedbackTarget("group-admin");
+  const feedbackTarget = useActionFeedbackTarget();
   const toolbarRef = useWorkspaceToolbarCollapse();
   const listRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);

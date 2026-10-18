@@ -216,7 +216,6 @@ function activeIngestionJob(
     file: existing?.file,
     fileFingerprint: existing?.fileFingerprint,
     md5: prepared?.md5 ?? existing?.md5,
-    preparedOrder: existing?.preparedOrder,
     downloadUrl: item.download_url ?? existing?.downloadUrl,
     uploadIntentItemInput: existing?.uploadIntentItemInput,
     importAcceptItemInput: existing?.importAcceptItemInput,
@@ -265,8 +264,6 @@ function activeIngestionJob(
         : undefined,
     serverStatus: item.status,
     serverPhase: item.phase,
-    serverError: item.error?.message ?? "",
-    serverProgress: item.progress,
     serverAttemptKey: existing?.attemptKey ?? pairKey,
     serverSessionId: item.session_id,
     serverImageId: item.image_id
@@ -377,9 +374,7 @@ export function completedIngestionJobPatch(
     commitFailureCheckpoint: undefined,
     resultState: "hydrated",
     serverStatus: "completed",
-    serverPhase: undefined,
-    serverError: "",
-    serverProgress: undefined
+    serverPhase: undefined
   } satisfies Partial<IngestionJob>;
 }
 
@@ -458,8 +453,6 @@ export function completedIngestionReceiptOwnerPatch(
     commitFailureCheckpoint: undefined,
     serverStatus: "completed",
     serverPhase: undefined,
-    serverError: "",
-    serverProgress: undefined,
     serverVersion: Math.max(existing.serverVersion ?? 0, completed.version),
     serverProgressSeq: retainsExistingClock
       ? existing.serverProgressSeq

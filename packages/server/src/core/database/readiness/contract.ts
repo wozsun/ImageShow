@@ -75,7 +75,6 @@ export const databaseReadiness = {
       description: "text",
       source: "text",
       original: "text",
-      image_time: "timestamptz",
       deleted_at: "timestamptz",
       created_by: "text",
       created_at: "timestamptz",

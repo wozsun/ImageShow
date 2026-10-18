@@ -77,8 +77,6 @@ export function ingestionStatusEventPatch(
     ...authority,
     serverStatus: item.status,
     serverPhase: item.phase,
-    serverError: item.error?.message ?? "",
-    serverProgress: item.progress,
     serverVersion: item.version,
     serverProgressSeq: item.progress_seq,
     status: activeIngestionClientStatus(item),

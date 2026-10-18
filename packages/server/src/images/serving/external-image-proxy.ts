@@ -1,4 +1,3 @@
-import { ApiError } from "../../core/api-error.ts";
 import {
   isAllowedExternalImageContentType,
   isExternalImageRejection,
@@ -61,16 +60,8 @@ export async function proxyExternalImage(
     });
   };
 
-  let origin: string;
-  try {
-    origin = `${new URL(externalUrl).origin}/`;
-  } catch {
-    throw new ApiError(400, "external_image_rejected", "外部图片请求未通过安全校验");
-  }
-
   try {
     const requestHeaders = new Headers({
-      Referer: origin,
       "User-Agent": externalImageProxyUserAgent,
       Accept: "image/*,*/*"
     });
@@ -104,6 +95,7 @@ export async function proxyExternalImage(
         signal: request.signal,
         timeoutMs: externalImageProxyTimeoutMs,
         headers: requestHeaders,
+        targetOriginReferer: true,
         imageValidation: method === "HEAD" ? "none" : "sniff"
       });
     let upstream = await fetchUpstream(request.method);

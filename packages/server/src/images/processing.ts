@@ -1,7 +1,8 @@
 import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import sharp from "sharp";
-import { imageVariants, type ImageVariant, type NormalizeProfile, type PreparedVariantFacts } from "@imageshow/shared/browser";
+import { imageVariants, type ImageVariant, type NormalizeProfile } from "@imageshow/shared/browser";
+import type { PreparedVariantFacts } from "./variants/encoding.ts";
 import { getIngestionMaxLongEdge } from "../config/app-settings.ts";
 import { withVariantScratch } from "./variants/scratch.ts";
 import { createVariantEncoder } from "./variants/encoding.ts";

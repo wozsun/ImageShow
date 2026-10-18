@@ -4,7 +4,6 @@ import test from "node:test";
 import type { IngestionJob } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-job.ts";
 import { webUuidV7 } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-identity.ts";
 import {
-  canApplyIngestionAttributeDefaults,
   ingestionAttributeDefaultsPatch,
   ingestionJobAttributesEditable
 } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-attribute-policy.ts";
@@ -27,7 +26,6 @@ import {
   ingestionJobStatusLabel
 } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-status-detail.ts";
 import {
-  emptyServerIngestionQueueView,
   parseServerIngestionQueueEvent
 } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/server-ingestion-queue-view.ts";
 import {
@@ -59,18 +57,6 @@ import {
 } from "../../support/web-test-context.ts";
 
 test("[Web/内容接入] 内容接入模块保持 view、草稿、上传与清理纯边界", () => {
-  assert.deepEqual(emptyServerIngestionQueueView("connecting", 3), {
-    status: "connecting",
-    connectionGeneration: 3,
-    actionScope: "",
-    revision: null,
-    lastAcceptedOrder: null,
-    summary: null,
-    items: [],
-    staleItems: [],
-    actionWatermark: "",
-    error: ""
-  });
   assert.deepEqual(
     parseServerIngestionQueueEvent(
       JSON.stringify({
@@ -407,7 +393,6 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     }
   );
   assert.equal(advanced.jobs[0]?.serverProgressSeq, 9);
-  assert.equal(advanced.jobs[0]?.serverProgress, 80);
 
   const resolving = ingestionStatusEventPatch(base, {
     session_id: sessionId,
@@ -576,11 +561,6 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     ingestionAttributeDefaultsPatch(inFlightPlaceholder, inFlightDefaults).author,
     "clicked-while-accepting",
     "已发出 accept 的 placeholder 仍属于应用到全部捕获的本地前缀"
-  );
-  assert.equal(
-    canApplyIngestionAttributeDefaults(inFlightPlaceholder, inFlightDefaults),
-    true,
-    "只有在途 placeholder 时也必须启用应用到全部"
   );
   const defaultsAppliedInFlight = reduceIngestionQueue(
     {
@@ -852,7 +832,6 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     serverAccepted: true,
     serverVersion: 99,
     serverStatus: "failed",
-    serverError: "old incarnation error",
     preview: "old-incarnation-preview",
     status: "failed"
   });
@@ -886,7 +865,6 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     "同 session 新 incarnation 不得继承旧 canonical preview"
   );
   assert.equal(replacedIncarnation.jobs[0]?.serverStatus, undefined);
-  assert.equal(replacedIncarnation.jobs[0]?.serverError, undefined);
 
   const staleSnapshotDuringDraftFence = ingestionJobFromServerItem(
     {

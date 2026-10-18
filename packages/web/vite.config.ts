@@ -1,8 +1,5 @@
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
-import { existsSync, readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { appConfig } from "../shared/src/app-config.ts";
 import { createChunkPlan, publishedChunkName } from "./vite-chunk-plan.ts";
 
 function webSourcePath(id: string | null) {
@@ -88,23 +85,6 @@ function webBuildReport(): Plugin {
   };
 }
 
-function resolveProxyTarget() {
-  const configPath = fileURLToPath(new URL("../../data/config.json", import.meta.url));
-  if (existsSync(configPath)) {
-    try {
-      const config = JSON.parse(readFileSync(configPath, "utf8")) as { site?: { domain?: string } };
-      const domain = config.site?.domain;
-      if (domain) return `http://${domain.replace(/:\d+$/, "")}:${appConfig.applicationPort}`;
-    } catch {}
-  }
-  if (process.env.SITE_DOMAIN) {
-    return `http://${process.env.SITE_DOMAIN.replace(/:\d+$/, "")}:${appConfig.applicationPort}`;
-  }
-  return `http://localhost:${appConfig.applicationPort}`;
-}
-
-const target = resolveProxyTarget();
-
 export default defineConfig({
   // Relative imports let one immutable build run behind any configured asset URL.
   base: "./",
@@ -147,15 +127,6 @@ export default defineConfig({
         chunkFileNames: ({ name }) => javascriptAssetPattern(name),
         assetFileNames: ({ names }) => staticAssetPattern(names)
       }
-    }
-  },
-  server: {
-    proxy: {
-      "/api": target,
-      "/random": target,
-      // Trailing slash keeps the built-in /assets/ files on the Vite dev server.
-      "/asset/": target,
-      "/favicon.ico": target
     }
   }
 });

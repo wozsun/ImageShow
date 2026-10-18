@@ -72,10 +72,7 @@ import {
   publicRedirectCacheControl
 } from "../../../packages/server/src/core/http/headers.ts";
 import { handleApiError } from "../../../packages/server/src/core/http/responses.ts";
-import {
-  deviceFromDimensions,
-  resolveClassification
-} from "../../../packages/server/src/images/classification.ts";
+import { resolveClassification } from "../../../packages/server/src/images/classification.ts";
 import { detectBrightness } from "../../../packages/server/src/images/brightness.ts";
 import {
   createImageBrowseContext,
@@ -88,10 +85,7 @@ import {
   imageFilterPlanWithout
 } from "../../../packages/server/src/images/filter-plan.ts";
 import { createPageWindow } from "../../../packages/server/src/images/page-window.ts";
-import {
-  createImageId,
-  parseImageTime
-} from "../../../packages/server/src/images/image-time.ts";
+import { parseImageTime } from "../../../packages/server/src/images/image-time.ts";
 import {
   servePublicStoredObject
 } from "../../../packages/server/src/images/serving/stored-image.ts";
@@ -1859,13 +1853,6 @@ test("[Server/图片] 图片时间、UUIDv7、游标、分类和统一筛选保�
   assert.equal(parsedTime.iso, "2020-04-30T16:00:00.000Z");
   assert.throws(() => parseImageTime("1969-12-31T23:59:59Z"), /1970/);
 
-  const id = createImageId(new Date(parsedTime.iso));
-  assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-  assert.equal(
-    Number.parseInt(id.replaceAll("-", "").slice(0, 12), 16),
-    Date.parse(parsedTime.iso)
-  );
-
   // Ordered cursors carry only the UUIDv7 ID; its timestamp is the image-time score.
   const context = createImageBrowseContext("latest");
   const cursorId = "00000000-0000-7000-8000-0000000000ab";
@@ -1879,7 +1866,6 @@ test("[Server/图片] 图片时间、UUIDv7、游标、分类和统一筛选保�
     for (const order of ["latest", "oldest"] as const) {
       assert.deepEqual(decodeImageCursor(encoded, createImageBrowseContext(order)), {
         id,
-        sortScore: Number.parseInt(id.replaceAll("-", "").slice(0, 12), 16),
         phase: 0
       });
     }
@@ -1916,7 +1902,6 @@ test("[Server/图片] 图片时间、UUIDv7、游标、分类和统一筛选保�
       assert.equal(randomCursor.length, 26);
       assert.deepEqual(decodeImageCursor(randomCursor, randomContext), {
         id,
-        sortScore: Number.parseInt(suffix, 16),
         phase: suffix[0] === "0" ? 1 : 0
       });
       assert.throws(
@@ -1930,8 +1915,6 @@ test("[Server/图片] 图片时间、UUIDv7、游标、分类和统一筛选保�
     }
   }
 
-  assert.equal(deviceFromDimensions(1920, 1080), "pc");
-  assert.equal(deviceFromDimensions(800, 1200), "mb");
   assert.deepEqual(
     resolveClassification(
       { device: "auto", brightness: "light" },
@@ -1998,7 +1981,7 @@ test("[Server/图片] 公开 cursor、后台 offset 与 Redis 有序窗口只读
     60,
     createImageBrowseContext("oldest"),
     "gallery",
-    { id: publicCursorId, sortScore: 0, phase: 0 },
+    { id: publicCursorId, phase: 0 },
     reader
   );
   assert.match(sql, /id > \$2::uuid/);

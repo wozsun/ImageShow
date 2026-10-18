@@ -490,7 +490,7 @@ body:has(.gallery-page) {
   transition:
     opacity 120ms ease-out,
     visibility 0s linear 120ms,
-    transform var(--pressable-transition-duration, 0.1s) ease;
+    transform 0.1s ease;
 }
 
 .gallery-back-to-top.is-visible {

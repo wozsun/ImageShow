@@ -56,7 +56,7 @@ export function StorageSettings() {
   });
   const [busy, setBusy] = useState("");
   const [actionFeedback, setActionFeedback] = useState<ActionFeedbackState | null>(null);
-  const feedbackTarget = useActionFeedbackTarget("storage-settings");
+  const feedbackTarget = useActionFeedbackTarget();
   const defaultAction = useAsyncActionStatus();
   const defaultActionRunning = useRef(false);
   const [defaultActionSlug, setDefaultActionSlug] = useState("");

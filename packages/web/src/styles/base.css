@@ -741,7 +741,7 @@ button.active,
     color 0.16s ease,
     background-color 0.16s ease,
     border-color 0.16s ease,
-    transform var(--pressable-transition-duration, 0.1s) ease;
+    transform 0.1s ease;
 }
 .copy-button:active {
   transform: scale(var(--pressable-scale-small, 0.97));

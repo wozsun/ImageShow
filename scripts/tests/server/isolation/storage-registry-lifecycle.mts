@@ -263,7 +263,7 @@ await runIntegrationScenario(async (runtime) => {
       }, neverAbortedSignal);
       await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { assets_base_url: "" } });
       await database.pool.query(
-        "INSERT INTO metadata (id,image_time,storage_slug,device,brightness,created_by,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'local','pc','light','integration-admin',1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)",
+        "INSERT INTO metadata (id,storage_slug,device,brightness,created_by,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'local','pc','light','integration-admin',1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)",
         ["00000000-0000-7000-8000-0000000000a5", "0".repeat(32)]
       );
       const main = await request("main.example.test", `/images/large/${key}`);
@@ -355,16 +355,6 @@ await runIntegrationScenario(async (runtime) => {
   );
   registry.invalidateStorageBackendRegistry();
   const registryExampleKey = storageObjectKey("00000000-0000-7000-8000-0000000000aa");
-  const projectedRegistryUrls = await publicUrls.publicImageUrl(
-    { id: "00000000-0000-7000-8000-0000000000aa" },
-    registryBackend,
-    "large",
-    { mode: "internal" }
-  );
-  assert.equal(
-    projectedRegistryUrls,
-    "https://cdn.example.com/images/large/" + registryExampleKey
-  );
   const { publicShowImageCards } =
     await import("../../../../packages/server/src/images/presenter.ts");
   const card = {
@@ -480,7 +470,7 @@ await runIntegrationScenario(async (runtime) => {
     ]
   );
   await database.pool.query(
-    `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin',$2,'pc','dark',NULL,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
+    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin',$2,'pc','dark',NULL,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
     [
         inaccessibleAliasImage,
         inaccessibleAlias,

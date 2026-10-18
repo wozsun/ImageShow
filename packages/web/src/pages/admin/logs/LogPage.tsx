@@ -68,7 +68,7 @@ export function LogPage() {
   const [savingLevel, setSavingLevel] = useState(false);
   const refreshLogsStatus = useAsyncActionStatus();
   const [feedback, setFeedback] = useState<ActionFeedbackState | null>(null);
-  const feedbackTarget = useActionFeedbackTarget("admin-logs");
+  const feedbackTarget = useActionFeedbackTarget();
   const workspaceToolbarRef = useWorkspaceToolbarCollapse();
   const query = useQuery<AdminLogPayloadDto>({
     queryKey: [...queryKeys.logs, selectedFile],

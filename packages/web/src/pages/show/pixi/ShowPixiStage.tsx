@@ -55,7 +55,6 @@ export function ShowPixiStage({
   onNeedImages,
   onOpen,
   order,
-  reducedMotion,
   running,
   scene,
   speed,
@@ -81,7 +80,6 @@ export function ShowPixiStage({
   onNeedImages: (usage: ShowCandidateUsage) => void;
   onOpen: (image: ShowImage, opener: HTMLElement) => void;
   order: ShowOrder;
-  reducedMotion: boolean;
   running: boolean;
   scene: ShowPixiSceneKind;
   speed: number;
@@ -150,7 +148,6 @@ export function ShowPixiStage({
           waterfallColumns,
           floatSizeIndex,
           running,
-          reducedMotion,
           speed,
           statsElement: statsRef.current,
           onClusterFocusChange: (focus, entry) => {
@@ -243,8 +240,6 @@ export function ShowPixiStage({
   return (
     <div
       className={`show-viewport show-pixi-viewport is-${scene}`}
-      data-show-pixi-stage=""
-      data-show-scene={scene}
     >
       <div className="show-atmosphere" aria-hidden="true">
         <PublicStarfield />

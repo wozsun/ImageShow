@@ -77,7 +77,7 @@ await runIntegrationScenario(async (runtime) => {
   const slugs = (items: readonly { slug: string }[]) => items.map((item) => item.slug);
   const imageId = randomUUIDv7();
   await pool.query(
-    `INSERT INTO metadata (id,image_time,created_by,status,storage_slug,device,brightness,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','ready','local','pc','dark',1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)`,
+    `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','ready','local','pc','dark',1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)`,
     [
           imageId,
           "1".repeat(32)

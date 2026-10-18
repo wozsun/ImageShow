@@ -37,12 +37,12 @@ import {
   READY_IMAGE_ITEMS_KEY
 } from "./keys.ts";
 import {
-  parseReadyImageCacheItem,
   readyImageMember,
   type ReadyImageCacheResult,
   type ReadyImageCacheItem
 } from "./model.ts";
 import {
+  parsedReadyImageCoreItem,
   readReadyImageOrderedWindow,
   readyImageWindowIndexIsValid,
   type ReadyImageCacheWindow,
@@ -66,15 +66,6 @@ export type ReadyImagePageReadResult<T> =
 
 function cacheItemCount() {
   return getReadyImageCacheCoordinatorStatus().meta?.itemCount ?? 0;
-}
-
-function parsedItem(raw: string | null, expectedMember?: string) {
-  const item = parseReadyImageCacheItem(raw);
-  if (!item
-    || (expectedMember && readyImageMember(item.id) !== expectedMember)) {
-    throw new ReadyImageCoreCacheError("Ready-image cache returned a corrupt core item");
-  }
-  return item;
 }
 
 function reportFilterResolutionFailure(
@@ -187,7 +178,7 @@ export async function readReadyImageById(
       }
       return null;
     }
-    return parsedItem(raw, member);
+    return parsedReadyImageCoreItem(raw, member);
   });
 }
 
@@ -206,25 +197,13 @@ async function cursorWindowStart(
 ) {
   if (decoded === undefined) return 0;
   const member = readyImageMember(decoded.id);
-  const cursorState = redis.pipeline();
-  cursorState.zscore(index.key, member);
-  if (order === "oldest") cursorState.zrank(index.key, member);
-  else cursorState.zrevrank(index.key, member);
-  const cursorResults = await executePageRedisCommand(
+  const rank = await executePageRedisCommand(
     mode,
-    () => execRedisPipeline(cursorState)
+    () => order === "oldest"
+      ? redis.zrank(index.key, member)
+      : redis.zrevrank(index.key, member)
   );
-  const scoreRaw = cursorResults[0]?.[1];
-  const rankRaw = cursorResults[1]?.[1];
-  if (scoreRaw === null || rankRaw === null) return null;
-  const score = Number(scoreRaw);
-  const rank = Number(rankRaw);
-  return Number.isSafeInteger(score) &&
-    score === decoded.sortScore &&
-    Number.isSafeInteger(rank) &&
-    rank >= 0
-    ? rank + 1
-    : null;
+  return rank !== null && Number.isSafeInteger(rank) && rank >= 0 ? rank + 1 : null;
 }
 
 function readyImageWindowDependencies(order: PublicImageOrder): ReadyImageWindowDependencies {
@@ -354,7 +333,7 @@ async function readRandomWindowFromIndex(
       if (index.kind !== "core" && visible.length) {
         await assertDerivedMissingItemsAreNotCore(visible, raws);
       }
-      const items = raws.map((raw, offset) => parsedItem(raw, visible[offset]));
+      const items = raws.map((raw, offset) => parsedReadyImageCoreItem(raw, visible[offset]!));
       if (!readyImageWindowIndexIsValid(index, await validateReadyImageFilterIndex(index)))
         return null;
       return { items, total: index.count ?? items.length, hasMore: members.length > limit };

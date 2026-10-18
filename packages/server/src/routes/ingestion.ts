@@ -230,8 +230,7 @@ export function registerIngestionRoutes(app: Hono) {
       return c.json(
         apiSuccess(
           parseJsonlManifest(input.content, {
-            maxItems: getRuntimeConfig().import.max_items,
-            timeZone: process.env.TZ
+            maxItems: getRuntimeConfig().import.max_items
           })
         )
       );
@@ -243,10 +242,7 @@ export function registerIngestionRoutes(app: Hono) {
   app.post(importWeiboParsePath, async (c) => {
     const input = parse(weiboImportInput, await readJsonBody(c));
     const runtimeConfig = getRuntimeConfig();
-    const maxPosts = Math.min(
-      appConfig.ingestion.batchHardLimit,
-      runtimeConfig.weibo.max_items
-    );
+    const maxPosts = runtimeConfig.weibo.max_items;
     if (input.urls.length > maxPosts) {
       throw new ApiError(
         400,
@@ -255,8 +251,7 @@ export function registerIngestionRoutes(app: Hono) {
       );
     }
     return streamWeiboImportParse(c, adminSessionOf(c), input.urls, {
-      sourceEnabled: runtimeConfig.weibo.source_enabled,
-      timeZone: process.env.TZ
+      sourceEnabled: runtimeConfig.weibo.source_enabled
     });
   });
 

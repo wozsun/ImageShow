@@ -27,7 +27,6 @@ export function WorkflowDefaultFields({
   placeholders,
   ariaLabels,
   changed = {},
-  disabled = false,
   applyDisabled = false,
   onApply,
   onPrepareClear,
@@ -54,7 +53,6 @@ export function WorkflowDefaultFields({
   };
   ariaLabels: Record<WorkflowDefaultField, string>;
   changed?: Partial<Record<WorkflowDefaultField, boolean>>;
-  disabled?: boolean;
   applyDisabled?: boolean;
   onApply: () => void;
   onPrepareClear: PrepareImageAttributeClear;
@@ -71,7 +69,6 @@ export function WorkflowDefaultFields({
         onChange={onChange.device}
         options={deviceOptions}
         ariaLabel={ariaLabels.device}
-        disabled={disabled}
       />
       <SelectMenu
         className={`workflow-default-select workflow-default-brightness${changedClass("brightness")}`}
@@ -79,7 +76,6 @@ export function WorkflowDefaultFields({
         onChange={onChange.brightness}
         options={brightnessOptions}
         ariaLabel={ariaLabels.brightness}
-        disabled={disabled}
       />
       <div className="workflow-default-pair">
         <NamedSlugInput
@@ -90,7 +86,6 @@ export function WorkflowDefaultFields({
           noun="主题"
           placeholder={placeholders.theme}
           ariaLabel={ariaLabels.theme}
-          disabled={disabled}
         />
         <NamedSlugInput
           className={`workflow-default-author${changedClass("author")}`}
@@ -100,7 +95,6 @@ export function WorkflowDefaultFields({
           noun="作者"
           placeholder={placeholders.author}
           ariaLabel={ariaLabels.author}
-          disabled={disabled}
         />
         <TagInput
           className={`workflow-default-tags${changedClass("tags")}`}
@@ -109,12 +103,11 @@ export function WorkflowDefaultFields({
           suggestions={tags}
           placeholder={placeholders.tags}
           ariaLabel={ariaLabels.tags}
-          disabled={disabled}
         />
       </div>
       <WorkflowAttributeActions
         key={clearScope}
-        disabled={disabled || applyDisabled}
+        disabled={applyDisabled}
         scopeLabel={clearScopeLabel}
         onApply={onApply}
         onPrepareClear={onPrepareClear}

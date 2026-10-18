@@ -30,7 +30,7 @@ await runIntegrationScenario(async (runtime) => {
     .update(classificationRollbackBody)
     .digest("hex");
   await database.pool.query(
-    `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','local','pc','dark',NULL,'before',1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
+    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','local','pc','dark',NULL,'before',1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
     [
         classificationRollbackId,
         classificationRollbackMd5,
@@ -138,7 +138,7 @@ await runIntegrationScenario(async (runtime) => {
     .update(classificationBody)
     .digest("hex");
   await database.pool.query(
-    `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','local','pc','dark',NULL,'ready',1,1,GREATEST(1,$3),$2,1,1,GREATEST(1,$3),$2,1,1,GREATEST(1,$3),$2)`,
+    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','local','pc','dark',NULL,'ready',1,1,GREATEST(1,$3),$2,1,1,GREATEST(1,$3),$2,1,1,GREATEST(1,$3),$2)`,
     [
         classificationId,
         classificationMd5,
@@ -219,7 +219,7 @@ await runIntegrationScenario(async (runtime) => {
     .update(classificationMissingThumbBody)
     .digest("hex");
   await database.pool.query(
-    `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','local','pc','dark',NULL,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,0),$2)`,
+    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','local','pc','dark',NULL,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,0),$2)`,
     [
         classificationMissingThumbId,
         classificationMissingThumbMd5

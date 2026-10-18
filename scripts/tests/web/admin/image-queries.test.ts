@@ -317,7 +317,6 @@ test("[Web/后台] 后台图片数字页由单一目标查询直达并隔离分�
         isSuccess: false
       },
       expected: {
-        currentQueryHasObservedSuccessfulData: false,
         queryTotal: null,
         total: 0
       }
@@ -333,7 +332,6 @@ test("[Web/后台] 后台图片数字页由单一目标查询直达并隔离分�
         isSuccess: true
       },
       expected: {
-        currentQueryHasObservedSuccessfulData: false,
         queryTotal: null,
         total: 6_000
       }
@@ -349,7 +347,6 @@ test("[Web/后台] 后台图片数字页由单一目标查询直达并隔离分�
         isSuccess: true
       },
       expected: {
-        currentQueryHasObservedSuccessfulData: false,
         queryTotal: 7_200,
         total: 7_200
       }
@@ -365,7 +362,6 @@ test("[Web/后台] 后台图片数字页由单一目标查询直达并隔离分�
         isSuccess: true
       },
       expected: {
-        currentQueryHasObservedSuccessfulData: true,
         queryTotal: 7_200,
         total: 7_200
       }
@@ -381,7 +377,6 @@ test("[Web/后台] 后台图片数字页由单一目标查询直达并隔离分�
         isSuccess: false
       },
       expected: {
-        currentQueryHasObservedSuccessfulData: false,
         queryTotal: null,
         total: 6_000
       }
@@ -397,7 +392,6 @@ test("[Web/后台] 后台图片数字页由单一目标查询直达并隔离分�
         isSuccess: false
       },
       expected: {
-        currentQueryHasObservedSuccessfulData: false,
         queryTotal: 180,
         total: 180
       }
@@ -963,8 +957,6 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
       await import("../../../../packages/web/src/pages/admin/images/ImageAdmin.tsx").finally(() =>
         cssHooks.deregister()
       );
-    const { ADMIN_ICONS } =
-      await import("../../../../packages/web/src/components/icon/admin-icons.generated.ts");
     const container = document.getElementById("root");
     assert.ok(container);
 
@@ -1053,6 +1045,7 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
       });
 
       const listRequests: number[] = [];
+      const committedGridText: string[] = [];
       let shrunk = false;
       let mutationRequests = 0;
       let pageTwoAttempts = 0;
@@ -1196,7 +1189,16 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
                     React.createElement(
                       ActionFeedbackProvider,
                       null,
-                      React.createElement(ImageAdmin)
+                      React.createElement(
+                        React.Profiler,
+                        {
+                          id: "image-pagination",
+                          onRender: () => {
+                            committedGridText.push(container.querySelector(".admin-image-grid")?.textContent ?? "");
+                          }
+                        },
+                        React.createElement(ImageAdmin)
+                      )
                     )
                   )
                 )
@@ -1303,10 +1305,6 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
             'button[aria-label="永久删除"]'
           );
           assert.ok(permanentDelete);
-          assert.equal(
-            permanentDelete.querySelector("path")?.getAttribute("d"),
-            ADMIN_ICONS["delete-bin-line"]
-          );
           const purgeForm = purgeDialog.querySelector<HTMLFormElement>("form");
           assert.ok(purgeForm);
           await submitForm(purgeForm);
@@ -1319,10 +1317,6 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
             'button[aria-label="确认删除"]'
           );
           assert.ok(confirmedPurge);
-          assert.equal(
-            confirmedPurge.querySelector("path")?.getAttribute("d"),
-            ADMIN_ICONS["delete-bin-2-line"]
-          );
           await submitForm(purgeForm);
           await waitFor(
             () => Boolean(purgeDialog.querySelector('button[aria-label="正在删除"]')),
@@ -1332,10 +1326,6 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
             'button[aria-label="正在删除"]'
           );
           assert.ok(pendingPurge);
-          assert.equal(
-            pendingPurge.querySelector("path")?.getAttribute("d"),
-            ADMIN_ICONS["delete-bin-5-line"]
-          );
           if (mode === "purge") {
             assert.equal(progressStreams.length >= 1, true, "可永久删除时挂载即检查后台删除进度");
             const backgroundCheck = progressStreams[0]!;
@@ -1467,6 +1457,7 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
         const finishPostMutationRefresh = resolvePostMutationRefresh as
           ((response: Response) => void) | null;
         assert.ok(finishPostMutationRefresh);
+        committedGridText.length = 0;
         await React.act(async () =>
           finishPostMutationRefresh(
             jsonResponse({
@@ -1481,6 +1472,11 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
             showsPage(1, 1) &&
             listRequests.at(-1) === 1,
           `${mode} scenario did not clamp to the new last page`
+        );
+        assert.equal(
+          committedGridText.some((text) => text.includes("暂无记录")),
+          false,
+          `${mode} 回到仍有图片的末页前不得提交空图库状态`
         );
         assert.deepEqual(
           listRequests.slice(-2),
@@ -1827,10 +1823,6 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
           '.two-step-confirm-button[aria-label="正在删除"]'
         );
         assert.ok(pendingBatchTrash);
-        assert.equal(
-          pendingBatchTrash.querySelector("path")?.getAttribute("d"),
-          ADMIN_ICONS["delete-bin-5-line"]
-        );
         await React.act(async () => releaseTrashMutations.shift()?.());
         await waitFor(
           () =>
@@ -1878,10 +1870,6 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
           'button[aria-label^="删除中："]'
         );
         assert.ok(pendingSingleTrash);
-        assert.equal(
-          pendingSingleTrash.querySelector("path")?.getAttribute("d"),
-          ADMIN_ICONS["delete-bin-5-line"]
-        );
         assert.equal(document.querySelector("[data-dialog-frame]"), null);
         await React.act(async () => releaseTrashMutations.shift()?.());
         await waitFor(

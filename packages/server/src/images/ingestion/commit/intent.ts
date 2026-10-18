@@ -14,6 +14,7 @@ import {
 } from "../../read-models/ingestion-results.ts";
 import { readDuplicateSnapshotsByMd5 } from "../../read-models/duplicates.ts";
 import { canonicalImportMetadata } from "../sessions/import-metadata.ts";
+import { isIngestionVersionConflict } from "../sessions/replies.ts";
 import { ingestionSessionWithDuplicateConflict } from "./conflict-recovery.ts";
 import type {
   IngestionSessionSnapshot,
@@ -179,9 +180,7 @@ async function convergeCommitVersionConflict(
   runtime: ReturnType<typeof getRuntimeConfig>,
   error: unknown
 ): Promise<IngestionCommitItemResultDto> {
-  if (!(error instanceof ApiError) || error.code !== "ingestion_version_conflict") {
-    throw error;
-  }
+  if (!isIngestionVersionConflict(error)) throw error;
 
   const [current] = await repository.readSessions(owner, [input]);
   const committed = await readCommittedIngestionResultsByImageIds([input.image_id]);

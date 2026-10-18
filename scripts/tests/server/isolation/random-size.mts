@@ -41,7 +41,7 @@ await runIntegrationScenario(async (runtime) => {
   );
   for (const [i, id] of ids.entries()) {
     await runtime.databasePools.pool.query(
-      `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,image_time,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','ready',$2,'pc','dark',now(),1600,900,$4,$3,1600,900,$5,$3,1600,900,$6,$3)`,
+      `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','ready',$2,'pc','dark',1600,900,$4,$3,1600,900,$5,$3,1600,900,$6,$3)`,
       [id, i === 0 ? "local" : "synthetic-s3", String(i).repeat(32), full.length, medium.length, thumb.length]
     );
   }

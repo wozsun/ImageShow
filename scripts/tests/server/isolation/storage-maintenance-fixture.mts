@@ -40,7 +40,7 @@ export async function createMaintenanceFixture(runtime: IntegrationRuntime) {
     const thumb = key;
     const small = options.thumbnail ?? body;
     await runtime.databasePools.pool.query(
-      "INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','local','pc','dark',2,2,$2,$3,2,2,$2,$3,2,2,$4,$5)",
+      "INSERT INTO metadata (id,created_by,storage_slug,device,brightness,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','local','pc','dark',2,2,$2,$3,2,2,$2,$3,2,2,$4,$5)",
       [id,body.length,createHash("md5").update(body).digest("hex"),small.length,createHash("md5").update(small).digest("hex")]
     );
     if (options.source !== false) for(const prefix of ["large","medium"] as const) await access.driver.writeBuffer(prefix,key,body,"image/webp");

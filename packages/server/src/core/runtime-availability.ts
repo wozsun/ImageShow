@@ -134,6 +134,10 @@ export function getRedisOperationalState() {
   return redisState;
 }
 
+export function redisIsUnavailable() {
+  return !redisState.available;
+}
+
 export function onRedisOperationalStateChange(listener: RedisOperationalListener) {
   redisListeners.add(listener);
   return () => redisListeners.delete(listener);

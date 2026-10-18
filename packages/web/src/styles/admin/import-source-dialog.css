@@ -157,7 +157,6 @@
 }
 .import-issue-list span {
   overflow: hidden;
-  color: var(--admin-color-text-secondary);
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;

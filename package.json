@@ -1,7 +1,7 @@
 {
   "name": "imageshow",
   "private": true,
-  "version": "6.8.15",
+  "version": "6.8.16",
   "type": "module",
   "workspaces": [
     "packages/*"
@@ -10,8 +10,6 @@
     "esbuild@0.28.2": true
   },
   "scripts": {
-    "dev:server": "npm run build -w @imageshow/shared && npm run dev -w @imageshow/server",
-    "dev:web": "npm run build -w @imageshow/shared && npm run dev -w @imageshow/web",
     "clean": "node scripts/build/clean-build-output.mjs",
     "build": "node scripts/build/run-build.mjs",
     "icons:generate": "npm run icons:generate -w @imageshow/web",
@@ -24,8 +22,7 @@
     "verify:runtime": "node scripts/tests/verify/run.mjs runtime",
     "verify:release": "node scripts/tests/verify/run.mjs release",
     "test:web": "tsx --import ./scripts/tests/support/web-assets.mjs --test scripts/tests/web.test.ts",
-    "admin:reset-password": "node --env-file-if-exists=.env packages/server/src/admin-password-cli.ts reset-password",
-    "start": "npm run start -w @imageshow/server"
+    "admin:reset-password": "node --env-file-if-exists=.env packages/server/src/admin-password-cli.ts reset-password"
   },
   "engines": {
     "node": ">=26.10.0 <27"

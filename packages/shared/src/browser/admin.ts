@@ -126,7 +126,8 @@ export type AdminCheckStatusDto = {
   redis: AdminCheckResourceDto<AdminRedisStatusDto>;
 };
 
-export type TrashPurgeJobStateDto = "pending" | "running" | "retrying" | "exhausted";
+export const trashPurgeJobStates = ["pending", "running", "retrying", "exhausted"] as const;
+export type TrashPurgeJobStateDto = (typeof trashPurgeJobStates)[number];
 
 export type AdminTrashPurgeJobDto = {
   id: string;
@@ -138,8 +139,14 @@ export type AdminTrashPurgeJobDto = {
   error: string;
 };
 
+export const adminTrashCheckIssueKinds = [
+  "succeeded_target_remaining",
+  "target_not_deleted",
+  "stalled_job"
+] as const;
+
 export type AdminTrashCheckIssueDto = {
-  kind: "succeeded_target_remaining" | "target_not_deleted" | "stalled_job";
+  kind: (typeof adminTrashCheckIssueKinds)[number];
   count: number;
   sample_ids: string[];
 };

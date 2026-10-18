@@ -353,7 +353,7 @@ test("[Web/后台排序] 整数输入边界、权威更新与卸载遵循草稿�
   };
   // 排序输入的提示投递到所在页面的反馈区；这里由宿主组件提供同一个目标与区域。
   function Host({ value }: { value: number }) {
-    const feedbackTarget = useActionFeedbackTarget("sort-order-test");
+    const feedbackTarget = useActionFeedbackTarget();
     return h.React.createElement(
       h.React.Fragment,
       null,

@@ -6,8 +6,13 @@ export type ImageVariantsDto = Record<ImageVariant, ImageVariantDimensions>;
 export type ImageVariantByteSizesDto = Record<ImageVariant, Pick<ImageVariantDimensions, "byte_size">>;
 export type BoundImageAddress = { id: string; base_url: string };
 
+/** Stable physical identity, independent of editable image classification. */
+export function storageObjectKey(id: string) {
+  return `${id.slice(-2)}/${id}.webp`;
+}
+
 export function imageVariantUrl(image: BoundImageAddress, variant: ImageVariant) {
-  return `${image.base_url}/${variant}/${image.id.slice(-2)}/${image.id}.webp`;
+  return `${image.base_url}/${variant}/${storageObjectKey(image.id)}`;
 }
 
 export type VariantSettings = {
@@ -32,15 +37,3 @@ export function defaultNormalizeProfile(): NormalizeProfile {
     small: { ...common, max_long_edge: 600, max_size_kb: 60 }
   };
 }
-
-export type PreparedVariantFacts = {
-  bytes: number;
-  width: number;
-  height: number;
-  md5: string;
-  sha256: string;
-  quality: number | null;
-  effort: number | null;
-  passthrough: boolean;
-  over_target: boolean;
-};

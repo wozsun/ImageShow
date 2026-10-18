@@ -2,7 +2,11 @@ import "../support/web-environment.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseHTML } from "linkedom";
-import { galleryResidenceBufferScreens, galleryVirtualOverscanScreens } from "../../../packages/web/src/lib/gallery/gallery-budget.ts";
+import {
+  galleryRenderViewportHysteresisScreens,
+  galleryResidenceBufferScreens,
+  galleryVirtualOverscanScreens
+} from "../../../packages/web/src/lib/gallery/gallery-budget.ts";
 import { createGalleryTaxonomyDisplayFormatter } from "../../../packages/web/src/lib/gallery/card-display.ts";
 import {
   boundedHomeRevealIndexes,
@@ -22,7 +26,6 @@ import {
 } from "../../../packages/web/src/pages/gallery/gallery-data-window.ts";
 import {
   createGalleryRenderViewport,
-  galleryRenderViewportHysteresisScreens,
   shouldRefreshGalleryRenderViewport
 } from "../../../packages/web/src/pages/gallery/gallery-render-viewport.ts";
 import { GalleryCardRevealRegistry } from "../../../packages/web/src/pages/gallery/gallery-card-reveal.ts";
