@@ -210,8 +210,7 @@ await runIntegrationScenario(async (runtime) => {
         ...fixture.importTemplate,
         owner: "raw-session-owner",
         session_id: sessionId,
-        image_id: randomUuidV7At(new Date(now)),
-        image_time: new Date(now).toISOString()
+        image_id: randomUuidV7At(new Date(now))
       };
       const queued = activeSession(
         (

@@ -171,7 +171,6 @@ export type UploadIntentInputDto = {
 };
 
 type AcceptedIngestionItemDto = IngestionSessionPairDto & {
-  resolved_image_time: string;
   accepted_order: number;
 } & (
     | {
@@ -200,7 +199,6 @@ export type UploadIntentItemDto =
   | {
       session_id: string;
       candidate_image_id: string;
-      resolved_image_time: string;
       credential: string;
       status: "intent";
     }
@@ -263,7 +261,6 @@ export type ActiveServerIngestionItemDto = IngestionSessionPairDto & {
   download_url?: string;
   batch_position?: number;
   manifest_line?: number;
-  resolved_image_time: string;
   status: Exclude<ServerIngestionStatusDto, "completed">;
   phase: string;
   message: string;

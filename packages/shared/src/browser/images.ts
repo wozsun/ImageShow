@@ -7,6 +7,11 @@ export function storageObjectKey(id: string) {
   return `${id.slice(-2)}/${id}.webp`;
 }
 
+/** Image time is the UUIDv7 timestamp of the image ID (hyphenated lowercase form): its first 12 hex digits are Unix milliseconds, so ordering by ID orders by image time. */
+export function imageTimeMs(id: string) {
+  return Number.parseInt(id.slice(0, 8) + id.slice(9, 13), 16);
+}
+
 export function imageDevice(width: number, height: number): Device {
   return width >= height ? "pc" : "mb";
 }
@@ -68,7 +73,6 @@ export type ImageCardBaseDto = ShowImageCardDto & {
   theme: string | null;
   author: string | null;
   tags: string[];
-  image_time: string;
 };
 
 /**
@@ -79,7 +83,7 @@ export type GalleryImageCardDto = ShowImageCardDto & Pick<ImageCardBaseDto, "the
 
 type ImageDetailFieldsDto = Pick<
   ImageCardBaseDto,
-  "device" | "brightness" | "author" | "theme" | "tags" | "image_time"
+  "device" | "brightness" | "author" | "theme" | "tags"
 > & {
   description: string;
   base_url: string;
@@ -129,7 +133,6 @@ export type RandomImageJsonItemDto = {
   tags: string[];
   width: number;
   height: number;
-  image_time: string;
   url: string;
   byte_size: number;
 };
@@ -151,7 +154,7 @@ export type ImageAdminInfoDto = ImageAdminStorageDto & {
 };
 
 /** Exact recovery payload consumed by the image metadata editor. */
-export type EditableImageSnapshotDto = Omit<ImageDetailItemDto, "image_time"> &
+export type EditableImageSnapshotDto = ImageDetailItemDto &
   Pick<ShowImageCardDto, "width" | "height"> & ImageAdminStorageDto & {
     original: string;
   };

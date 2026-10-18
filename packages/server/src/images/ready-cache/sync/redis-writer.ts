@@ -18,6 +18,7 @@ import {
   readyImageIdSuffixScore,
   readyImageMember,
   readyImageStatFields,
+  readyImageTimeScore,
   serializeReadyImageCacheItem,
   type ReadyImageCacheItem
 } from "../model.ts";
@@ -98,7 +99,7 @@ export async function writeReadyImageCacheBatch(
     const member = readyImageMember(item.id);
     itemEntries.push([member, serializeReadyImageCacheItem(item)]);
     suffixMembers.push(readyImageIdSuffixScore(item), member);
-    allIndexMembers.push(item.sort_score, member);
+    allIndexMembers.push(readyImageTimeScore(item), member);
     incrementReadyImageCount(cardinalities, READY_IMAGE_ALL_INDEX_KEY);
     for (const field of readyImageStatFields(item)) {
       incrementReadyImageCount(stats, field);

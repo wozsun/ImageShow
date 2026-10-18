@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomUUIDv7 } from "node:crypto";
 import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 import { interceptPoolConnections, interceptSqlQueries } from "./database-faults.mts";
@@ -24,18 +24,19 @@ await runIntegrationScenario(async (runtime) => {
   const publicImagesReadModel =
     await import("../../../../packages/server/src/images/read-models/public-images.ts");
   const imageFilterPlan = await import("../../../../packages/server/src/images/filter-plan.ts");
+  const imageTime = await import("../../../../packages/server/src/images/image-time.ts");
   const readyCacheFilterIndex =
     await import("../../../../packages/server/src/images/ready-cache/indexes/filter.ts");
   const vocabCache = await import("../../../../packages/server/src/vocab/cache.ts");
   await runtimeAvailability.requireOperationalRedis();
   const duplicates =
     await import("../../../../packages/server/src/images/read-models/duplicates.ts");
-  const duplicateIds = [randomUUID(), randomUUID()];
+  const duplicateIds = [randomUUIDv7(), randomUUIDv7()];
   const duplicateMd5 = createHash("md5").update("duplicate-authority").digest("hex");
   try {
     for (const [index, id] of duplicateIds.entries()) {
       await database.pool.query(
-        `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','local','pc','dark',NULL,$3,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)`,
+        `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','local','pc','dark',NULL,$3,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)`,
         [
           id,
           duplicateMd5,
@@ -67,9 +68,10 @@ await runIntegrationScenario(async (runtime) => {
     await database.pool.query("DELETE FROM metadata WHERE id=ANY($1::uuid[])", [duplicateIds]);
   }
   await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
-  const paginationIds = [randomUUID(), randomUUID(), randomUUID()];
   const paginationNewest = "2026-08-15T00:00:00.000Z";
   const paginationOlder = "2026-08-14T00:00:00.000Z";
+  const paginationIds = [paginationNewest, paginationNewest, paginationOlder]
+    .map((time) => imageTime.createImageId(new Date(time)));
   await database.pool.query(
     "INSERT INTO tag(slug, display_name) VALUES " +
       "('pagination-old', 'Pagination old'), " +
@@ -115,7 +117,7 @@ await runIntegrationScenario(async (runtime) => {
   let pageWindowSelects = 0;
   const restorePageWindows = interceptPoolConnections(database.pool, (client) =>
     interceptSqlQueries(client, (text, _values, query) => {
-      if (/ORDER BY image_time DESC, id DESC[\s\S]*OFFSET/.test(text)) {
+      if (/ORDER BY id DESC[\s\S]*OFFSET/.test(text)) {
         pageWindowSelects += 1;
       }
       return query();
@@ -164,7 +166,7 @@ await runIntegrationScenario(async (runtime) => {
     page: 1,
     limit: 10
   });
-  const concurrentPaginationId = randomUUID();
+  const concurrentPaginationId = imageTime.createImageId(new Date("2026-08-16T00:00:00.000Z"));
   let snapshotPage;
   try {
     await Promise.race([
@@ -236,15 +238,8 @@ await runIntegrationScenario(async (runtime) => {
   const matrixExtraTag = "pagination-extra";
   const matrixEmptyTag = "pagination-empty";
   const matrixAuthor = "pagination-matrix";
-  const matrixIds = [
-    randomUUID(),
-    randomUUID(),
-    randomUUID(),
-    randomUUID(),
-    randomUUID(),
-    randomUUID()
-  ];
   const matrixTime = "2026-08-17T00:00:00.000Z";
+  const matrixIds = Array.from({ length: 6 }, () => imageTime.createImageId(new Date(matrixTime)));
   await database.pool.query(
     "INSERT INTO theme(slug, display_name) VALUES ($1, 'Pagination matrix')",
     [matrixTheme]
@@ -607,14 +602,13 @@ await runIntegrationScenario(async (runtime) => {
 
   const sortRows = matrixIds.map((id, index) => ({
     id,
-    image_time: `2026-08-${20 + Math.floor(index / 2)}T00:00:00.000Z`,
     created_at: `2026-08-${24 - Math.floor(index / 2)}T00:00:00.000Z`,
     unset: index < 2
   }));
   for (const row of sortRows) {
     await database.pool.query(
-      "UPDATE metadata SET image_time=$2, created_at=$3, theme=$4 WHERE id=$1",
-      [row.id, row.image_time, row.created_at, row.unset ? null : matrixTheme]
+      "UPDATE metadata SET created_at=$2, theme=$3 WHERE id=$1",
+      [row.id, row.created_at, row.unset ? null : matrixTheme]
     );
   }
   await readyCacheCoordinator.requestReadyImageCacheRebuild({ signal: neverAbortedSignal });
@@ -631,7 +625,9 @@ await runIntegrationScenario(async (runtime) => {
           const expected = sortRows
             .filter((row) => !unset || row.unset)
             .sort((a, b) => {
-              const comparison = a[sort_by].localeCompare(b[sort_by]) || a.id.localeCompare(b.id);
+              // The image ID carries the image time, so image-time order is ID order.
+              const comparison = (sort_by === "created_at" ? a.created_at.localeCompare(b.created_at) : 0)
+                || a.id.localeCompare(b.id);
               return order === "latest" ? -comparison : comparison;
             });
           const seen: string[] = [];

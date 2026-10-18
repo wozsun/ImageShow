@@ -13,6 +13,7 @@ import {
   readyImageIdSuffixScore,
   readyImageMember,
   readyImageStatFields,
+  readyImageTimeScore,
   serializeReadyImageCacheItem,
   type ReadyImageCacheItem
 } from "../model.ts";
@@ -133,11 +134,11 @@ async function queueAddition(
       }
     );
   }
-  if (!previous || previous.sort_score !== item.sort_score) {
+  if (!previous) {
     await writer.queue(
-      estimatedRedisBytes(READY_IMAGE_ALL_INDEX_KEY, item.sort_score, member),
+      estimatedRedisBytes(READY_IMAGE_ALL_INDEX_KEY, readyImageTimeScore(item), member),
       (pipeline) => {
-        pipeline.zadd(READY_IMAGE_ALL_INDEX_KEY, item.sort_score, member);
+        pipeline.zadd(READY_IMAGE_ALL_INDEX_KEY, readyImageTimeScore(item), member);
       }
     );
   }

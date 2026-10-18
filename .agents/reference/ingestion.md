@@ -11,8 +11,8 @@
 
 ## 身份与幂等
 
-- 任务以大小写敏感的 `(session_id, image_id)` pair 定位：UUID 可以规范化大小写，session ID 不得改写。`image_id` 是按独立 `image_time` 生成的 UUIDv7；一次选择共享 batch key，batch position 写入 UUIDv7 的 `rand_a`，使并发完成顺序不改变同批排序。
-- 浏览器 `attemptKey` 是幂等键：同一规范化意图的重试复用原 session、候选 ID、`image_time` 与 request hash；只有 intent 已过期且 canonical 也不存在时才形成新 incarnation。接管请求冻结完整输入，响应未知的重放不读取之后变化的窗口默认值。服务端派生的 accepted order、执行 token 与 generation 不进入 request hash。
+- 任务以大小写敏感的 `(session_id, image_id)` pair 定位：UUID 可以规范化大小写，session ID 不得改写。`image_id` 是按解析后的图片时间生成的 UUIDv7，canonical、上传意图与回执不另存时间；一次选择共享 batch key，batch position 写入 UUIDv7 的 `rand_a`，使并发完成顺序不改变同批排序。
+- 浏览器 `attemptKey` 是幂等键：同一规范化意图的重试复用原 session、候选 ID（图片时间随之固定）与 request hash；只有 intent 已过期且 canonical 也不存在时才形成新 incarnation。接管请求冻结完整输入，响应未知的重放不读取之后变化的窗口默认值。服务端派生的 accepted order、执行 token 与 generation 不进入 request hash。
 - prepare 后的 MD5 重复只是 PG 快照提示，commit 在同 MD5 advisory lock 内再次判定。
 - Upload 固定为一次 intent POST 加每项至多一次 raw PUT，凭据只放受限 header；canonical 形成前失败时以原 `attemptKey` 为同一 pair 重签凭据，不创建第二项任务。Import accept 在 storage read lock 内创建 canonical，请求断开不撤销已接受项；取消结果未知的项以冻结输入发送 `cancel_if_missing`，缺失项原子登记 discarded 回执，迟到的 accept 复用该回执。
 - 控制请求超时保留未知结果供幂等核对，不视为服务端失败或已取消。

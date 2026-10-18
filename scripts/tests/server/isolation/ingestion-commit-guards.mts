@@ -73,7 +73,6 @@ await runIntegrationScenario(async (runtime) => {
     source_type: "weibo" as const,
     session_id: commitSessionId,
     image_id: commitImageId,
-    image_time: commitImageTime.iso,
     request_hash: createHash("sha256")
       .update("real-commit-" + commitImageId)
       .digest("hex"),

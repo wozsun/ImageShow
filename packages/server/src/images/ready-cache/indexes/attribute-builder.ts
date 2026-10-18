@@ -1,5 +1,4 @@
 import { randomUUIDv7 } from "node:crypto";
-import { microsecondsTimestamp } from "../../../core/microseconds.ts";
 import { unsetSelector } from "@imageshow/shared/browser";
 import { withTransactionOnClient } from "../../../core/database/transactions.ts";
 import { neverAbortedSignal } from "../../../core/abort.ts";
@@ -19,7 +18,7 @@ import {
 } from "../keys.ts";
 import {
   readyImageMember,
-  readyImageSortScore
+  readyImageTimeScore
 } from "../model.ts";
 import { chunkSortedSetEntries } from "../sync/redis-batch.ts";
 import { getReadyImageRevision } from "../revision.ts";
@@ -32,25 +31,18 @@ const ATTRIBUTE_INDEX_BATCH_SIZE = 1_000;
 
 type ReadyImageAttributeIndexRow = {
   id: string;
-  sort_score: string;
 };
 
-type ReadyImageAttributeIndexCursor = {
-  id: string;
-  imageTime?: string;
-};
-
+/** Every attribute source pages by ascending image ID; scores derive from the ID. */
 function attributeSourceQuery(
   spec: ReadyImageAttributeIndexSpec,
-  cursor: ReadyImageAttributeIndexCursor | null
+  afterId: string | null
 ) {
-  const commonColumns = `m.id::text AS id,
-    (extract(epoch FROM m.image_time) * 1000000)::bigint::text AS sort_score`;
   if ((spec.kind === "tag" && spec.value !== unsetSelector) || spec.kind === "group") {
     const table = spec.kind === "tag" ? "image_tag" : "image_group_member";
     const slugColumn = spec.kind === "tag" ? "tag_slug" : "group_slug";
     return {
-      text: `SELECT ${commonColumns}
+      text: `SELECT m.id::text AS id
                FROM ${table} it
                JOIN metadata m ON m.id=it.image_id
               WHERE it.${slugColumn}=$1
@@ -58,7 +50,7 @@ function attributeSourceQuery(
                 AND ($2::uuid IS NULL OR it.image_id > $2::uuid)
               ORDER BY it.image_id
               LIMIT $3`,
-      values: [spec.value, cursor?.id ?? null, ATTRIBUTE_INDEX_BATCH_SIZE]
+      values: [spec.value, afterId, ATTRIBUTE_INDEX_BATCH_SIZE]
     };
   }
   const conditions: string[] = ["m.status='ready'"];
@@ -79,16 +71,14 @@ function attributeSourceQuery(
         : `m.${spec.kind}=${bind(spec.value)}`
     );
   }
-  const time = bind(cursor?.imageTime ?? null);
-  const id = bind(cursor?.id ?? null);
+  const id = bind(afterId);
   values.push(ATTRIBUTE_INDEX_BATCH_SIZE);
   return {
-    text: `SELECT ${commonColumns}
+    text: `SELECT m.id::text AS id
              FROM metadata m
             WHERE ${conditions.join(" AND ")}
-              AND (${time}::timestamptz IS NULL
-                OR (m.image_time, m.id) < (${time}::timestamptz, ${id}::uuid))
-            ORDER BY m.image_time DESC, m.id DESC
+              AND (${id}::uuid IS NULL OR m.id > ${id}::uuid)
+            ORDER BY m.id
             LIMIT $${values.length}`,
     values
   };
@@ -97,11 +87,11 @@ function attributeSourceQuery(
 async function readAttributeIndexBatch(
   client: DatabaseReader,
   spec: ReadyImageAttributeIndexSpec,
-  cursor: ReadyImageAttributeIndexCursor | null,
+  afterId: string | null,
   signal: AbortSignal
 ) {
   signal.throwIfAborted();
-  const query = attributeSourceQuery(spec, cursor);
+  const query = attributeSourceQuery(spec, afterId);
   const rows = (await client.query(query.text, query.values)).rows as ReadyImageAttributeIndexRow[];
   signal.throwIfAborted();
   return rows;
@@ -114,7 +104,7 @@ async function writeAttributeIndexBatch(
 ) {
   signal.throwIfAborted();
   const entries = rows.map(
-    (row) => [readyImageSortScore(row.sort_score), readyImageMember(row.id)] as const
+    (row) => [readyImageTimeScore(row), readyImageMember(row.id)] as const
   );
   for (const chunk of chunkSortedSetEntries(key, entries)) {
     const members = chunk.flat();
@@ -138,14 +128,14 @@ async function buildAttributeIndexSource(
   signal: AbortSignal
 ) {
   let count = 0;
-  let cursor: ReadyImageAttributeIndexCursor | null = null;
+  let afterId: string | null = null;
   return withTransactionOnClient(client, async () => {
     if ((await getReadyImageRevision(client)).revision !== revision) {
       return null;
     }
     for (;;) {
       signal.throwIfAborted();
-      const rows = await readAttributeIndexBatch(client, spec, cursor, signal);
+      const rows = await readAttributeIndexBatch(client, spec, afterId, signal);
       if (!rows.length) break;
       if (count + rows.length > READY_IMAGE_DERIVED_CACHE_POLICY.maxResultMembers) {
         return null;
@@ -155,19 +145,11 @@ async function buildAttributeIndexSource(
       if (!Number.isSafeInteger(count)) {
         throw new Error("Ready-image attribute index is too large");
       }
-      const last = rows.at(-1)!;
-      const nextCursor =
-        ((spec.kind === "tag" && spec.value !== unsetSelector) || spec.kind === "group")
-          ? { id: last.id }
-          : {
-              id: last.id,
-              imageTime: microsecondsTimestamp(BigInt(readyImageSortScore(last.sort_score)))!
-            };
-      if (nextCursor.id === cursor?.id
-        && nextCursor.imageTime === cursor?.imageTime) {
+      const lastId = rows.at(-1)!.id;
+      if (lastId === afterId) {
         throw new Error("Ready-image attribute index keyset cursor did not advance");
       }
-      cursor = nextCursor;
+      afterId = lastId;
       const connection = getRedisConnectionState();
       if (!connection.ready || connection.epoch !== connectionEpoch) {
         throw new Error("Redis connection changed while building an attribute index");

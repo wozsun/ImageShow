@@ -32,7 +32,6 @@ import { imageHasTrashPurgeJobSql } from "./trash/purge-state.ts";
 
 type DatabaseNumber = number | string;
 type DatabaseTimestamp = string | Date;
-type PublicImageTimeRecord = { image_time: DatabaseTimestamp } | { sort_score: number };
 
 type ImageMetadataRecord = {
   id: string;
@@ -61,15 +60,12 @@ export type ImageAdminInfoRecord = ImageVariantByteSizeRecord & ImageAdminTimest
   storage_slug: string;
 };
 
-export type IngestionImageRecord = ImageMetadataRecord & ImageVariantRecord & {
-  image_time: DatabaseTimestamp;
-};
+export type IngestionImageRecord = ImageMetadataRecord & ImageVariantRecord;
 
 export type IngestionImageRecordWithTags = IngestionImageRecord & { tags: string[] };
 
 /** Exact row returned by the full admin image-list projection. */
 export type ImageRecordWithTags = AdminImageCommonRecord & ImageAdminTimestampsRecord & {
-  image_time: DatabaseTimestamp;
   status: "ready" | "deleted";
   deleted_at: DatabaseTimestamp | null;
   purge_pending: boolean;
@@ -78,7 +74,6 @@ export type ImageRecordWithTags = AdminImageCommonRecord & ImageAdminTimestampsR
 
 /** Exact row returned by the compact overview detail projection. */
 export type AdminImageDetailRecordWithTags = ImageMetadataRecord & ImageAdminInfoRecord & {
-  image_time: DatabaseTimestamp;
   tags: string[];
 };
 
@@ -104,10 +99,7 @@ function imageMetadataPresentationColumns(variantColumns: string) {
   ].join(", ");
 }
 
-export const ingestionImagePresentationColumns = [
-  imageMetadataPresentationColumns(imageVariantColumns),
-  "image_time"
-].join(", ");
+export const ingestionImagePresentationColumns = imageMetadataPresentationColumns(imageVariantColumns);
 
 const editableImagePresentationColumns = [
   imageMetadataPresentationColumns(imageVariantByteSizeColumns),
@@ -125,7 +117,6 @@ export const imageAdminInfoPresentationColumns = [
 
 export const adminImageListPresentationColumns = [
   editableImagePresentationColumns,
-  "image_time",
   "status",
   "deleted_at",
   imageAdminTimestampColumns
@@ -155,7 +146,6 @@ export const ingestionImagePresentationColumnsWithTags = [
 
 export const adminImageDetailPresentationColumnsWithTags = [
   imageMetadataPresentationColumns(imageVariantByteSizeColumns),
-  "image_time",
   imageAdminTimestampColumns,
   imageTagsPresentationColumn
 ].join(", ");
@@ -184,8 +174,7 @@ export type PublicImageDetailRecord = Pick<
   | "author"
   | "brightness"
   | "theme"
-> &
-  PublicImageTimeRecord & { tags: string[] };
+> & { tags: string[] };
 
 export type PublicShowImageRecord = Pick<
   PublicImageCardRecord,
@@ -206,12 +195,6 @@ function storageRecordsForRows(
 
 function serializeTimestamp(value: DatabaseTimestamp) {
   return (value instanceof Date ? value : new Date(value)).toISOString();
-}
-
-function serializePublicImageTime(row: PublicImageTimeRecord) {
-  return "sort_score" in row
-    ? new Date(Math.floor(row.sort_score / 1_000)).toISOString()
-    : serializeTimestamp(row.image_time);
 }
 
 function serializeNullableTimestamp(value: DatabaseTimestamp | null) {
@@ -293,8 +276,7 @@ export async function ingestionImageItemsWithTags(rows: IngestionImageRecordWith
     width: Number(row.s_width),
     height: Number(row.s_height),
     original: row.original,
-    large_md5: row.l_md5,
-    image_time: serializeTimestamp(row.image_time)
+    large_md5: row.l_md5
   }));
 }
 
@@ -317,7 +299,6 @@ export async function adminImageListItemsWithTags(rows: ImageRecordWithTags[]) {
     status: row.status,
     purge_pending: row.purge_pending,
     deleted_at: serializeNullableTimestamp(row.deleted_at),
-    image_time: serializeTimestamp(row.image_time),
     ...presentImageAdminTimestamps(row)
   }));
 }
@@ -328,7 +309,6 @@ export async function adminImageDetailItemsWithTags(rows: AdminImageDetailRecord
   return rows.map((row): AdminImageRecentItemDto => ({
     ...presentAdminImageBase(row, storageRecords),
     original: hasOriginal(row),
-    image_time: serializeTimestamp(row.image_time),
     ...presentImageAdminTimestamps(row)
   }));
 }
@@ -352,7 +332,6 @@ export async function publicImageDetail(
     author: row.author,
     brightness: row.brightness,
     ...(view === "show" ? { theme: row.theme, tags: row.tags } : {}),
-    image_time: serializePublicImageTime(row),
     description: row.description,
     source: row.source || null,
     base_url,

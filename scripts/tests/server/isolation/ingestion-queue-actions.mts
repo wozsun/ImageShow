@@ -90,7 +90,6 @@ await runIntegrationScenario(async (runtime) => {
       owner: actionOwner,
       session_id: sessionId,
       image_id: imageId,
-      image_time: resolved.iso,
       request_hash: createHash("sha256").update(label).digest("hex"),
       import_download: { url: "https://example.com/action-" + label + ".webp" },
       metadata: { ...ingestionMetadata, title: label }
@@ -146,7 +145,7 @@ await runIntegrationScenario(async (runtime) => {
   const actionFirst = await createActionReadySession("first");
   const actionSecond = await createActionReadySession("second");
   await database.pool.query(
-    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,'ready',1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
+    `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),$2,'local','pc','dark',NULL,'ready',1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
     [
         actionFirst.image_id,
         actionOwner,
@@ -867,7 +866,7 @@ await runIntegrationScenario(async (runtime) => {
   );
   const duplicateRecoveryImageId = randomUUIDv7();
   await database.pool.query(
-    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,'ready',1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
+    `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),$2,'local','pc','dark',NULL,'ready',1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
     [
         duplicateRecoveryImageId,
         actionOwner,
@@ -934,7 +933,7 @@ await runIntegrationScenario(async (runtime) => {
   const duplicateIntentReady = await createActionReadySession("duplicate-before-intent");
   const duplicateIntentImageId = randomUUIDv7();
   await database.pool.query(
-    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,'ready',1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
+    `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),$2,'local','pc','dark',NULL,'ready',1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
     [
         duplicateIntentImageId,
         actionOwner,
@@ -1193,7 +1192,7 @@ await runIntegrationScenario(async (runtime) => {
   assert.ok(completedCommitActionCurrent);
   assert.equal(completedCommitActionCurrent.status, "committing");
   await database.pool.query(
-    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,'ready',1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
+    `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),$2,'local','pc','dark',NULL,'ready',1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
     [
         completedCommitActionReady.image_id,
         actionOwner,
@@ -1396,7 +1395,7 @@ await runIntegrationScenario(async (runtime) => {
     )
   );
   await database.pool.query(
-    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,'ready',1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
+    `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),$2,'local','pc','dark',NULL,'ready',1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
     [
         clearCompletedReady.image_id,
         actionOwner,
@@ -1444,7 +1443,7 @@ await runIntegrationScenario(async (runtime) => {
     )
   );
   await database.pool.query(
-    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,'ready',1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
+    `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),$2,'local','pc','dark',NULL,'ready',1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
     [
         deferredCompletedReady.image_id,
         actionOwner,
@@ -1745,7 +1744,6 @@ await runIntegrationScenario(async (runtime) => {
   for (const key of [
     "session_id",
     "image_id",
-    "image_time",
     "accepted_order",
     "batch_position",
     "source_type",
@@ -1883,7 +1881,6 @@ await runIntegrationScenario(async (runtime) => {
     assert.equal(current.status, excluded ? "failed" : "queued");
     for (const field of [
       "image_id",
-      "image_time",
       "accepted_order",
       "batch_position",
       "source_type",

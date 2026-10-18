@@ -125,7 +125,6 @@ test("[Web/内容接入] placeholder 草稿按批写回并自动跨越 worker �
               image_id: imageIds[0],
               queue: "import",
               source_type: "url",
-              resolved_image_time: "2026-08-23T01:02:03.456Z",
               status: "preparing",
               phase: "prepare",
               message: "worker advanced",
@@ -1709,7 +1708,6 @@ test("[Web/内容接入] Import 批次清空只等待一次 accept 并聚合 50+
           items: jobs.map((_, index) => ({
             session_id: String(index).padStart(43, "S"),
             image_id: `019f8457-063a-7${String(index).padStart(3, "0")}-a580-00000000008e`,
-            resolved_image_time: "2026-08-23T01:02:03.456Z",
             status: "accepted",
             accepted_order: index + 1,
             version: 1,
@@ -1858,7 +1856,6 @@ test("[Web/内容接入] 解析后 202 张按上限接管，明确拒绝与未�
         status: "discarded",
         session_id: "D".repeat(43),
         image_id: webUuidV7(),
-        resolved_image_time: "2026-09-13T00:00:00.000Z",
         accepted_order: 1
       }
     ]
@@ -1951,7 +1948,6 @@ test("[Web/内容接入] Upload 与 Import 接管只使用固定短路由和 1 +
           items: items.map((_, index) => ({
             session_id: sessionIds[index],
             candidate_image_id: imageIds[index],
-            resolved_image_time: "2026-08-23T01:02:03.456Z",
             credential: `credential-${index}`,
             status: "intent"
           }))
@@ -1967,7 +1963,6 @@ test("[Web/内容接入] Upload 与 Import 接管只使用固定短路由和 1 +
           items: items.map((_, index) => ({
             session_id: sessionIds[index],
             image_id: imageIds[index],
-            resolved_image_time: "2026-08-23T01:02:03.456Z",
             status: "accepted"
           }))
         }),

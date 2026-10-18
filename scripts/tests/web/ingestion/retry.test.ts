@@ -389,7 +389,6 @@ test("[Web/内容接入] 上传重试等待前批结束后复核原尝试及当�
             status: "accepted",
             session_id: target.sessionId,
             image_id: target.imageId,
-            resolved_image_time: imageTime,
             version: 1,
             last_semantic_revision: 2,
             accepted_order: 2

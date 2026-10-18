@@ -168,8 +168,7 @@ test("[Server/图片] 完成结果统一分类图片与存储配置断连并保�
             s_width: 600,
             s_height: 400,
             s_byte_size: "40000",
-            s_md5: "c".repeat(32),
-            image_time: fault === "format" ? "invalid" : "2026-09-15T00:00:00.000Z"
+            s_md5: "c".repeat(32)
           }
         ]
       };
@@ -184,7 +183,7 @@ test("[Server/图片] 完成结果统一分类图片与存储配置断连并保�
           : [
               {
                 slug: "local",
-                type: "local",
+                type: fault === "format" ? "unsupported" : "local",
                 config: {},
                 display_name: "Local",
                 enabled: true,
@@ -210,7 +209,10 @@ test("[Server/图片] 完成结果统一分类图片与存储配置断连并保�
   }
   fault = "format";
   registry.invalidateStorageBackendRegistry();
-  await assert.rejects(readCommittedIngestionResultsByImageIds([id]), RangeError);
+  await assert.rejects(
+    readCommittedIngestionResultsByImageIds([id]),
+    /Unsupported storage backend type/
+  );
   fault = "missing";
   registry.invalidateStorageBackendRegistry();
   await assert.rejects(
@@ -1864,41 +1866,25 @@ test("[Server/图片] 图片时间、UUIDv7、游标、分类和统一筛选保�
     Date.parse(parsedTime.iso)
   );
 
+  // Ordered cursors carry only the UUIDv7 ID; its timestamp is the image-time score.
   const context = createImageBrowseContext("latest");
   const cursorId = "00000000-0000-7000-8000-0000000000ab";
-  const positions = [
-    { time: "2020-04-30T16:00:00.123456Z", score: 1_588_262_400_123_456 },
-    { time: "1684-07-28T00:12:25.259009Z", score: Number.MIN_SAFE_INTEGER },
-    { time: "1969-12-31T23:59:59.999999Z", score: -1 },
-    { time: "1970-01-01T00:00:00.000000Z", score: 0 },
-    { time: "2255-06-05T23:47:34.740991Z", score: Number.MAX_SAFE_INTEGER }
-  ];
-  for (const { time, score } of positions) {
-    const row = { cursor_image_time: time, id: cursorId };
-    const encoded = encodeImageCursor(row, context);
-    assert.equal(encoded.length, 31);
-    assert.equal(encodeImageCursor({ id: cursorId, sort_score: score }, context), encoded);
+  for (const id of [
+    cursorId,
+    "0171cb6c-7c3b-7000-8000-0000000000ab",
+    "ffffffff-ffff-7fff-bfff-ffffffffffff"
+  ]) {
+    const encoded = encodeImageCursor({ id }, context);
+    assert.equal(encoded.length, 22);
     for (const order of ["latest", "oldest"] as const) {
       assert.deepEqual(decodeImageCursor(encoded, createImageBrowseContext(order)), {
-        imageTime: time,
-        id: cursorId,
-        sortScore: score,
+        id,
+        sortScore: Number.parseInt(id.replaceAll("-", "").slice(0, 12), 16),
         phase: 0
       });
     }
   }
-  const adjacent = [1_588_262_400_123_456, 1_588_262_400_123_457].map((sort_score) =>
-    encodeImageCursor({ id: cursorId, sort_score }, context)
-  );
-  assert.notEqual(adjacent[0], adjacent[1]);
-  assert.equal(decodeImageCursor(adjacent[1]!, context).imageTime, "2020-04-30T16:00:00.123457Z");
-  for (const sort_score of [NaN, Infinity, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
-    assert.throws(
-      () => encodeImageCursor({ id: cursorId, sort_score }, context),
-      /Invalid image list cursor row/
-    );
-  }
-  const fixedCursorRow = { cursor_image_time: positions[0]!.time, id: cursorId };
+  const fixedCursorRow = { id: cursorId };
   const encoded = encodeImageCursor(fixedCursorRow, context);
   for (const invalid of [
     "invalid",
@@ -1910,18 +1896,10 @@ test("[Server/图片] 图片时间、UUIDv7、游标、分类和统一筛选保�
     assert.throws(() => decodeImageCursor(invalid, context), /Invalid image list cursor/);
   }
   const invalidUuid = Buffer.from(encoded, "base64url");
-  invalidUuid[15] = 0;
+  invalidUuid[8] = 0;
   assert.throws(
     () => decodeImageCursor(invalidUuid.toString("base64url"), context),
     /Invalid image list cursor/
-  );
-  assert.throws(
-    () =>
-      encodeImageCursor(
-        { ...fixedCursorRow, cursor_image_time: "2255-06-05T23:47:34.740992Z" },
-        context
-      ),
-    /Invalid image list cursor row/
   );
   assert.throws(
     () => encodeImageCursor({ ...fixedCursorRow, id: "not-a-uuid" }, context),
@@ -1938,7 +1916,6 @@ test("[Server/图片] 图片时间、UUIDv7、游标、分类和统一筛选保�
       assert.equal(randomCursor.length, 26);
       assert.deepEqual(decodeImageCursor(randomCursor, randomContext), {
         id,
-        imageTime: "",
         sortScore: Number.parseInt(suffix, 16),
         phase: suffix[0] === "0" ? 1 : 0
       });
@@ -1978,7 +1955,7 @@ test("[Server/图片] 图片时间、UUIDv7、游标、分类和统一筛选保�
     "dark",
     "pc",
     "light",
-    ["blocked"],
+    "blocked",
     ["live", "stage"]
   ]);
   assert.match(sql.where.join(" AND "), /EXISTS/);
@@ -2006,7 +1983,7 @@ test("[Server/图片] 公开 cursor、后台 offset 与 Redis 有序窗口只读
     createPageWindow(100, 60),
     reader
   );
-  assert.match(sql, /ORDER BY image_time DESC, id DESC/);
+  assert.match(sql, /ORDER BY id DESC/);
   assert.match(sql, /LIMIT \$2 OFFSET \$3/);
   assert.match(sql, /AS tags/);
   assert.match(
@@ -2016,24 +1993,21 @@ test("[Server/图片] 公开 cursor、后台 offset 与 Redis 有序窗口只读
   assert.deepEqual(sqlParams, ["deleted", 60, 5_940]);
 
   const publicCursorId = "00000000-0000-7002-8000-00000000008d";
-  const publicCursorTime = "2026-08-03T12:00:00.000000Z";
   await fetchPublicImageCardPage(
-    ["status=$1"],
-    ["ready"],
+    createImageFilterPlan({}),
     60,
     createImageBrowseContext("oldest"),
     "gallery",
-    { imageTime: publicCursorTime, id: publicCursorId, sortScore: 0, phase: 0 },
+    { id: publicCursorId, sortScore: 0, phase: 0 },
     reader
   );
-  assert.match(sql, /\(image_time, id\) > \(\$3::timestamptz, \$4::uuid\)/);
-  assert.match(sql, /ORDER BY image_time ASC, id ASC/);
-  assert.match(sql, /LIMIT \$2/);
+  assert.match(sql, /id > \$2::uuid/);
+  assert.match(sql, /ORDER BY id ASC/);
+  assert.match(sql, /LIMIT \$3/);
   assert.deepEqual(sqlParams, [
     "ready",
-    61,
-    publicCursorTime,
-    publicCursorId
+    publicCursorId,
+    61
   ]);
 
   const first = servingReadyCacheItem({ id: randomUUID() });

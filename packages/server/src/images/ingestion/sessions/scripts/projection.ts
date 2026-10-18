@@ -530,7 +530,7 @@ end
 
 local function assert_upload_intent_shape(intent, stored)
   assert_exact_fields(intent, {
-    'owner', 'session_id', 'candidate_image_id', 'resolved_image_time',
+    'owner', 'session_id', 'candidate_image_id',
     'request_hash', 'display_order_key', 'batch_position', 'metadata', 'storage_slug',
     'expected_size', 'max_long_edge', 'created_at', 'expires_at',
     'execution_token', 'claim_heartbeat_at'
@@ -539,8 +539,6 @@ local function assert_upload_intent_shape(intent, stored)
     or type(intent.session_id) ~= 'string' or intent.session_id == ''
     or type(intent.candidate_image_id) ~= 'string'
     or intent.candidate_image_id == ''
-    or type(intent.resolved_image_time) ~= 'string'
-    or intent.resolved_image_time == ''
     or not valid_hash(intent.request_hash, 32)
     or not valid_display_order_key(
       intent.display_order_key,
@@ -615,17 +613,16 @@ local function assert_canonical_shape(snapshot, pending_acceptance)
     end
   elseif snapshot.status == 'discarded' then
     assert_exact_fields(snapshot, {
-      'owner', 'queue', 'session_id', 'image_id', 'image_time',
+      'owner', 'queue', 'session_id', 'image_id',
       'request_hash', 'status', 'version', 'last_semantic_revision',
       'accepted_at', 'accepted_order', 'discarded_at', 'discard_at'
     }, 'discarded')
-    if type(snapshot.image_time) ~= 'string' or snapshot.image_time == ''
-      or not valid_integer(snapshot.discarded_at, 0) then
+    if not valid_integer(snapshot.discarded_at, 0) then
       error('INGESTION_QUEUE_STRUCTURE discarded_shape')
     end
   else
     assert_allowed_fields(snapshot, {
-      'owner', 'queue', 'source_type', 'session_id', 'image_id', 'image_time',
+      'owner', 'queue', 'source_type', 'session_id', 'image_id',
       'request_hash', 'metadata', 'storage_slug', 'status', 'phase', 'message',
       'progress', 'version', 'progress_seq', 'last_semantic_revision',
       'accepted_at', 'accepted_order', 'execution_token', 'raw_generation',
@@ -641,8 +638,7 @@ local function assert_canonical_shape(snapshot, pending_acceptance)
       and not valid_import_source_type(snapshot.source_type) then
       error('INGESTION_QUEUE_STRUCTURE canonical_source')
     end
-    if type(snapshot.image_time) ~= 'string' or snapshot.image_time == ''
-      or type(snapshot.storage_slug) ~= 'string'
+    if type(snapshot.storage_slug) ~= 'string'
       or snapshot.storage_slug == ''
       or type(snapshot.phase) ~= 'string'
       or type(snapshot.message) ~= 'string'

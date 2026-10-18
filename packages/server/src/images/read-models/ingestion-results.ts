@@ -11,7 +11,6 @@ import {
 
 export type CommittedIngestionResult = Readonly<{
   image_id: string;
-  image_time: string;
   created_by: string;
   item: CompletedIngestionImageDto;
 }>;
@@ -61,8 +60,6 @@ export async function readCommittedIngestionResultsByImageIds(
       item.id.toLowerCase(),
       {
         image_id: item.id.toLowerCase(),
-        image_time: new Date(rowsById.get(item.id.toLowerCase())!.image_time)
-          .toISOString(),
         created_by: rowsById.get(item.id.toLowerCase())!.created_by,
         item
       }

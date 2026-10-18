@@ -1,5 +1,4 @@
 import type { RandomImageJsonItemDto, RandomImageSize } from "@imageshow/shared/browser";
-import { microsecondsTimestamp } from "../core/microseconds.ts";
 import { publicImageUrlForConfig } from "../storage/objects/public-urls.ts";
 import { getStorageBackendRecords } from "../storage/backends/registry.ts";
 import { storedVariantFacts } from "../images/variants/record.ts";
@@ -23,8 +22,7 @@ export async function presentRandomJsonItems(
       id: item.id, title: item.title, author: item.author,
       url: new URL(imageUrl, origin).href,
       device: item.device, brightness: item.brightness, theme: item.theme, tags: item.tags,
-      width: facts.width, height: facts.height, byte_size: facts.byte_size,
-      image_time: microsecondsTimestamp(BigInt(item.sort_score))!
+      width: facts.width, height: facts.height, byte_size: facts.byte_size
     };
   });
 }

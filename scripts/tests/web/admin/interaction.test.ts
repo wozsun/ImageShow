@@ -305,7 +305,7 @@ test("[Web/后台] 公开详情切图和切换视图隔离迟到响应并采用�
     }))
   );
   const payload = (source: string) => ({ item: {
-    device: "mb", author: null, brightness: "dark", image_time: "2026-09-01T00:00:00.000Z",
+    device: "mb", author: null, brightness: "dark",
     description: "", source, base_url: "https://new.example.test/images"
   } });
   const sourceLink = () => h.document.querySelector(".image-detail-source")?.getAttribute("href");

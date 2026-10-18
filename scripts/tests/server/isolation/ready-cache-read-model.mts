@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomUUIDv7 } from "node:crypto";
 import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 import { pollUntil } from "../../support/polling.ts";
@@ -90,7 +90,7 @@ await runIntegrationScenario(async (runtime) => {
     return id;
   };
 
-  const suffix = randomUUID().slice(0, 8);
+  const suffix = randomUUIDv7().slice(0, 8);
   const theme = `cache-theme-${suffix}`;
   const tag = `cache-tag-${suffix}`;
   const author = `cache-author-${suffix}`;

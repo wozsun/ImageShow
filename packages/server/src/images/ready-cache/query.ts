@@ -384,13 +384,7 @@ export function readReadyImageCursorPage(
             ...window,
             nextCursor:
               start + window.items.length < window.total && last
-                ? encodeImageCursor(
-                    {
-                      sort_score: last.sort_score,
-                      id: last.id
-                    },
-                    context
-                  )
+                ? encodeImageCursor({ id: last.id }, context)
                 : null
           };
         }
@@ -412,7 +406,7 @@ export function readReadyImageCursorPage(
               total,
               nextCursor:
                 hasMore && last
-                  ? encodeImageCursor({ id: last.id, sort_score: last.sort_score }, context)
+                  ? encodeImageCursor({ id: last.id }, context)
                   : null
             }
           };

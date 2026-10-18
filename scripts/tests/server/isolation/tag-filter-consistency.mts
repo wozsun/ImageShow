@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomUUIDv7 } from "node:crypto";
 import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 import { pollUntil } from "../../support/polling.ts";
@@ -36,7 +36,7 @@ await runIntegrationScenario(async (runtime) => {
   const budgetTags = Array.from({ length: 9 }, (_, index) => `budget-${index}`);
   const allTags = [...tags, "matrix-empty", "matrix-alias", "matrix-symbols", ...budgetTags];
   const rows = Array.from({ length: 64 }, (_, index) => ({
-    id: randomUUID(),
+    id: randomUUIDv7(),
     mask: Math.floor(index / 4),
     device: index % 4 < 2 ? "pc" : "mb",
     brightness: index % 2 ? "light" : "dark",
@@ -118,7 +118,7 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(emptyCounts.snapshot.total, 0);
   for (const [index, row] of rows.entries()) {
     await pool.query(
-      `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,author,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','ready','local',$2,$3,$4,$5,$7,800,600,GREATEST(1,1),$6,800,600,GREATEST(1,1),$6,800,600,GREATEST(1,1),$6)`,
+      `INSERT INTO metadata (id,image_time,created_by,status,storage_slug,device,brightness,theme,author,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','ready','local',$2,$3,$4,$5,$7,800,600,GREATEST(1,1),$6,800,600,GREATEST(1,1),$6,800,600,GREATEST(1,1),$6)`,
       [
         row.id,
         row.device,

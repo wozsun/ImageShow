@@ -10,7 +10,6 @@ export function ingestionAcceptanceBinding(
     sessionId: result.session_id,
     imageId: result.image_id,
     serverAccepted: true,
-    ...("resolved_image_time" in result ? { imageTime: result.resolved_image_time } : {}),
     ...(result.status === "accepted" || result.status === "completed"
       ? {
           serverVersion: result.version,

@@ -281,7 +281,6 @@ test("[Web/内容接入] 大队列页外进度和缓冲进度不重复请求当�
     image_id: `019f8457-063a-7${index.toString(16).padStart(3, "0")}-a580-00000000008e`,
     queue: "import" as const,
     source_type: "url" as const,
-    resolved_image_time: "2026-09-14T00:00:00.000Z",
     status: "preparing" as const,
     phase: "prepare-waiting",
     message: "待处理",
@@ -449,7 +448,6 @@ test("[Web/内容接入] 各来源及恢复任务原位重试保留身份时间�
     [21, undefined],
     [21, "upload"]
   ] as const) {
-    const imageTime = "2020-06-17T02:30:45.000Z";
     state = {
       page: 2,
       jobs: Array.from({ length: count }, (_, index) =>
@@ -460,7 +458,6 @@ test("[Web/内容接入] 各来源及恢复任务原位重试保留身份时间�
           source_type: source ?? "url",
           batch_position: index,
           download_url: "https://images.example.com/photo.png",
-          resolved_image_time: imageTime,
           status: "failed",
           phase: "failed",
           message: "内容接入执行权已转移",
@@ -516,11 +513,10 @@ test("[Web/内容接入] 各来源及恢复任务原位重试保留身份时间�
       ids
     );
     assert.equal(state.jobs[20].attemptKey, before.attemptKey);
-    assert.equal(state.jobs[20].imageTime, imageTime);
+    assert.equal(state.jobs[20].imageId, before.imageId);
     assert.equal(state.jobs[20].browserDisplayReleased, true);
     assert.deepEqual(browserDisplayPrefixJobs(state.jobs), [], "恢复卡片不能提升到浏览器前缀");
     assert.equal(state.jobs[20].serverAccepted, true);
-    assert.equal(state.jobs[20].imageTime, imageTime);
   }
   const current = state.jobs[20];
   const failedRequest = h.pending.length;
@@ -535,7 +531,7 @@ test("[Web/内容接入] 各来源及恢复任务原位重试保留身份时间�
   assert.equal(h.pending.length, failedRequest + 1, "不自动重发未知写入结果");
   assert.equal(recoveries, 5, "写回执丢失后仍由原 owner 回读一次");
   assert.equal(state.page, 2);
-  assert.equal(state.jobs[20].imageTime, current.imageTime);
+  assert.equal(state.jobs[20].imageId, current.imageId);
   queue.appendJobs([ingestionJob({ id: "new-batch" })]);
   assert.equal(state.page, 1);
 });

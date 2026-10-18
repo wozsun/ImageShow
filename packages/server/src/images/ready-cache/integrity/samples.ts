@@ -9,6 +9,7 @@ import {
   parseReadyImageCacheItem,
   readyImageIdSuffixScore,
   readyImageMember,
+  readyImageTimeScore,
   serializeReadyImageCacheItem,
   type ReadyImageCacheItem
 } from "../model.ts";
@@ -84,7 +85,7 @@ export async function validateReadyImageSamples(
       (value) => {
         if (value === null
           || value === undefined
-          || Number(value) !== item.sort_score) {
+          || Number(value) !== readyImageTimeScore(item)) {
           throw new Error("Ready-image cache index sample failed validation");
         }
       }

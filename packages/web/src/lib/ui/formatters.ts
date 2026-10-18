@@ -28,7 +28,7 @@ export function formatImageClassification(
   return [`${item.device}/${item.brightness}`, item.theme].filter(Boolean).join(" · ");
 }
 
-export function formatDate(value: string) {
+export function formatDate(value: string | number) {
   return new Date(value).toLocaleString();
 }
 

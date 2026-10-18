@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import type { StorageDriver } from "../../../../packages/server/src/storage/drivers/driver.ts";
 import { interceptSqlQueries } from "./database-faults.mts";
 import { removeDriverObject } from "./storage-fixture.mts";
-import { randomUUID } from "node:crypto";
+import { randomUUIDv7 } from "node:crypto";
 
 import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
@@ -263,7 +263,7 @@ await runIntegrationScenario(async (runtime) => {
       }, neverAbortedSignal);
       await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { assets_base_url: "" } });
       await database.pool.query(
-        "INSERT INTO metadata (id,storage_slug,device,brightness,created_by,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'local','pc','light','integration-admin',1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)",
+        "INSERT INTO metadata (id,image_time,storage_slug,device,brightness,created_by,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'local','pc','light','integration-admin',1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)",
         ["00000000-0000-7000-8000-0000000000a5", "0".repeat(32)]
       );
       const main = await request("main.example.test", `/images/large/${key}`);
@@ -465,7 +465,7 @@ await runIntegrationScenario(async (runtime) => {
   }
 
   const inaccessibleAlias = "registry-inaccessible-alias";
-  const inaccessibleAliasImage = randomUUID();
+  const inaccessibleAliasImage = randomUUIDv7();
   const inaccessibleAliasKey = storageObjectKey(inaccessibleAliasImage);
   await database.pool.query(
     "INSERT INTO storage_backend (slug, display_name, type, config) " +
@@ -480,7 +480,7 @@ await runIntegrationScenario(async (runtime) => {
     ]
   );
   await database.pool.query(
-    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin',$2,'pc','dark',NULL,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
+    `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin',$2,'pc','dark',NULL,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
     [
         inaccessibleAliasImage,
         inaccessibleAlias,
@@ -642,7 +642,7 @@ await runIntegrationScenario(async (runtime) => {
     await selfTest.testStorageBackend(
       await probe.resolveStorageTestConfig({
         slug: "capability",
-        s3: { access_key_id: randomUUID() }
+        s3: { access_key_id: randomUUIDv7() }
       }),
       neverAbortedSignal
     );
@@ -653,7 +653,7 @@ await runIntegrationScenario(async (runtime) => {
     );
     await backendUpdate.updateStorageBackend(
       "capability",
-      { s3: { access_key_id: randomUUID() } },
+      { s3: { access_key_id: randomUUIDv7() } },
       neverAbortedSignal
     );
     assert.deepEqual((await readConfig()).capabilities, { content_md5: false });
@@ -668,7 +668,7 @@ await runIntegrationScenario(async (runtime) => {
     await assert.rejects(
       backendUpdate.updateStorageBackend(
         "capability",
-        { s3: { secret_access_key: randomUUID() } },
+        { s3: { secret_access_key: randomUUIDv7() } },
         neverAbortedSignal
       ),
       { name: "AccessDenied" }

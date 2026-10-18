@@ -41,7 +41,6 @@ const ingestionSessionProjection = await import(
 const imageTime = await import(moduleUrl("packages/server/src/images/image-time.ts"));
 
 const owner = "current-cold-start-owner";
-const beforeTime = imageTime.parseImageTime("2026-08-23T06:00:00.000Z");
 const beforeSessionId = ingestionSessionIdentity.createIngestionSessionId(
   owner,
   "import",
@@ -74,7 +73,6 @@ try {
       source_type: "url",
       session_id: beforeSessionId,
       image_id: beforeImageId,
-      image_time: beforeTime.iso,
       request_hash: "7".repeat(64),
       import_download: { url: "https://example.com/before-flush.webp" },
       metadata: {
@@ -154,7 +152,6 @@ try {
       source_type: "url",
       session_id: afterSessionId,
       image_id: imageTime.createImageId(afterTime.date, 22),
-      image_time: afterTime.iso,
       request_hash: "9".repeat(64),
       import_download: { url: "https://example.com/after-flush.webp" },
       metadata: {

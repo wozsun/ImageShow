@@ -66,16 +66,12 @@ export function inspectImageUuidV7(value: string) {
 
 export function assertImageIdentity(
   imageId: string,
-  imageTime: string,
   batchPosition?: number | null
 ) {
   const inspected = inspectImageUuidV7(imageId);
-  const timestamp = new Date(imageTime).getTime();
   if (
     inspected.version !== 7 ||
     inspected.variant !== 2 ||
-    !Number.isSafeInteger(timestamp) ||
-    inspected.timestamp !== timestamp ||
     (batchPosition !== undefined
       && batchPosition !== null
       && inspected.randA !== batchPosition)
@@ -83,7 +79,7 @@ export function assertImageIdentity(
     throw new ApiError(
       409,
       "invalid_image_identity",
-      "图片身份与已冻结的图片时间或批次位置不一致"
+      "图片身份不是 UUIDv7 或与已冻结的批次位置不一致"
     );
   }
   return inspected;

@@ -43,7 +43,6 @@ test("[Server/内容接入] SSE 慢读的各阶段持续串行验权，条数与
           queue: "upload",
           session_id: "pair",
           image_id: "image",
-          image_time: "time",
           request_hash: "a".repeat(64),
           status: "discarded",
           version: 1,

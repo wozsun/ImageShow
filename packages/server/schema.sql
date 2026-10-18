@@ -119,11 +119,12 @@ CREATE TABLE metadata (
   description TEXT NOT NULL DEFAULT '',
   source TEXT NOT NULL DEFAULT '',
   original TEXT NOT NULL DEFAULT '',
-  image_time TIMESTAMPTZ NOT NULL DEFAULT now(),
+  image_time TIMESTAMPTZ NOT NULL,
   created_by TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   deleted_at TIMESTAMPTZ,
+  CHECK (uuid_extract_version(id) = 7),
   CHECK (status IN ('ready', 'deleted')),
   CHECK (device IN ('pc', 'mb')),
   CHECK (brightness IN ('dark', 'light')),
@@ -154,40 +155,38 @@ ON metadata(l_md5);
 CREATE INDEX idx_metadata_status_deleted
 ON metadata(status, deleted_at, id);
 
-CREATE INDEX idx_metadata_status_image_time
-ON metadata(status, image_time DESC, id DESC);
+-- The UUIDv7 ID carries the image time: ID order is image time order for lists, cursors and the random fallback range.
+CREATE INDEX idx_metadata_status_id
+ON metadata(status, id DESC);
 
-CREATE INDEX idx_metadata_ready_image_time
-ON metadata(image_time DESC, id DESC) WHERE status = 'ready';
+CREATE INDEX idx_metadata_ready_id
+ON metadata(id DESC) WHERE status = 'ready';
 
-CREATE INDEX idx_metadata_ready_device_image_time
-ON metadata(device, image_time DESC, id DESC) WHERE status = 'ready';
+CREATE INDEX idx_metadata_ready_device_id
+ON metadata(device, id DESC) WHERE status = 'ready';
 
-CREATE INDEX idx_metadata_ready_brightness_image_time
-ON metadata(brightness, image_time DESC, id DESC) WHERE status = 'ready';
+CREATE INDEX idx_metadata_ready_brightness_id
+ON metadata(brightness, id DESC) WHERE status = 'ready';
 
-CREATE INDEX idx_metadata_ready_device_brightness_image_time
-ON metadata(device, brightness, image_time DESC, id DESC) WHERE status = 'ready';
+CREATE INDEX idx_metadata_ready_device_brightness_id
+ON metadata(device, brightness, id DESC) WHERE status = 'ready';
 
-CREATE INDEX idx_metadata_ready_device_theme_image_time
-ON metadata(device, theme, image_time DESC, id DESC) WHERE status = 'ready';
+CREATE INDEX idx_metadata_ready_device_theme_id
+ON metadata(device, theme, id DESC) WHERE status = 'ready';
 
-CREATE INDEX idx_metadata_ready_brightness_theme_image_time
-ON metadata(brightness, theme, image_time DESC, id DESC) WHERE status = 'ready';
+CREATE INDEX idx_metadata_ready_brightness_theme_id
+ON metadata(brightness, theme, id DESC) WHERE status = 'ready';
 
-CREATE INDEX idx_metadata_ready_axes_image_time
-ON metadata(device, brightness, theme, image_time DESC, id DESC) WHERE status = 'ready';
+CREATE INDEX idx_metadata_ready_axes_id
+ON metadata(device, brightness, theme, id DESC) WHERE status = 'ready';
 
-CREATE INDEX idx_metadata_ready_theme_image_time
-ON metadata(theme, image_time DESC, id DESC) WHERE status = 'ready';
+CREATE INDEX idx_metadata_ready_theme_id
+ON metadata(theme, id DESC) WHERE status = 'ready';
 
-CREATE INDEX idx_metadata_ready_author_image_time
-ON metadata(author, image_time DESC, id DESC) WHERE status = 'ready';
+CREATE INDEX idx_metadata_ready_author_id
+ON metadata(author, id DESC) WHERE status = 'ready';
 
 -- Random selection
-CREATE INDEX idx_metadata_ready_random_axes
-ON metadata(device, brightness, theme, id) WHERE status = 'ready';
-
 CREATE INDEX idx_metadata_ready_id_suffix
 ON metadata ((right(id::text, 12))) WHERE status = 'ready';
 

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { randomUUIDv7 } from "node:crypto";
 import { pollUntil } from "../../support/polling.ts";
 import type { Hono as HonoApp } from "hono";
 import type { AdminSession } from "../../../../packages/server/src/core/http/admin-session-context.ts";
@@ -13,12 +13,12 @@ await runIntegrationScenario(async (runtime) => {
   const trash = await import("../../../../packages/server/src/images/trash/mutations.ts");
   const { requireOperationalRedis } = await import("../../../../packages/server/src/core/runtime-availability.ts");
   await requireOperationalRedis();
-  const [first, second, missing] = [randomUUID(), randomUUID(), randomUUID()];
+  const [first, second, missing] = [randomUUIDv7(), randomUUIDv7(), randomUUIDv7()];
   for (const id of [first, second]) {
     await pool.query(
-      `INSERT INTO metadata(id,created_by,storage_slug,device,brightness,
+      `INSERT INTO metadata(id,image_time,created_by,storage_slug,device,brightness,
          l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5)
-       VALUES($1,'integration-admin','local','pc','dark',1,1,1,$2,1,1,1,$2,1,1,1,$2)`,
+       VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','local','pc','dark',1,1,1,$2,1,1,1,$2,1,1,1,$2)`,
       [id, "a".repeat(32)]
     );
   }

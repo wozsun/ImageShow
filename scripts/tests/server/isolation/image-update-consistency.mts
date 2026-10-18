@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { randomUUIDv7 } from "node:crypto";
 
 import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
@@ -34,10 +34,10 @@ await runIntegrationScenario(async (runtime) => {
       )
     );
   const imageUpdateIds = {
-    first: randomUUID(),
-    missing: randomUUID(),
-    third: randomUUID(),
-    fourth: randomUUID()
+    first: randomUUIDv7(),
+    missing: randomUUIDv7(),
+    third: randomUUIDv7(),
+    fourth: randomUUIDv7()
   };
   for (const [index, id] of [
     imageUpdateIds.first,
@@ -45,7 +45,7 @@ await runIntegrationScenario(async (runtime) => {
     imageUpdateIds.fourth
   ].entries()) {
     await database.pool.query(
-      `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','local','pc','dark',NULL,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)`,
+      `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','local','pc','dark',NULL,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)`,
       [
         id,
         String(index + 1).repeat(32)

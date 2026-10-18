@@ -1,7 +1,7 @@
 import { randomUUIDv7 } from "node:crypto";
 import { z } from "zod";
 
-const UUID_V7_MAX_TIMESTAMP = 0xffffffffffff;
+export const UUID_V7_MAX_TIMESTAMP = 0xffffffffffff;
 
 export const normalizedUuidSchema = z.uuid()
   .transform((value) => value.toLowerCase());

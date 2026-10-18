@@ -243,7 +243,7 @@ function activeIngestionJob(
       ? existing?.serverHandoffProvisionalTotal
       : undefined,
     serverAcceptedOrder: item.accepted_order,
-    imageTime: item.resolved_image_time,
+    imageTime: existing?.imageTime,
     batchTime: existing?.batchTime,
     manifestSource: manifestSource ?? existing?.manifestSource,
     manifestProvidedCommonFields: existing?.manifestProvidedCommonFields,
@@ -369,7 +369,6 @@ export function completedIngestionJobPatch(
       : {}),
     variants: completed.variants,
     md5: completed.large_md5,
-    imageTime: completed.image_time,
     storageSlug: completed.storage_slug,
     duplicates: [],
     duplicateDecision: "upload",

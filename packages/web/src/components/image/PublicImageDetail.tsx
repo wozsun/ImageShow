@@ -25,7 +25,6 @@ function imagePlaceholder(card: ShowImageCardDto | GalleryImageCardDto): PublicI
     theme: null,
     author: null,
     tags: [],
-    image_time: "",
     ...card,
     device: imageDevice(card.width, card.height),
     description: "",

@@ -47,7 +47,6 @@ export function discardedIngestionReceipt(
     queue: current.queue,
     session_id: current.session_id,
     image_id: current.image_id,
-    image_time: current.image_time,
     request_hash: current.request_hash,
     status: "discarded",
     version: current.version,

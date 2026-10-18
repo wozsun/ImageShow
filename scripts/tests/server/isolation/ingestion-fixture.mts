@@ -181,7 +181,6 @@ export async function createReadyIngestionFixture(
     source_type: "url",
     session_id: sessionId,
     image_id: imageId,
-    image_time: resolvedTime.iso,
     request_hash: createHash("sha256").update(`${label}:${imageId}`).digest("hex"),
     import_download: { url: `https://example.com/${label}.webp` },
     metadata,

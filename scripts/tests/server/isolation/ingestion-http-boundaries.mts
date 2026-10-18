@@ -59,8 +59,7 @@ await runIntegrationScenario(async (runtime) => {
         ...fixture.importTemplate,
         owner: "integration-admin",
         session_id: sessionId,
-        image_id: randomUUIDv7(),
-        image_time: new Date().toISOString()
+        image_id: randomUUIDv7()
       };
       const now = Date.now();
       const session = activeSession(

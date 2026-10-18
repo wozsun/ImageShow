@@ -4,7 +4,7 @@ import {
   trashPurgeEventsPath
 } from "@imageshow/shared/browser";
 import assert from "node:assert/strict";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomUUIDv7 } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import type { BackgroundJob } from "../../../../packages/server/src/jobs/types.ts";
 import { interceptSqlQueries } from "./database-faults.mts";
@@ -35,9 +35,9 @@ await runIntegrationScenario(async (runtime) => {
   const { createTag } = await import("../../../../packages/server/src/vocab/tags/mutations.ts");
   const { createAuthor } = await import("../../../../packages/server/src/vocab/authors/mutations.ts");
   const localAccess = await registry.resolveStorageAccess("local");
-  const foregroundImage = randomUUID();
+  const foregroundImage = randomUUIDv7();
   await database.pool.query(
-    `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','ready','local','pc','dark',NULL,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)`,
+    `INSERT INTO metadata (id,image_time,created_by,status,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','ready','local','pc','dark',NULL,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)`,
     [
      foregroundImage,
      "0".repeat(32)
@@ -57,13 +57,13 @@ await runIntegrationScenario(async (runtime) => {
     assert.equal(await jobs.markBackgroundJobSucceeded(job), true);
   };
 
-  const uncertainImage = randomUUID();
+  const uncertainImage = randomUUIDv7();
   const uncertainObjectKey = storageObjectKey(uncertainImage);
   const uncertainThumbKey = uncertainObjectKey;
   const uncertainFull = Buffer.from("uncertain-purge-full");
   const uncertainThumbnail = Buffer.from("uncertain-purge-thumbnail");
   await database.pool.query(
-    `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','deleted','local','pc','dark',NULL,now(),1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
+    `INSERT INTO metadata (id,image_time,created_by,status,storage_slug,device,brightness,theme,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','deleted','local','pc','dark',NULL,now(),1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
     [
       uncertainImage,
       createHash("md5").update(uncertainFull).digest("hex"),
@@ -154,13 +154,13 @@ await runIntegrationScenario(async (runtime) => {
     0
   );
 
-  const queuedImage = randomUUID();
+  const queuedImage = randomUUIDv7();
   const queuedObjectKey = storageObjectKey(queuedImage);
   const queuedThumbKey = queuedObjectKey;
   const queuedFull = Buffer.from("queued-purge-full");
   const queuedThumbnail = Buffer.from("queued-purge-thumbnail");
   await database.pool.query(
-    `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','deleted','local','pc','dark',NULL,now(),1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
+    `INSERT INTO metadata (id,image_time,created_by,status,storage_slug,device,brightness,theme,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','deleted','local','pc','dark',NULL,now(),1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
     [
       queuedImage,
       createHash("md5").update(queuedFull).digest("hex"),
@@ -237,13 +237,13 @@ await runIntegrationScenario(async (runtime) => {
     false
   );
 
-  const concurrentImage = randomUUID();
+  const concurrentImage = randomUUIDv7();
   const concurrentObjectKey = storageObjectKey(concurrentImage);
   const concurrentThumbKey = concurrentObjectKey;
   const concurrentFull = Buffer.from("concurrent-trash-full");
   const concurrentThumbnail = Buffer.from("concurrent-trash-thumbnail");
   await database.pool.query(
-    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','local','pc','dark',NULL,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
+    `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','local','pc','dark',NULL,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
     [
       concurrentImage,
       createHash("md5").update(concurrentFull).digest("hex"),
@@ -330,13 +330,13 @@ await runIntegrationScenario(async (runtime) => {
 
   await database.pool.query("DELETE FROM metadata WHERE status='deleted'");
   const createTrashImage = async (ageSeconds: number) => {
-    const id = randomUUID();
+    const id = randomUUIDv7();
     const objectKey = storageObjectKey(id);
     const thumbKey = objectKey;
     const full = Buffer.from("watermark-full-" + id);
     const thumbnail = Buffer.from("watermark-thumb-" + id);
     await database.pool.query(
-      `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','deleted','local','pc','dark',NULL,clock_timestamp() - ($4 || ' seconds')::interval,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
+      `INSERT INTO metadata (id,image_time,created_by,status,storage_slug,device,brightness,theme,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','deleted','local','pc','dark',NULL,clock_timestamp() - ($4 || ' seconds')::interval,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
       [
         id,
         createHash("md5").update(full).digest("hex"),
@@ -600,7 +600,7 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal((await database.pool.query("SELECT id FROM metadata WHERE id=$1", [failedItem.id])).rowCount, 0);
 
   const succeededItem = await createTrashImage(0);
-  const succeededJob = randomUUID();
+  const succeededJob = randomUUIDv7();
   await database.pool.query(
     "INSERT INTO background_job(id,type,status,target_id,idempotency_key,updated_at) VALUES($1,'trash.purge','succeeded',$2,$3,now()-interval '30 days')",
     [succeededJob, succeededItem.id, `trash.purge:${succeededItem.id}`]
@@ -624,7 +624,7 @@ await runIntegrationScenario(async (runtime) => {
   await finishTrashPurgeJob(await claimTrashPurgeJob());
 
   // A task pointing at a ready image must not authorize physical deletion.
-  const readyJobId = randomUUID();
+  const readyJobId = randomUUIDv7();
   await database.pool.query(
     "INSERT INTO background_job(id,type,target_id,idempotency_key) VALUES($1,'trash.purge',$2,$3)",
     [readyJobId, foregroundImage, `trash.purge:${foregroundImage}`]
@@ -644,9 +644,9 @@ await runIntegrationScenario(async (runtime) => {
   await database.pool.query("DELETE FROM background_job WHERE id=$1", [readyJobId]);
 
   const referencedHistoryItem = await createTrashImage(0);
-  const referencedHistoryJob = randomUUID();
-  const unreferencedHistoryJob = randomUUID();
-  const retainedMoveHistoryJob = randomUUID();
+  const referencedHistoryJob = randomUUIDv7();
+  const unreferencedHistoryJob = randomUUIDv7();
+  const retainedMoveHistoryJob = randomUUIDv7();
   await database.pool.query(
     "INSERT INTO background_job(" +
       "id, type, status, target_id, payload, error, next_retry_at, updated_at" +
@@ -665,7 +665,7 @@ await runIntegrationScenario(async (runtime) => {
       sharedAppConfig.appConfig.backgroundJob.failedRetentionSeconds + 1,
       JSON.stringify({}),
       referencedHistoryItem.id,
-      randomUUID()
+      randomUUIDv7()
     ]
   );
   assert.deepEqual(await jobs.cleanupBackgroundJobHistory(), [

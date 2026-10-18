@@ -220,7 +220,6 @@ export class IngestionSessionService {
       return {
         session_id: session.session_id,
         image_id: session.image_id,
-        resolved_image_time: databaseResult.image_time,
         status: "completed",
         accepted_order: session.accepted_order,
         ...(session.status === "completed"
@@ -257,7 +256,6 @@ export class IngestionSessionService {
     return {
       session_id: session.session_id,
       image_id: session.image_id,
-      resolved_image_time: session.image_time,
       accepted_order: session.accepted_order,
       ...(session.status === "discarded"
         ? { status: "discarded" as const }
@@ -337,7 +335,6 @@ export class IngestionSessionService {
               resolvedTime.date,
               item.batch_position
             ),
-            resolved_image_time: resolvedTime.iso,
             request_hash: requestHash,
             display_order_key: createIngestionDisplayOrderKey(
               item.batch_key,
@@ -389,7 +386,6 @@ export class IngestionSessionService {
           response.push({
             session_id: entry.result.intent.session_id,
             candidate_image_id: entry.result.intent.candidate_image_id,
-            resolved_image_time: entry.result.intent.resolved_image_time,
             credential: this.#credential(entry.result.intent, now),
             status: "intent"
           });
@@ -478,7 +474,6 @@ export class IngestionSessionService {
             manifest_line: item.manifest_line,
             session_id: sessionId,
             image_id: imageId,
-            image_time: resolvedTime.iso,
             request_hash: requestHash,
             import_download: { url: item.download_url },
             metadata,
@@ -557,7 +552,6 @@ export class IngestionSessionService {
   ): PendingIngestionSession {
     assertImageIdentity(
       intent.candidate_image_id,
-      intent.resolved_image_time,
       intent.batch_position
     );
     return {
@@ -567,7 +561,6 @@ export class IngestionSessionService {
       batch_position: intent.batch_position,
       session_id: intent.session_id,
       image_id: intent.candidate_image_id,
-      image_time: intent.resolved_image_time,
       request_hash: intent.request_hash,
       metadata: intent.metadata,
       storage_slug: intent.storage_slug,

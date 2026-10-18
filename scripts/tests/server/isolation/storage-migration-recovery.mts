@@ -1,6 +1,6 @@
 import { storageObjectKey } from "@imageshow/shared/browser";
 import assert from "node:assert/strict";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomUUIDv7 } from "node:crypto";
 import { removeDriverObject } from "./storage-fixture.mts";
 import { interceptSqlQueries, withCommitFault } from "./database-faults.mts";
 import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
@@ -42,11 +42,11 @@ await runIntegrationScenario(async (runtime) => {
   );
   registry.invalidateStorageBackendRegistry();
   const migrationIds = {
-    migrated: randomUUID(),
-    notFound: randomUUID(),
-    sourceMissing: randomUUID(),
-    unchanged: randomUUID(),
-    failed: randomUUID()
+    migrated: randomUUIDv7(),
+    notFound: randomUUIDv7(),
+    sourceMissing: randomUUIDv7(),
+    unchanged: randomUUIDv7(),
+    failed: randomUUIDv7()
   };
   const addMigrationImage = async (
     id: string,
@@ -57,7 +57,7 @@ await runIntegrationScenario(async (runtime) => {
     const key = storageObjectKey(id);
 
     await database.pool.query(
-      `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin',$2,'pc','dark',NULL,'deleted',now(),1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3)`,
+      `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,status,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin',$2,'pc','dark',NULL,'deleted',now(),1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3)`,
       [
         id,
         storageSlug,
@@ -147,11 +147,11 @@ await runIntegrationScenario(async (runtime) => {
   );
   assert.equal(await localAccess.driver.exists("large", migratedKey), true);
 
-  const thumbnailMissingMigrationId = randomUUID();
+  const thumbnailMissingMigrationId = randomUUIDv7();
   const thumbnailMissingMigrationKey = storageObjectKey(thumbnailMissingMigrationId);
   const thumbnailMissingMigrationBody = Buffer.from("migration-without-thumbnail");
   await database.pool.query(
-    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','local','pc','dark',NULL,1,1,GREATEST(1,$3),$2,1,1,GREATEST(1,$3),$2,1,1,GREATEST(1,0),$2)`,
+    `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','local','pc','dark',NULL,1,1,GREATEST(1,$3),$2,1,1,GREATEST(1,$3),$2,1,1,GREATEST(1,0),$2)`,
     [
       thumbnailMissingMigrationId,
       createHash("md5").update(thumbnailMissingMigrationBody).digest("hex"),
@@ -193,9 +193,9 @@ await runIntegrationScenario(async (runtime) => {
   await removeDriverObject(localAccess.driver, "large", thumbnailMissingMigrationKey);
 
   const backendErrorIds = {
-    missing: randomUUID(),
-    known: randomUUID(),
-    unknown: randomUUID()
+    missing: randomUUIDv7(),
+    known: randomUUIDv7(),
+    unknown: randomUUIDv7()
   };
   await addMigrationImage(
     backendErrorIds.missing,
@@ -306,7 +306,7 @@ await runIntegrationScenario(async (runtime) => {
   const originalMissingSourceOpenRead = missingSourceAccess.driver.openRead;
   const originalExistingTargetExists = existingTargetAccess.driver.exists;
   const originalExistingTargetOpenRead = existingTargetAccess.driver.openRead;
-  const existingTargetIds = [randomUUID(), randomUUID()];
+  const existingTargetIds = [randomUUIDv7(), randomUUIDv7()];
   const existingTargetKeys = new Set(existingTargetIds.map((id) => storageObjectKey(id)));
   let existingTargetDigestReads = 0;
   missingSourceAccess.driver.openRead = async function (prefix, key, ...rest) {
@@ -334,7 +334,7 @@ await runIntegrationScenario(async (runtime) => {
     for (const [index, id] of existingTargetIds.entries()) {
       const expectedBody = "existing-target-" + index;
       await database.pool.query(
-        `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin',$2,'pc','dark',NULL,'deleted',now(),1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3)`,
+        `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,status,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin',$2,'pc','dark',NULL,'deleted',now(),1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3)`,
         [
           id,
           existingTargetSource,
@@ -419,7 +419,7 @@ await runIntegrationScenario(async (runtime) => {
   registry.invalidateStorageBackendRegistry();
   const backendOverflowIds = [];
   for (let index = 0; index < 101; index += 1) {
-    const id = randomUUID();
+    const id = randomUUIDv7();
     backendOverflowIds.push(id);
     await addMigrationImage(id, backendOverflowSource, null);
   }
@@ -472,7 +472,7 @@ await runIntegrationScenario(async (runtime) => {
 
     const body = Buffer.from("migration-abort-" + storageSlug + "-" + id);
     await database.pool.query(
-      `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin',$2,'pc','dark',NULL,'deleted',now(),1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3)`,
+      `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,status,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin',$2,'pc','dark',NULL,'deleted',now(),1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3)`,
       [
         id,
         storageSlug,
@@ -510,7 +510,7 @@ await runIntegrationScenario(async (runtime) => {
   const migrationConcurrency = storageMigrationAdmission.IMAGE_TRANSFER_CONCURRENCY;
   const listAbortFixtures = [];
   for (let index = 0; index < migrationConcurrency + 2; index += 1) {
-    listAbortFixtures.push(await addAbortMigrationImage(randomUUID(), "local"));
+    listAbortFixtures.push(await addAbortMigrationImage(randomUUIDv7(), "local"));
   }
   const listAbortKeys = new Set(listAbortFixtures.map((fixture) => fixture.key));
   const originalListAbortOpenRead = localAccess.driver.openRead;
@@ -585,7 +585,7 @@ await runIntegrationScenario(async (runtime) => {
   const backendAbortFixtures = [];
   for (let index = 0; index < 3; index += 1) {
     backendAbortFixtures.push(await addAbortMigrationImage(
-      randomUUID(),
+      randomUUIDv7(),
       backendAbortSource
     ));
   }
@@ -659,7 +659,7 @@ await runIntegrationScenario(async (runtime) => {
   );
   registry.invalidateStorageBackendRegistry();
 
-  const responseLossId = randomUUID();
+  const responseLossId = randomUUIDv7();
   const responseLossBody = Buffer.from("migration-response-loss");
   await addMigrationImage(responseLossId, "local", responseLossBody);
 

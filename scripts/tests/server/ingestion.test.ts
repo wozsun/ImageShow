@@ -455,8 +455,8 @@ test("[Server/内容接入] 内容接入身份、稳定哈希、状态投影、T
     variant: 2,
     randA: 37
   });
-  assert.equal(assertImageIdentity(imageId, imageTime.iso, 37).randA, 37);
-  assert.throws(() => assertImageIdentity(imageId, imageTime.iso, 38));
+  assert.equal(assertImageIdentity(imageId, 37).randA, 37);
+  assert.throws(() => assertImageIdentity(imageId, 38));
   assert.equal(
     createIngestionSessionId("alice", "upload", "same"),
     createIngestionSessionId("alice", "upload", "same")
@@ -506,7 +506,6 @@ test("[Server/内容接入] 内容接入身份、稳定哈希、状态投影、T
     session_id: "server-session",
     candidate_image_id: "server-candidate",
     image_id: "server-image",
-    resolved_image_time: "2027-01-01T00:00:00.000Z",
     accepted_at: 123,
     accepted_order: 456,
     execution_token: "server-token",
@@ -2055,7 +2054,6 @@ test("[Server/内容接入] 同一 execution 可接力草稿版本且身份变�
     source_type: "url",
     session_id: createIngestionSessionId(owner, "import", "metadata-relay"),
     image_id: createImageId(new Date("2026-08-23T01:00:01.000Z"), 2),
-    image_time: "2026-08-23T01:00:01.000Z",
     request_hash: "a".repeat(64),
     import_download: { url: "https://example.com/metadata-relay.jpg" },
     metadata: {
@@ -2268,7 +2266,6 @@ test("[Server/内容接入] 取消批次只查询一次 PG 并在查询期间封
       source_type: "url",
       session_id: createIngestionSessionId(owner, "import", `item-${index}`),
       image_id: createImageId(resolved.date, index),
-      image_time: resolved.iso,
       request_hash: String(index).padStart(64, "0"),
       import_download: { url: `https://example.com/${index}.jpg` },
       metadata: {
@@ -2547,7 +2544,6 @@ test("[Server/内容接入] 已启动事务的 expiry 只通过原子 cutoff 收
       queue: "import",
       source_type: "url",
       ...pair,
-      image_time: "2026-08-23T01:03:00.456Z",
       request_hash: "a".repeat(64),
       import_download: { url: "https://example.com/expiry.jpg" },
       metadata: {
@@ -2679,7 +2675,6 @@ test("[Server/内容接入] PG 完成清理不会越过新的 session incarnatio
       source_type: "url",
       session_id: sessionId,
       image_id: imageId,
-      image_time: "2026-08-23T01:04:00.456Z",
       request_hash: "d".repeat(64),
       import_download: { url: "https://example.com/incarnation.jpg" },
       metadata: {
@@ -2758,7 +2753,6 @@ test("[Server/内容接入] PG 完成会清退保留 commit 的 failed canonical
     queue: "import",
     source_type: "url",
     ...pair,
-    image_time: "2026-08-23T01:05:01.456Z",
     request_hash: "f".repeat(64),
     import_download: { url: "https://example.com/failed-commit.jpg" },
     metadata: {
@@ -2817,7 +2811,6 @@ test("[Server/内容接入] PG 完成会清退保留 commit 的 failed canonical
     owner,
     queue: "import",
     ...pair,
-    image_time: failed.image_time,
     request_hash: failed.request_hash,
     status: "discarded",
     version: 3,
@@ -2860,7 +2853,6 @@ test("[Server/内容接入] PG 完成会清退保留 commit 的 failed canonical
               pair.image_id,
               {
                 image_id: pair.image_id,
-                image_time: failed.image_time,
                 created_by: owner,
                 item: {
                   storage_slug: failed.storage_slug,
@@ -2957,7 +2949,6 @@ test("[Server/内容接入] recovery 严格先收敛 expiry 并只重排一次�
     source_type: "url",
     session_id: `session-${imageId}`,
     image_id: imageId,
-    image_time: "2026-08-23T01:02:03.456Z",
     request_hash: `request-${imageId}`,
     import_download: { url: "https://example.com/image.jpg" },
     metadata: {
@@ -3156,7 +3147,6 @@ test("[Server/内容接入] 恢复按实际扫描边界越过缺失 canonical �
       source_type: "url" as const,
       session_id: sessionId,
       image_id: createImageId(new Date(now), label === "ready" ? 1 : 2),
-      image_time: new Date(now).toISOString(),
       request_hash: (label === "ready" ? "1" : "2").repeat(64),
       import_download: { url: `https://example.com/${label}.jpg` },
       metadata: {

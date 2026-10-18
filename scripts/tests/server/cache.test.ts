@@ -1887,11 +1887,8 @@ test("[Server/缓存与 Redis] ready 随机抽样只调用一次 Redis 并优先
     "00000000-0000-7002-8000-00000000008f",
     "00000000-0000-7002-8000-000000000090"
   ];
-  const samplingItems = samplingIds.map((id, position) =>
-    servingReadyCacheItem({
-      id,
-      sort_score: String(position + 1)
-    })
+  const samplingItems = samplingIds.map((id) =>
+    servingReadyCacheItem({ id })
   );
   const coreCalls: unknown[] = [];
   let derivedCalls = 0;

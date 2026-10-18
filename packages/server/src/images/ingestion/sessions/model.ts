@@ -105,7 +105,6 @@ const activeSessionSchema = z
     source_type: z.enum(ingestionSourceTypes),
     batch_position: batchPosition.optional(),
     manifest_line: manifestLine.optional(),
-    image_time: nonEmptyString,
     import_download: importDownloadSchema.optional(),
     metadata: draftSchema,
     storage_slug: nonEmptyString,
@@ -200,7 +199,6 @@ export type CompletedIngestionReceipt = Readonly<z.infer<typeof completedReceipt
 
 const discardedReceiptSchema = z.strictObject({
   ...sessionShape,
-  image_time: nonEmptyString,
   status: z.literal("discarded"),
   discarded_at: nonNegativeInteger
 });
@@ -218,7 +216,6 @@ export const uploadIntentSchema = z
     owner: nonEmptyString,
     session_id: nonEmptyString,
     candidate_image_id: nonEmptyString,
-    resolved_image_time: nonEmptyString,
     request_hash: digest(32),
     display_order_key: z.string().regex(/^[0-9a-f]{32}:[0-9a-f]{3}:[A-Za-z0-9_-]{43}$/u),
     batch_position: batchPosition,

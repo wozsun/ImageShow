@@ -122,18 +122,17 @@ curl "https://img.example.com/random?device=all&mode=json"
   "fallback": [],
   "items": [
     {
-      "id": "00000000-0000-7000-8000-000000000001",
+      "id": "019fc77e-be00-7000-8000-000000000001",
       "title": "示例图片",
       "author": "photographer",
-      "url": "https://img.example.com/images/medium/01/00000000-0000-7000-8000-000000000001.webp",
+      "url": "https://img.example.com/images/medium/01/019fc77e-be00-7000-8000-000000000001.webp",
       "device": "pc",
       "brightness": "dark",
       "theme": "theme",
       "tags": ["sample"],
       "width": 2200,
       "height": 1238,
-      "byte_size": 218000,
-      "image_time": "2026-08-03T12:00:00.000000Z"
+      "byte_size": 218000
     }
   ]
 }
@@ -143,13 +142,12 @@ curl "https://img.example.com/random?device=all&mode=json"
 | --- | --- |
 | `count` | 实际返回的数量，可能少于 `limit` |
 | `fallback` | 实际放宽的维度数组，按应用顺序排列；未回退时为 `[]` |
-| `id` | 图片 ID |
+| `id` | 图片 ID，UUIDv7 格式；前 48 位（去掉连字符后的前 12 个十六进制字符）是图片时间的 Unix 毫秒数 |
 | `title` | 标题 |
 | `author` / `theme` / `tags` | 作者、主题、标签的标识；没有作者或主题时为 `null` |
 | `url` | 所选尺寸的图片地址（绝对地址） |
 | `device` / `brightness` | 横竖（`pc` / `mb`）、明暗（`dark` / `light`） |
 | `width` / `height` / `byte_size` | 所选尺寸的宽、高（像素）和文件大小（字节） |
-| `image_time` | 图片时间，UTC，精确到微秒 |
 
 `/random` 的响应都带 `Cache-Control: no-store`，也支持 `HEAD` 请求。JSON 中的图片地址有自己的缓存策略，可以保存并重复使用。
 
@@ -175,7 +173,7 @@ curl "https://img.example.com/random?device=all&mode=json"
 `id` 可以是完整的图片 ID，也可以是 ID 的最后 12 位。用逗号分隔或重复参数传多个，每次最多 32 个，站点从中随机选取：
 
 ```text
-/random?id=00000000-0000-7000-8000-000000000001
+/random?id=019fc77e-be00-7000-8000-000000000001
 /random?id=000000000001,000000000002&mode=json&limit=2
 ```
 

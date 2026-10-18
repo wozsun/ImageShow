@@ -1,4 +1,5 @@
 import { appConfig } from "@imageshow/shared";
+import { imageTimeMs } from "@imageshow/shared/browser";
 import { randomUuidV7At } from "../core/uuid.ts";
 import type { DatabaseReader } from "../core/database/pools.ts";
 import type { ImageFilterPlan } from "../images/filter-plan.ts";
@@ -26,18 +27,9 @@ function filterClause(plan: ImageFilterPlan) {
   return { params: clause.params, sql: clause.where.join(" AND ") };
 }
 
-function uuidV7Milliseconds(id: string) {
-  const compact = id.replaceAll("-", "");
-  const value = Number.parseInt(compact.slice(0, 12), 16);
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw new Error("PostgreSQL random fallback returned an invalid UUIDv7");
-  }
-  return value;
-}
-
 function randomPivot(minId: string, maxId: string) {
-  const minimum = uuidV7Milliseconds(minId);
-  const maximum = uuidV7Milliseconds(maxId);
+  const minimum = imageTimeMs(minId);
+  const maximum = imageTimeMs(maxId);
   const timestamp = minimum + Math.floor(Math.random() * (Math.max(0, maximum - minimum) + 1));
   return randomUuidV7At(new Date(timestamp));
 }

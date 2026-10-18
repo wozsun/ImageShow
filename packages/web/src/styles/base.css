@@ -289,13 +289,15 @@ textarea:disabled {
   gap: 6px;
 }
 
-.image-detail-tags-label {
-  align-self: start;
-  padding-top: 3px;
+/*标签行在加载中、无标签与有标签时同高（24px），与单行标签外框一致（16px 行高、上下 3px 内边距加 1px 边框），标签加载出来时不顶开下方内容。*/
+.image-detail-tags-label,
+.image-detail-tags {
+  line-height: 24px;
 }
 
 .image-detail-tags .tag-chip {
   padding: 3px 10px;
+  line-height: 16px;
 }
 .select-control {
   position: relative;

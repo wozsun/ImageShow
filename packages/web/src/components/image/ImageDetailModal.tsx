@@ -1,6 +1,7 @@
 import {
   imageVariantUrl,
   imageOriginalUrl,
+  imageTimeMs,
   type AdminImageDetailItemDto,
   type EditableImageSnapshotDto
 } from "@imageshow/shared/browser";
@@ -192,7 +193,6 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const authorLink = authorOption?.link || "";
 
   const title = imageDisplayTitle(item);
-  const imageTime = adminItem?.image_time ?? item.image_time;
   const sourceAvailable = Boolean(item.source);
   const sourceStateLabel = detailError
     ? "详情加载失败"
@@ -321,8 +321,8 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                     </dd>
                     <dt>主题</dt>
                     <dd>{taxonomyReady ? themeLabel : taxonomyPlaceholder}</dd>
-                    <dt className={tagsShown ? "image-detail-tags-label" : undefined}>标签</dt>
-                    <dd className={tagsShown ? "image-detail-tags" : undefined}>
+                    <dt className="image-detail-tags-label">标签</dt>
+                    <dd className="image-detail-tags">
                       {tagsShown
                         ? item.tags.map((tag, index) => (
                           <span key={tag} className="tag-chip">
@@ -334,18 +334,12 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                           : taxonomyPlaceholder}
                     </dd>
                     <dt>发布时间</dt>
-                    <dd>
-                      {detailLoading
-                        ? "加载中"
-                        : detailError
-                          ? "加载失败"
-                          : imageTime
-                            ? formatDate(imageTime)
-                            : "—"}
-                    </dd>
+                    <dd>{formatDate(imageTimeMs(item.id))}</dd>
                   </dl>
                   <div className="inline-actions image-detail-actions" ref={actionsRef}>
+                    {/* 禁用占位与可用链接是两个元素：来源加载出来时像“原图”一样直接以最终样式出现。若沿用同一元素，访问过的来源链接会从无链接时的文字色过渡到边框色，先闪出亮边框再回落。 */}
                     <a
+                      key={sourceAvailable ? "source" : "source-placeholder"}
                       className={`button secondary image-detail-source${sourceAvailable ? " pressable" : " is-disabled"}`}
                       href={item.source || undefined}
                       target="_blank"

@@ -73,8 +73,7 @@ async function readAdminImagePage(query: AdminImageListQuery): Promise<AdminImag
   let readyPlan: Awaited<ReturnType<typeof resolveImageFilterPlan>> | null = null;
   if (query.status === "ready") {
     readyPlan = await resolveImageFilterPlan(query, { redisMode: "required" });
-    // The ready index is ordered by image_time. Entry time uses PostgreSQL's
-    // authoritative order instead of reordering only the cached page.
+    // The ready index is ordered by image ID, which carries the image time. Entry time uses PostgreSQL's authoritative order instead of reordering only the cached page.
     if (sort.sort_by === "image_time" && !query.group && !query.mark_group) {
       const cached = await readReadyImagePageWindow(readyPlan, window, sort.order);
       if (cached.status === "redis_unavailable") throw cached.error;
@@ -82,7 +81,6 @@ async function readAdminImagePage(query: AdminImageListQuery): Promise<AdminImag
         const images = await adminImageListItemsWithTags(
           cached.value.items.map((item) => ({
             ...item,
-            image_time: new Date(Math.floor(item.sort_score / 1_000)),
             status: "ready",
             deleted_at: null,
             purge_pending: false

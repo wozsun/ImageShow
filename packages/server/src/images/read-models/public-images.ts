@@ -24,7 +24,6 @@ import {
   imageTagsPresentationColumn,
   type PublicImageDetailRecord
 } from "../presenter.ts";
-import { buildResolvedReadyImageListFilters } from "./list-filters.ts";
 import { fetchPublicImageCardPage, type PublicImagePageRows } from "./pagination.ts";
 
 export type PublicImageListQuery = {
@@ -69,10 +68,8 @@ async function listPublicImageRowsWithAccess(
     };
   }
 
-  const { params, where } = buildResolvedReadyImageListFilters(plan);
   return fetchPublicImageCardPage(
-    where,
-    params,
+    plan,
     limit,
     context,
     query.view,
@@ -115,7 +112,7 @@ async function getPublicImageRecordWithAccess(
             description,
             source,
             original,
-            device, author, brightness, theme, image_time,
+            device, author, brightness, theme,
             ${imageTagsPresentationColumn}
        FROM metadata
       WHERE id=$1 AND status='ready'

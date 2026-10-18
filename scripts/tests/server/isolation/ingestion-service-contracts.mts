@@ -379,7 +379,6 @@ await runIntegrationScenario(async (runtime) => {
             source_type: "upload" as const,
             session_id: intent.session_id,
             image_id: intent.candidate_image_id,
-            image_time: intent.resolved_image_time,
             request_hash: intent.request_hash,
             metadata: intent.metadata,
             storage_slug: intent.storage_slug,
@@ -443,13 +442,12 @@ await runIntegrationScenario(async (runtime) => {
     serviceNow
   );
   assert.equal(queriedCanonicalIds.length, 2, "所有 canonical 都必须查询 PostgreSQL");
-  assert.equal(canonicalBatchResult[0].status, "completed");
-  assert.equal(canonicalBatchResult[0].accepted_order, 1);
   assert.equal(
-    canonicalBatchResult[0].resolved_image_time,
-    "2026-08-20T00:00:00.000Z",
+    canonicalBatchResult[0].status,
+    "completed",
     "即使 Redis 仍在 committing，PostgreSQL 已存在时也必须返回 completed"
   );
+  assert.equal(canonicalBatchResult[0].accepted_order, 1);
   assert.equal(
     canonicalBatchResult[0].last_semantic_revision,
     undefined,

@@ -33,24 +33,30 @@ await runIntegrationScenario(async (runtime) => {
   app.onError((error, context) => handleApiError(context, error));
   registerPublicRoutes(app);
   registerRandomRoutes(app);
+  // Pairs share an image-time millisecond; suffixes stay fixed for the random ring.
   const ids = [
-    "00000000-0000-7000-8000-000000000001",
-    "00000000-0000-7001-8000-000000000001",
-    "00000000-0000-7000-8000-222222222222",
-    "00000000-0000-7000-8000-dddddddddddd",
-    "00000000-0000-7001-8000-dddddddddddd",
-    "00000000-0000-7000-8000-ffffffffffff"
+    "00000000-0001-7000-8000-000000000001",
+    "00000000-0001-7001-8000-000000000001",
+    "00000000-0002-7000-8000-222222222222",
+    "00000000-0002-7000-8000-dddddddddddd",
+    "00000000-0003-7001-8000-dddddddddddd",
+    "00000000-0003-7000-8000-ffffffffffff"
   ];
   for (const [index, id] of ids.entries()) {
     await pool.query(
-      `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,image_time,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','ready','local','pc','dark',NULL,$3,$4,1600,900,GREATEST(1,1),$2,1600,900,GREATEST(1,1),$2,1600,900,GREATEST(1,1),$2)`,
+      `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,image_time,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','ready','local','pc','dark',NULL,uuid_extract_timestamp($1::uuid),$3,1600,900,GREATEST(1,1),$2,1600,900,GREATEST(1,1),$2,1600,900,GREATEST(1,1),$2)`,
       [
         id,
         createHash("md5").update(id).digest("hex"),
-        `2026-09-01T00:00:00.00000${Math.floor(index / 2)}Z`,
         `Image ${index}`
       ]
     );
+  }
+  const browseTag = "browse-tagged";
+  const taggedIds = [ids[1]!, ids[3]!, ids[4]!];
+  await pool.query("INSERT INTO tag(slug, display_name) VALUES ($1, 'Browse tagged')", [browseTag]);
+  for (const id of taggedIds) {
+    await pool.query("INSERT INTO image_tag(image_id, tag_slug) VALUES ($1, $2)", [id, browseTag]);
   }
   const time = Date.parse("2026-09-08T12:00:00Z");
   let now = time;
@@ -186,7 +192,7 @@ await runIntegrationScenario(async (runtime) => {
         );
         assert.deepEqual(sortedKeys(gallery.items[0]!), galleryKeys);
         pages.push({ query: galleryQuery, value: gallery });
-        if (value.next_cursor) assert.equal(value.next_cursor.length, order === "random" ? 26 : 31);
+        if (value.next_cursor) assert.equal(value.next_cursor.length, order === "random" ? 26 : 22);
         cursor = value.next_cursor ?? undefined;
       } while (cursor);
       assert.deepEqual(visited, expected(order));
@@ -207,6 +213,21 @@ await runIntegrationScenario(async (runtime) => {
         assert.equal(validated.status, 304);
         assert.equal(await validated.text(), "");
       }
+    }
+    // Tag membership follows the same ID cursor in both directions.
+    for (const order of ["latest", "oldest"] as const) {
+      let cursor: string | undefined;
+      const visited: string[] = [];
+      do {
+        const value = await reads.listPublicImages(
+          { status: "ready", view: "gallery", order, limit: 1, cursor, tag: browseTag },
+          neverAbortedSignal,
+          now
+        );
+        visited.push(...value.items.map((item) => item.id));
+        cursor = value.next_cursor ?? undefined;
+      } while (cursor);
+      assert.deepEqual(visited, expected(order).filter((id) => taggedIds.includes(id)));
     }
     for (const query of [
       "view=show&limit=0",

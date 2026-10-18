@@ -51,8 +51,7 @@ await runIntegrationScenario(async (runtime) => {
   const template = {
     ...fixture.importTemplate,
     ...pair,
-    owner: "orphan-owner",
-    image_time: new Date(now).toISOString()
+    owner: "orphan-owner"
   };
   const queued = activeSession(
     (

@@ -49,7 +49,6 @@ await runIntegrationScenario(async (runtime) => {
     source_type: "url" as const,
     session_id: importSessionId,
     image_id: importImageId,
-    image_time: importResolvedTime.iso,
     request_hash: "d".repeat(64),
     import_download: { url: "https://example.com/current-domain.jpg" },
     metadata: ingestionMetadata,
@@ -275,7 +274,6 @@ await runIntegrationScenario(async (runtime) => {
       owner: importOrderOwner,
       session_id: sessionId,
       image_id: imageTime.createImageId(resolved.date, position),
-      image_time: resolved.iso,
       request_hash: createHash("sha256")
         .update(label + "-" + String(position))
         .digest("hex")
@@ -493,7 +491,6 @@ await runIntegrationScenario(async (runtime) => {
     owner: importOrderOwner,
     session_id: staleIncludedSession.session_id,
     image_id: imageTime.createImageId(replacementTime.date, 0),
-    image_time: replacementTime.iso,
     request_hash: createHash("sha256")
       .update("newer-0-replacement")
       .digest("hex")
@@ -598,7 +595,6 @@ await runIntegrationScenario(async (runtime) => {
         owner: staleScaleOwner,
         session_id: sessionId,
         image_id: imageId,
-        image_time: staleScaleTime.iso,
         request_hash: createHash("sha256")
           .update("stale-scale-active-" + String(position))
           .digest("hex"),
@@ -770,7 +766,6 @@ await runIntegrationScenario(async (runtime) => {
         uploadOrderTime.date,
         position
       ),
-      resolved_image_time: uploadOrderTime.iso,
       request_hash: requestHash,
       display_order_key: ingestionSessionIdentity.createIngestionDisplayOrderKey(
         uploadOrderBatchKey,
@@ -811,7 +806,6 @@ await runIntegrationScenario(async (runtime) => {
       source_type: "upload" as const,
       session_id: intent.session_id,
       image_id: intent.candidate_image_id,
-      image_time: intent.resolved_image_time,
       request_hash: intent.request_hash,
       metadata: intent.metadata,
       storage_slug: intent.storage_slug,
@@ -1129,13 +1123,12 @@ await runIntegrationScenario(async (runtime) => {
   );
   assert.ok(discardedImport.session);
   assert.equal(discardedImport.session.status, "discarded");
-  assert.equal(discardedImport.session.image_time, importResolvedTime.iso);
+  assert.equal(discardedImport.session.image_id, importCanonical.image_id);
   const discardedReceiptFields = [
     "owner",
     "queue",
     "session_id",
     "image_id",
-    "image_time",
     "request_hash",
     "status",
     "version",
@@ -1168,15 +1161,14 @@ await runIntegrationScenario(async (runtime) => {
     await ingestionRepository.acceptImportSession(
       {
         ...importCanonical,
-        image_id: imageTime.createImageId(regeneratedImportTime.date, 44),
-        image_time: regeneratedImportTime.iso
+        image_id: imageTime.createImageId(regeneratedImportTime.date, 44)
       },
       displayOrderKey(importSessionId, 39, importCreatedAt),
       importCreatedAt + 6
     )
   );
   assert.equal(reusedDiscardedImport.created, false);
-  assert.equal(reusedDiscardedImport.session.image_time, importResolvedTime.iso);
+  assert.equal(reusedDiscardedImport.session.image_id, importCanonical.image_id);
   assert.equal(importListenerCalls, importEventsBeforeReuse);
   await ingestionRepository.expireSession(
     discardedImport.session,

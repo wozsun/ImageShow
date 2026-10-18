@@ -12,6 +12,12 @@ export type ImageFilterSqlInput = {
   plan: ImageFilterPlan;
 };
 
+/** Keyset boundary on the image ID, which also orders images by image time. */
+export type ImageIdBound = {
+  comparison: "<" | ">";
+  id: string;
+};
+
 function selectedValues(group: ImageSelectorGroup) {
   if (group.include.length && group.exclude.length) {
     throw new Error("Image filter selector group mixes include and exclude");
@@ -25,6 +31,13 @@ function selectedValues(group: ImageSelectorGroup) {
   return null;
 }
 
+/** A single value compares with "=" so PostgreSQL can walk a (value, id) index in ID order; "= ANY" cannot promise that order even for one element. */
+function textMatch(column: string, values: readonly string[], bind: (value: unknown) => string) {
+  return values.length === 1
+    ? `${column}=${bind(values[0])}`
+    : `${column}=ANY(${bind(values)}::text[])`;
+}
+
 function assertSqlAlias(alias: string | undefined) {
   if (alias !== undefined && !/^[a-z][a-z0-9_]*$/u.test(alias)) {
     throw new Error("Image filter SQL alias is invalid");
@@ -34,13 +47,16 @@ function assertSqlAlias(alias: string | undefined) {
 /**
  * Canonical PostgreSQL predicate builder for public/admin lists, facets and
  * random fallback. Callers may omit the facet axis being counted, but selector
- * NULL/exclusion and tag membership semantics remain owned here.
+ * NULL/exclusion and tag membership semantics remain owned here. An ID bound
+ * also limits tag membership, so an ID-ordered merge with image_tag starts at
+ * the boundary instead of the newest tag rows.
  */
 export function buildImageFilterSql(
   input: ImageFilterSqlInput,
   options: {
     alias?: string;
     omittedAxes?: readonly ImageFilterAxis[];
+    idBound?: ImageIdBound;
   } = {}
 ) {
   assertSqlAlias(options.alias);
@@ -55,6 +71,10 @@ export function buildImageFilterSql(
   };
 
   where.push(`${prefix}status=${bind(input.status)}`);
+  const idBound = options.idBound
+    ? `${options.idBound.comparison} ${bind(options.idBound.id)}::uuid`
+    : null;
+  if (idBound) where.push(`${prefix}id ${idBound}`);
   const axes = input.plan.axes;
   if (!omitted.has("device") && !omitted.has("brightness")) {
     if (axes.length === 0) {
@@ -89,7 +109,7 @@ export function buildImageFilterSql(
     const values = includesNull
       ? selection.values.filter((value) => value !== unsetSelector)
       : selection.values;
-    const matches = `${prefix}${column}=ANY(${bind(values)}::text[])`;
+    const matches = textMatch(`${prefix}${column}`, values, bind);
     where.push(
       selection.exclude
         ? includesNull
@@ -116,7 +136,8 @@ export function buildImageFilterSql(
         SELECT 1
           FROM image_tag ${tagAlias}
          WHERE ${tagAlias}.image_id=${prefix}id
-           AND ${tagAlias}.tag_slug=ANY(${bind(singletons)}::text[])
+           AND ${textMatch(`${tagAlias}.tag_slug`, singletons, bind)}${idBound ? `
+           AND ${tagAlias}.image_id ${idBound}` : ""}
       )`);
     }
     for (const clause of clauses.filter((clause) => clause.length > 1)) {

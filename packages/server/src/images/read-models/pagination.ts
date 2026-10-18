@@ -9,6 +9,8 @@ import {
   type ImageBrowseContext,
   type ImageBrowsePosition
 } from "../cursor.ts";
+import type { ImageFilterPlan } from "../filter-plan.ts";
+import { buildResolvedReadyImageListFilters } from "./list-filters.ts";
 import {
   adminImageListPresentationColumns,
   adminImageListPresentationColumnsWithTags,
@@ -26,9 +28,11 @@ export async function fetchAdminImageOffsetRows(
   reader: DatabaseReader = pool,
   sort: Readonly<AdminImageSort> = defaultAdminImageSort
 ) {
-  const field = sort.sort_by === "created_at" ? "created_at" : "image_time";
   const direction = sort.order === "oldest" ? "ASC" : "DESC";
-  const ordering = `${field} ${direction}, id ${direction}`;
+  // The image ID carries the image time, so it alone orders by image time.
+  const ordering = sort.sort_by === "created_at"
+    ? `created_at ${direction}, id ${direction}`
+    : `id ${direction}`;
   const result = await reader.query(
     `SELECT ${adminImageListPresentationColumnsWithTags}
        FROM (
@@ -53,15 +57,20 @@ export type PublicImagePageRows = {
 
 /** Selection and tag hydration share one PostgreSQL statement snapshot. */
 export async function fetchPublicImageCardPage(
-  where: string[],
-  filterParams: unknown[],
+  plan: ImageFilterPlan,
   limit: number,
   context: ImageBrowseContext,
   view: PublicImageView,
   position: ImageBrowsePosition | undefined,
   reader: DatabaseReader = pool
 ): Promise<PublicImagePageRows> {
-  const params = [...filterParams];
+  const ordered = context.order !== "random";
+  const { params, where } = buildResolvedReadyImageListFilters(
+    plan,
+    ordered && position
+      ? { comparison: context.order === "oldest" ? ">" : "<", id: position.id }
+      : undefined
+  );
   const parameter = (value: unknown) => {
     params.push(value);
     return `$${params.length}`;
@@ -73,12 +82,11 @@ export async function fetchPublicImageCardPage(
     "s_width AS width",
     "s_height AS height",
     "storage_slug",
-    "image_time::text AS cursor_image_time",
     ...(view === "gallery" ? ["theme"] : [])
   ].join(", ");
   let selection: string;
   let ordering: string;
-  if (context.order === "random") {
+  if (!ordered) {
     const start = parameter(context.start.toString(16).padStart(12, "0"));
     const boundary = position
       ? `(right(id::text, 12), id) > (${parameter(position.id.slice(-12))}, ${parameter(position.id)}::uuid)`
@@ -101,21 +109,15 @@ export async function fetchPublicImageCardPage(
     ordering = "phase, suffix, id";
   } else {
     const direction = context.order === "oldest" ? "ASC" : "DESC";
-    const comparison = context.order === "oldest" ? ">" : "<";
-    const clauses = [...where];
-    if (position)
-      clauses.push(
-        `(image_time, id) ${comparison} (${parameter(position.imageTime)}::timestamptz, ${parameter(position.id)}::uuid)`
-      );
-    selection = `SELECT ${columns}, image_time AS sort_time
-                   FROM metadata WHERE ${clauses.join(" AND ")}
-                  ORDER BY image_time ${direction}, id ${direction} LIMIT ${count}`;
-    ordering = `sort_time ${direction}, id ${direction}`;
+    selection = `SELECT ${columns}
+                   FROM metadata WHERE ${where.join(" AND ")}
+                  ORDER BY id ${direction} LIMIT ${count}`;
+    ordering = `id ${direction}`;
   }
   const sql = `SELECT metadata.*${view === "gallery" ? `, ${imageTagsPresentationColumn}` : ""}
                  FROM (${selection}) metadata
                 ORDER BY ${ordering} LIMIT ${count}`;
-  type PositionRow = { id: string; cursor_image_time: string };
+  type PositionRow = { id: string };
   const result = await reader.query(sql, params);
   const rows = result.rows.slice(0, limit);
   const last = rows.at(-1) as PositionRow | undefined;

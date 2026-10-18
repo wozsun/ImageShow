@@ -91,7 +91,6 @@ async function receiveUploadIntentBodyUnderAdmission(
           await assertStorageWriteTarget(claimed.storage_slug);
           assertImageIdentity(
             claimed.candidate_image_id,
-            claimed.resolved_image_time,
             claimed.batch_position
           );
           const template = service.uploadReceivedTemplate(

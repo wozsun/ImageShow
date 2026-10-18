@@ -54,7 +54,6 @@ export async function createIngestionScenarioFixture(runtime: IntegrationRuntime
     source_type: "url",
     session_id: identity.createIngestionSessionId("fixture-template", "import", "template"),
     image_id: templateId,
-    image_time: new Date(serviceNow).toISOString(),
     request_hash: "d".repeat(64),
     import_download: { url: "https://example.com/current-domain.jpg" },
     metadata: ingestionMetadata,

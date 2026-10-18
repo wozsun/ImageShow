@@ -66,11 +66,10 @@ export async function persistIngestionImage(
       `INSERT INTO metadata(
          id, image_time, device, brightness, theme, storage_slug, title, description, source, original, author, created_by,
          l_width, l_height, l_byte_size, l_md5, m_width, m_height, m_byte_size, m_md5, s_width, s_height, s_byte_size, s_md5
-       ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+       ) VALUES($1,uuid_extract_timestamp($1::uuid),$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
        RETURNING ${ingestionImagePresentationColumns}`,
       [
         session.image_id,
-        session.image_time,
         classification.device,
         classification.brightness,
         commit.metadata.theme,

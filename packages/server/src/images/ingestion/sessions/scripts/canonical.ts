@@ -94,7 +94,6 @@ if acceptance == 'upload' then
     or template.owner ~= intent.owner
     or template.queue ~= 'upload'
     or template.source_type ~= 'upload'
-    or template.image_time ~= intent.resolved_image_time
     or template.storage_slug ~= intent.storage_slug
     or not same_draft(template.metadata, intent.metadata) then
     return redis.error_reply('INGESTION_CANONICAL invalid_upload_takeover')
@@ -104,7 +103,6 @@ if acceptance == 'upload' then
   template.source_type = 'upload'
   template.session_id = intent.session_id
   template.image_id = intent.candidate_image_id
-  template.image_time = intent.resolved_image_time
   template.request_hash = intent.request_hash
   template.metadata = intent.metadata
   template.storage_slug = intent.storage_slug
@@ -136,7 +134,7 @@ if acceptance == 'import' and cancel_if_missing then
   template = {
     owner = template.owner, queue = template.queue,
     session_id = template.session_id, image_id = template.image_id,
-    image_time = template.image_time, request_hash = template.request_hash,
+    request_hash = template.request_hash,
     status = 'discarded', version = 0, last_semantic_revision = 0,
     accepted_at = 0, accepted_order = 0, discarded_at = now, discard_at = now + ttl_ms
   }
@@ -364,13 +362,11 @@ if next.session_id ~= current.session_id
   or next.queue ~= current.queue
   or next.request_hash ~= current.request_hash
   or tonumber(next.accepted_at) ~= tonumber(current.accepted_at)
-  or tonumber(next.accepted_order) ~= tonumber(current.accepted_order)
-  or (next.status == 'discarded' and next.image_time ~= current.image_time) then
+  or tonumber(next.accepted_order) ~= tonumber(current.accepted_order) then
   return redis.error_reply('INGESTION_CANONICAL immutable_field_changed')
 end
 if next.status ~= 'completed' and next.status ~= 'discarded'
   and (next.source_type ~= current.source_type
-    or next.image_time ~= current.image_time
     or next.storage_slug ~= current.storage_slug) then
   return redis.error_reply('INGESTION_CANONICAL immutable_active_field_changed')
 end

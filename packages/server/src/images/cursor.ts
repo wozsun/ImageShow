@@ -1,10 +1,9 @@
-import { timestampMicroseconds, microsecondsTimestamp } from "../core/microseconds.ts";
 import { hash } from "node:crypto";
-import type { PublicImageOrder } from "@imageshow/shared/browser";
+import { imageTimeMs, type PublicImageOrder } from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
 import { normalizedUuidSchema } from "../core/uuid.ts";
 
-const orderedPayloadBytes = 23;
+const orderedPayloadBytes = 16;
 const randomPayloadBytes = 19;
 const millisecondsPerDay = 86_400_000;
 const cursorPattern = /^[A-Za-z0-9_-]+$/;
@@ -42,9 +41,9 @@ export type ImageBrowseContext = {
   start: number;
 };
 
+/** Ordered positions score by image time and random positions by the ID suffix. */
 export type ImageBrowsePosition = {
   id: string;
-  imageTime: string;
   sortScore: number;
   phase: 0 | 1;
 };
@@ -68,32 +67,15 @@ export function createImageBrowseContext(
 }
 
 /** Exact value boundaries; the request owns filtering and traversal direction. */
-export function encodeImageCursor(
-  row: { id: string } & ({ cursor_image_time: string } | { sort_score: number }),
-  context: ImageBrowseContext
-) {
+export function encodeImageCursor(row: { id: string }, context: ImageBrowseContext) {
   const id = uuidBytes(row.id);
   if (id?.length !== 16) throw new Error("Invalid image list cursor row");
-  if (context.order === "random") {
-    if (context.period === null) throw new Error("Missing image browse period");
-    const payload = Buffer.alloc(randomPayloadBytes);
-    payload.writeIntBE(context.period, 0, 3);
-    id.copy(payload, 3);
-    return payload.toString("base64url");
-  }
-
-  const microseconds =
-    "sort_score" in row
-      ? Number.isSafeInteger(row.sort_score)
-        ? BigInt(row.sort_score)
-        : null
-      : timestampMicroseconds(row.cursor_image_time);
-  if (microseconds === null) throw new Error("Invalid image list cursor row");
-  const payload = Buffer.alloc(orderedPayloadBytes + 1);
-  payload.writeBigInt64BE(microseconds, 0);
-  id.copy(payload, 8);
-  // Safe-integer microseconds fit in 54 signed bits; omit the sign-extension byte.
-  return payload.subarray(1).toString("base64url");
+  if (context.order !== "random") return id.toString("base64url");
+  if (context.period === null) throw new Error("Missing image browse period");
+  const payload = Buffer.alloc(randomPayloadBytes);
+  payload.writeIntBE(context.period, 0, 3);
+  id.copy(payload, 3);
+  return payload.toString("base64url");
 }
 
 export function decodeImageCursor(
@@ -110,22 +92,14 @@ export function decodeImageCursor(
       || payload.toString("base64url") !== value) {
       throw new Error();
     }
-    const id = uuidFromBytes(payload.subarray(random ? 3 : 7));
+    const id = uuidFromBytes(payload.subarray(random ? 3 : 0));
     if (!id) throw new Error();
-    if (random) {
-      if (payload.readIntBE(0, 3) !== context.period) {
-        throw new ApiError(409, "cursor_expired", "Image browse cursor has expired");
-      }
-      const sortScore = Number.parseInt(id.slice(-12), 16);
-      return { id, imageTime: "", sortScore, phase: sortScore < context.start ? 1 : 0 };
+    if (!random) return { id, sortScore: imageTimeMs(id), phase: 0 };
+    if (payload.readIntBE(0, 3) !== context.period) {
+      throw new ApiError(409, "cursor_expired", "Image browse cursor has expired");
     }
-
-    const timestamp = Buffer.alloc(8, payload[0]! & 0x80 ? 0xff : 0);
-    payload.copy(timestamp, 1, 0, 7);
-    const microseconds = timestamp.readBigInt64BE(0);
-    const imageTime = microsecondsTimestamp(microseconds);
-    if (!imageTime) throw new Error();
-    return { imageTime, id, sortScore: Number(microseconds), phase: 0 };
+    const sortScore = Number.parseInt(id.slice(-12), 16);
+    return { id, sortScore, phase: sortScore < context.start ? 1 : 0 };
   } catch (error) {
     if (error instanceof ApiError && error.code === "cursor_expired") throw error;
     throw new ApiError(400, "invalid_cursor", "Invalid image list cursor");

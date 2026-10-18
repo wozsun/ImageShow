@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { randomUUIDv7 } from "node:crypto";
 import type { IngestionSessionSnapshot } from "../../../../packages/server/src/images/ingestion/sessions/model.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 import {
@@ -76,7 +76,7 @@ await runIntegrationScenario(async (runtime) => {
       await runtime.databasePools.pool.query(
         "UPDATE background_job SET status='running', execution_token=$2 " +
           "WHERE id=$1 RETURNING *",
-        [guard.id, randomUUID()]
+        [guard.id, randomUUIDv7()]
       )
     ).rows[0];
     await cleanupJob.handleMoveCleanupJob(

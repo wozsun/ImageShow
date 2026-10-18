@@ -2,7 +2,7 @@ import { storageObjectKey } from "@imageshow/shared/browser";
 import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomUUIDv7 } from "node:crypto";
 import { Readable } from "node:stream";
 import { controlledStorageDriver, removeDriverObject } from "./storage-fixture.mts";
 import type { StorageAccess } from "../../../../packages/server/src/storage/objects/transfer.ts";
@@ -25,13 +25,13 @@ await runIntegrationScenario(async (runtime) => {
   const objectTransfer =
     await import("../../../../packages/server/src/storage/objects/transfer.ts");
   const localAccess = await registry.resolveStorageAccess("local");
-  const foregroundImage = randomUUID();
+  const foregroundImage = randomUUIDv7();
   const foregroundObjectKey = storageObjectKey(foregroundImage);
-  const foregroundNextKey = storageObjectKey(randomUUID());
+  const foregroundNextKey = storageObjectKey(randomUUIDv7());
   const foregroundFull = Buffer.from("move-cleanup-owned-full");
   const foregroundThumb = Buffer.from("move-cleanup-owned-thumbnail");
   await database.pool.query(
-    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','local','pc','light',NULL,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
+    `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','local','pc','light',NULL,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
     [
       foregroundImage,
       createHash("md5").update(foregroundFull).digest("hex"),
@@ -77,7 +77,7 @@ await runIntegrationScenario(async (runtime) => {
     )
   );
   await database.pool.query("UPDATE metadata SET brightness='dark' WHERE id=$1", [foregroundImage]);
-  const adoptedToken = randomUUID();
+  const adoptedToken = randomUUIDv7();
   const adoptedCleanupJob = (
     await database.pool.query(
       "UPDATE background_job SET status='running', execution_token=$2 " + "WHERE id=$1 RETURNING *",
@@ -109,7 +109,7 @@ await runIntegrationScenario(async (runtime) => {
     foregroundCleanupObjects,
     "test_cleanup_after_re_adoption"
   );
-  const unreferencedToken = randomUUID();
+  const unreferencedToken = randomUUIDv7();
   const unreferencedCleanupJob = (
     await database.pool.query(
       "UPDATE background_job SET status='running', execution_token=$2 " + "WHERE id=$1 RETURNING *",
@@ -134,7 +134,7 @@ await runIntegrationScenario(async (runtime) => {
   );
   assert.equal(await localAccess.driver.exists("large", foregroundNextKey), true);
 
-  const uncertainCleanupImage = randomUUID();
+  const uncertainCleanupImage = randomUUIDv7();
   const uncertainCleanupKey = storageObjectKey(uncertainCleanupImage);
   await localAccess.driver.writeBuffer(
     "large",
@@ -156,7 +156,7 @@ await runIntegrationScenario(async (runtime) => {
       [uncertainCleanupImage]
     )
   ).rows[0];
-  const uncertainToken = randomUUID();
+  const uncertainToken = randomUUIDv7();
   const uncertainJob = (
     await database.pool.query(
       "UPDATE background_job SET status='running', execution_token=$2 " + "WHERE id=$1 RETURNING *",
@@ -195,7 +195,7 @@ await runIntegrationScenario(async (runtime) => {
     "UPDATE background_job SET status='pending', execution_token=NULL WHERE id=$1",
     [uncertainReceipt.id]
   );
-  const retryToken = randomUUID();
+  const retryToken = randomUUIDv7();
   const retryJob = (
     await database.pool.query(
       "UPDATE background_job SET status='running', execution_token=$2 " + "WHERE id=$1 RETURNING *",
@@ -205,7 +205,7 @@ await runIntegrationScenario(async (runtime) => {
   await cleanupJob.handleMoveCleanupJob(retryJob, new AbortController().signal);
   assert.equal(await jobs.markBackgroundJobSucceeded(retryJob), true);
 
-  const latePublishImage = randomUUID();
+  const latePublishImage = randomUUIDv7();
   const latePublishKey = storageObjectKey(latePublishImage);
   const latePublishBody = Buffer.from("late-published-after-client-rejection");
   const latePublishObjects = await cleanup.captureMoveCleanupObjects([
@@ -222,7 +222,7 @@ await runIntegrationScenario(async (runtime) => {
     "test_cleanup_late_publish",
     { confirmAbsentAfter }
   );
-  const latePublishToken = randomUUID();
+  const latePublishToken = randomUUIDv7();
   const latePublishJob = (
     await database.pool.query(
       "UPDATE background_job SET status='running', execution_token=$2 " +
@@ -254,7 +254,7 @@ await runIntegrationScenario(async (runtime) => {
     resolve,
     deferredCleanup.delayMs + 25
   ));
-  const latePublishRetryToken = randomUUID();
+  const latePublishRetryToken = randomUUIDv7();
   const latePublishRetryJob = (
     await database.pool.query(
       "UPDATE background_job SET status='running', execution_token=$2 " + "WHERE id=$1 RETURNING *",
@@ -278,10 +278,10 @@ await runIntegrationScenario(async (runtime) => {
     "不确定请求窗口结束后必须清理迟到发布的候选对象"
   );
 
-  const guardedLatePublishImage = randomUUID();
+  const guardedLatePublishImage = randomUUIDv7();
   const guardedLatePublishKey = storageObjectKey(guardedLatePublishImage);
   const guardedLatePublishBody = Buffer.from("ingestion-guarded-late-publish");
-  const guardedLatePublishToken = randomUUID();
+  const guardedLatePublishToken = randomUUIDv7();
   let lateGuardPublish;
   const guardedSourcePath = join(runtime.dataDirectory, "guarded-source.webp");
   await writeFile(guardedSourcePath, guardedLatePublishBody);
@@ -340,7 +340,7 @@ await runIntegrationScenario(async (runtime) => {
     await database.pool.query(
       "UPDATE background_job SET status='running', execution_token=$2 " +
         "WHERE type='move.cleanup' AND target_id=$1 RETURNING *",
-      [guardedLatePublishImage, randomUUID()]
+      [guardedLatePublishImage, randomUUIDv7()]
     )
   ).rows[0];
   assert.equal(
@@ -403,7 +403,7 @@ await runIntegrationScenario(async (runtime) => {
   guardedLatePublishJob = (
     await database.pool.query(
       "UPDATE background_job SET status='running', execution_token=$2 " + "WHERE id=$1 RETURNING *",
-      [guardedLatePublishJob.id, randomUUID()]
+      [guardedLatePublishJob.id, randomUUIDv7()]
     )
   ).rows[0];
   assert.deepEqual(
@@ -424,9 +424,9 @@ await runIntegrationScenario(async (runtime) => {
   );
 
   for (const contentMd5 of [false, true]) {
-    const settledGuardImage = randomUUID();
+    const settledGuardImage = randomUUIDv7();
     const settledGuardKey = storageObjectKey(settledGuardImage);
-    const settledGuardToken = randomUUID();
+    const settledGuardToken = randomUUIDv7();
     let settledTargetBody: Buffer | undefined;
     const settledSourceBody = Buffer.from("ingestion-guard-settled-upload");
     const settledSourcePath = join(runtime.dataDirectory, "settled-source.webp");
@@ -527,7 +527,7 @@ await runIntegrationScenario(async (runtime) => {
     );
   }
 
-  const admittedCleanupImage = randomUUID();
+  const admittedCleanupImage = randomUUIDv7();
   const admittedCleanupKey = storageObjectKey(admittedCleanupImage);
   await localAccess.driver.writeBuffer(
     "large",
@@ -543,7 +543,7 @@ await runIntegrationScenario(async (runtime) => {
     admittedCleanupObjects,
     "test_cleanup_admitted_cancel"
   );
-  const admittedCleanupToken = randomUUID();
+  const admittedCleanupToken = randomUUIDv7();
   const admittedCleanupJob = (
     await database.pool.query(
       "UPDATE background_job SET status='running', execution_token=$2 " +
@@ -585,7 +585,7 @@ await runIntegrationScenario(async (runtime) => {
   );
   assert.equal(await jobs.markBackgroundJobSucceeded(admittedCleanupJob), true);
 
-  const abortedImage = randomUUID();
+  const abortedImage = randomUUIDv7();
   const abortedObjectKey = storageObjectKey(abortedImage);
   const abortedBody = Buffer.from("cancelled-move-cleanup");
   await localAccess.driver.writeBuffer(
@@ -602,7 +602,7 @@ await runIntegrationScenario(async (runtime) => {
     [abortedCleanupObject],
     "test_cancelled_move_cleanup"
   );
-  const abortedExecutionToken = randomUUID();
+  const abortedExecutionToken = randomUUIDv7();
   const abortedReceipt = (
     await database.pool.query(
       "UPDATE background_job SET status='running', execution_token=$2 " +

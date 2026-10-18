@@ -1,5 +1,5 @@
 import type { ImageVariantRecord } from "../variants/record.ts";
-import { unsetSelector } from "@imageshow/shared/browser";
+import { imageTimeMs, unsetSelector } from "@imageshow/shared/browser";
 import {
   imageGroupMembershipLimit,
   brightnesses,
@@ -41,7 +41,6 @@ export type ReadyImageSourceRow = ImageVariantRecord & {
   author: string | null;
   tags: string[];
   groups: string[];
-  sort_score: number | string;
   title: string;
   description: string;
   source: string;
@@ -61,7 +60,6 @@ export type ReadyImageCacheItem = ImageVariantRecord & {
   groups: string[];
   width: number;
   height: number;
-  sort_score: number;
   title: string;
   description: string;
   source: string;
@@ -86,23 +84,6 @@ function timestamp(value: unknown, field: string) {
     throw new Error(`Ready-image cache row contains invalid ${field}`);
   }
   return text;
-}
-
-export function readyImageSortScore(value: unknown) {
-  if (typeof value === "number") {
-    if (!Number.isSafeInteger(value)) throw new Error("Invalid ready-image sort score");
-    return value;
-  }
-  const raw = String(value ?? "");
-  if (!/^-?\d+$/.test(raw)) {
-    throw new Error("Ready-image cache row contains an invalid sort score");
-  }
-  const integer = BigInt(raw);
-  const maximum = BigInt(Number.MAX_SAFE_INTEGER);
-  if (integer < -maximum || integer > maximum) {
-    throw new Error("Ready-image image_time cannot be represented exactly in Redis");
-  }
-  return Number(integer);
 }
 
 export function readyImageCacheItemFromRow(row: ReadyImageSourceRow): ReadyImageCacheItem {
@@ -132,7 +113,6 @@ export function readyImageCacheItemFromRow(row: ReadyImageSourceRow): ReadyImage
     l_md5: String(row.l_md5),
     m_md5: String(row.m_md5),
     s_md5: String(row.s_md5),
-    sort_score: readyImageSortScore(row.sort_score),
     title: String(row.title ?? ""),
     description: String(row.description ?? ""),
     source: String(row.source ?? ""),
@@ -174,7 +154,7 @@ function validateReadyImageCacheItem(item: ReadyImageCacheItem) {
   for (const field of ["l_md5","m_md5","s_md5"] as const) if (!/^[a-f0-9]{32}$/.test(item[field])) throw new Error("Invalid variant MD5");
 }
 
-const cacheFields = ["id","device","brightness","theme","storage_slug","author","tags","groups","sort_score","title","description","source","original","created_at","updated_at","l_width","l_height","l_byte_size","m_width","m_height","m_byte_size","s_width","s_height","s_byte_size","l_md5","m_md5","s_md5"] as const;
+const cacheFields = ["id","device","brightness","theme","storage_slug","author","tags","groups","title","description","source","original","created_at","updated_at","l_width","l_height","l_byte_size","m_width","m_height","m_byte_size","s_width","s_height","s_byte_size","l_md5","m_md5","s_md5"] as const;
 
 export function parseReadyImageCacheItem(raw: string | null): ReadyImageCacheItem | null {
   if (!raw) return null;
@@ -187,8 +167,8 @@ export function parseReadyImageCacheItem(raw: string | null): ReadyImageCacheIte
         if (!Array.isArray(entry) || entry.some((tag) => typeof tag !== "string")) return null;
       } else if (field === "theme" || field === "author") {
         if (entry !== null && typeof entry !== "string") return null;
-      } else if (field === "sort_score" || /_(width|height|byte_size)$/.test(field)) {
-        if (typeof entry !== "number" || !Number.isSafeInteger(entry) || (field !== "sort_score" && entry <= 0)) return null;
+      } else if (/_(width|height|byte_size)$/.test(field)) {
+        if (typeof entry !== "number" || !Number.isSafeInteger(entry) || entry <= 0) return null;
       } else if (typeof entry !== "string") return null;
     }
     const fields = Object.fromEntries(cacheFields.map((field, index) => [field, value[index]]));
@@ -225,6 +205,11 @@ function readyImageIdSuffix(item: Pick<ReadyImageCacheItem, "id">) {
 
 export function readyImageIdSuffixScore(item: Pick<ReadyImageCacheItem, "id">) {
   return Number.parseInt(readyImageIdSuffix(item), 16);
+}
+
+/** Ordered indexes score members by image time; equal scores fall back to member (ID) order. */
+export function readyImageTimeScore(item: Pick<ReadyImageCacheItem, "id">) {
+  return imageTimeMs(item.id);
 }
 
 export function readyImageStatFields(item: ReadyImageCacheItem) {

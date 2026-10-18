@@ -460,7 +460,6 @@ test("[Web/后台] 图片详情根据链接显示原图并保持来源、标题�
       width: 1600,
       height: 900,
       original: Boolean(originalUrl),
-      image_time: "2026-09-01T00:00:00.000Z",
       base_url: "/images",
     });
     type AuthScenario = "pending" | "expired" | "guest" | "image" | "super";

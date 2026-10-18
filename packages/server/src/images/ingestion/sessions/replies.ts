@@ -46,7 +46,6 @@ export function normalizedSemanticSession(next: PendingStoredIngestionSession): 
       queue: value.queue,
       session_id: value.session_id,
       image_id: value.image_id,
-      image_time: value.image_time,
       request_hash: value.request_hash,
       status: "discarded",
       version: value.version,

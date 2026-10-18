@@ -269,7 +269,6 @@ export function useUpload(options: {
           queue.updateJob(job.id, {
             sessionId: result.session_id,
             imageId: result.candidate_image_id,
-            imageTime: result.resolved_image_time,
             status: "uploading",
             transferProgress: 0
           });

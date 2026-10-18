@@ -45,7 +45,6 @@ export type IngestionServerBinding = {
 } & Partial<
   Pick<
     IngestionJob,
-    | "imageTime"
     | "serverVersion"
     | "serverSemanticRevision"
     | "serverHandoffPending"

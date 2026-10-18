@@ -1,10 +1,11 @@
-import { randomUuidV7At } from "../core/uuid.ts";
+import { randomUuidV7At, UUID_V7_MAX_TIMESTAMP } from "../core/uuid.ts";
 
 const localImageTimePattern = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/;
 const zonedImageTimePattern =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
+// The image ID carries the image time as UUIDv7 milliseconds.
 const earliestImageTime = 0;
-const latestImageTime = Math.floor(Number.MAX_SAFE_INTEGER / 1_000);
+const latestImageTime = UUID_V7_MAX_TIMESTAMP;
 const latestImageTimeIso = new Date(latestImageTime).toISOString();
 
 type ParseImageTimeOptions = {

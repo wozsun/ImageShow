@@ -4,7 +4,7 @@ import {
   type ImageFilterPlan
 } from "../filter-plan.ts";
 import type { VocabularyReadAccess } from "../../vocab/cache.ts";
-import { buildImageFilterSql } from "./image-filter-sql.ts";
+import { buildImageFilterSql, type ImageIdBound } from "./image-filter-sql.ts";
 
 export type ImageListFilterQuery = {
   status: "ready" | "deleted";
@@ -32,9 +32,12 @@ export async function buildImageListFilters(
 }
 
 /** Reuses the canonical selector plan already resolved for the Redis read. */
-export function buildResolvedReadyImageListFilters(plan: ImageFilterPlan) {
-  return buildImageFilterSql({
-    status: "ready",
-    plan
-  });
+export function buildResolvedReadyImageListFilters(plan: ImageFilterPlan, idBound?: ImageIdBound) {
+  return buildImageFilterSql(
+    {
+      status: "ready",
+      plan
+    },
+    { idBound }
+  );
 }

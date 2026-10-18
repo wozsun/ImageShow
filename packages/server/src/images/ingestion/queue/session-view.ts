@@ -63,7 +63,6 @@ export function presentIngestionSession(
     ...(session.manifest_line === undefined
       ? {}
       : { manifest_line: session.manifest_line }),
-    resolved_image_time: session.image_time,
     status: session.status,
     phase: session.phase,
     message: session.message,

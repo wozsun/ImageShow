@@ -74,7 +74,6 @@ export function adminImageListItem(
     width: 1600,
     height: 900,
     storage_label: "本地存储",
-    image_time: timestamp,
     status: "ready",
     purge_pending: false,
     storage_slug: "local",

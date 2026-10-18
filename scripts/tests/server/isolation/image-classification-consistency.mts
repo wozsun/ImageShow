@@ -1,6 +1,6 @@
 import { storageObjectKey } from "@imageshow/shared/browser";
 import assert from "node:assert/strict";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomUUIDv7 } from "node:crypto";
 import { removeDriverObject } from "./storage-fixture.mts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
@@ -23,14 +23,14 @@ await runIntegrationScenario(async (runtime) => {
         ).rows[0].revision
       )
     );
-  const classificationRollbackId = randomUUID();
+  const classificationRollbackId = randomUUIDv7();
   const classificationRollbackSource = storageObjectKey(classificationRollbackId);
   const classificationRollbackBody = Buffer.from("atomic-classification-rollback");
   const classificationRollbackMd5 = createHash("md5")
     .update(classificationRollbackBody)
     .digest("hex");
   await database.pool.query(
-    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','local','pc','dark',NULL,'before',1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
+    `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','local','pc','dark',NULL,'before',1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
     [
         classificationRollbackId,
         classificationRollbackMd5,
@@ -131,14 +131,14 @@ await runIntegrationScenario(async (runtime) => {
     classificationRollbackSource
   );
 
-  const classificationId = randomUUID();
+  const classificationId = randomUUIDv7();
   const classificationSourceKey = storageObjectKey(classificationId);
   const classificationBody = Buffer.from("classification-metadata-only");
   const classificationMd5 = createHash("md5")
     .update(classificationBody)
     .digest("hex");
   await database.pool.query(
-    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','local','pc','dark',NULL,'ready',1,1,GREATEST(1,$3),$2,1,1,GREATEST(1,$3),$2,1,1,GREATEST(1,$3),$2)`,
+    `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','local','pc','dark',NULL,'ready',1,1,GREATEST(1,$3),$2,1,1,GREATEST(1,$3),$2,1,1,GREATEST(1,$3),$2)`,
     [
         classificationId,
         classificationMd5,
@@ -212,14 +212,14 @@ await runIntegrationScenario(async (runtime) => {
     classificationSourceKey
   );
 
-  const classificationMissingThumbId = randomUUID();
+  const classificationMissingThumbId = randomUUIDv7();
   const classificationMissingThumbSource = storageObjectKey(classificationMissingThumbId);
   const classificationMissingThumbBody = Buffer.from("classification-without-thumbnail");
   const classificationMissingThumbMd5 = createHash("md5")
     .update(classificationMissingThumbBody)
     .digest("hex");
   await database.pool.query(
-    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','local','pc','dark',NULL,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,0),$2)`,
+    `INSERT INTO metadata (id,image_time,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,uuid_extract_timestamp($1::uuid),'integration-admin','local','pc','dark',NULL,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,0),$2)`,
     [
         classificationMissingThumbId,
         classificationMissingThumbMd5

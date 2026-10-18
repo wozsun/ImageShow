@@ -584,7 +584,6 @@ test("[Server/HTTP 与鉴权] Redis ready 投影、管理员权限和密码验�
     l_width: 1920, l_height: 1080, l_byte_size: 2048, l_md5: "0123456789abcdef0123456789abcdef",
     m_width: 1920, m_height: 1080, m_byte_size: 2048, m_md5: "0123456789abcdef0123456789abcdef",
     s_width: 1920, s_height: 1080, s_byte_size: 2048, s_md5: "0123456789abcdef0123456789abcdef",
-    sort_score: "1785844800654321",
     title: "title",
     description: "description",
     source: "https://example.com/post",
