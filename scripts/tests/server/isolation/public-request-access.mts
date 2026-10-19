@@ -128,7 +128,7 @@ await runIntegrationScenario(async (runtime) => {
     Referer: "https://alternate.example.test/gallery"
   }, "GET", "alternate.example.test");
   assert.equal(aliasRedirect.status, 302);
-  assert.equal(aliasRedirect.headers.get("Location"), `https://images.example.test/images/medium/${key}`);
+  assert.equal(aliasRedirect.headers.get("Location"), `/images/medium/${key}`);
   await aliasRedirect.arrayBuffer();
 
   // Rejected requests keep their charge; a limit that is not a count spends a batch slot.

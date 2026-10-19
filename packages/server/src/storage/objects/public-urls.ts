@@ -32,11 +32,10 @@ export function publicImageBaseUrl(config: StorageConfig) {
 }
 
 /**
- * Origins apart from the site's that serve public images, so a page can
- * connect to them before it requests images. They come from the last
- * published enabled backends, since a disabled one may be an external backup
- * location: none before the registry first loads, and reading them never
- * starts database work.
+ * Configured public image origins, so a page can connect before requesting images.
+ * Only enabled backends from the last published snapshot are exposed, since a
+ * disabled backend may be an external backup location. Reading this never starts
+ * database work, and returns no origins before the registry first loads.
  */
 export function publishedPublicImageOrigins() {
   const origins = new Set<string>();
@@ -45,8 +44,6 @@ export function publishedPublicImageOrigins() {
     const base = backend.type === "local" ? backend.public_base_url : backend.s3.public_base_url;
     if (base) origins.add(new URL(base).origin);
   }
-  const site = imageResourceBaseUrl();
-  if (URL.canParse(site)) origins.delete(new URL(site).origin);
   return [...origins];
 }
 

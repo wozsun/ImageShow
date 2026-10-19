@@ -103,7 +103,7 @@ curl "https://img.example.com/random?mode=json&limit=3"
 
 ### redirect
 
-返回 `302`，跳转到图片地址。地址可能在站点的 `/images/` 下，也可能是图片存储的公开地址。
+返回 `302`，跳转到图片地址。未配置图片存储的公开地址时，跳转到当前访问域名下的 `/images/` 路径；已配置时，跳转到该公开地址。
 
 ### proxy
 
@@ -145,7 +145,7 @@ curl "https://img.example.com/random?device=all&mode=json"
 | `id` | 图片 ID，UUIDv7 格式；前 48 位（去掉连字符后的前 12 个十六进制字符）是图片时间的 Unix 毫秒数 |
 | `title` | 标题 |
 | `author` / `theme` / `tags` | 作者、主题、标签的标识；没有作者或主题时为 `null` |
-| `url` | 所选尺寸的图片地址（绝对地址） |
+| `url` | 所选尺寸的图片地址（绝对地址）；未配置图片存储的公开地址时，使用此次请求的协议和域名 |
 | `device` / `brightness` | 横竖（`pc` / `mb`）、明暗（`dark` / `light`） |
 | `width` / `height` / `byte_size` | 所选尺寸的宽、高（像素）和文件大小（字节） |
 

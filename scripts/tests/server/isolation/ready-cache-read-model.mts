@@ -149,11 +149,12 @@ await runIntegrationScenario(async (runtime) => {
       site: { domain: "images.example", public_original: false },
       altcha: { enabled: false }
     });
-    const displayed = publicUrls.publicImageUrlForConfig(
+    // The large image as a visitor of the site sees it.
+    const displayed = new URL(publicUrls.publicImageUrlForConfig(
       { id: imageIds[2]! },
       await storageRegistry.getStorageBackend("local", { mode: "internal" }),
       "large"
-    );
+    ), "https://images.example").href;
     originalUrls.add(`${displayed}#original`);
     await runtime.databasePools.pool.query(
       "UPDATE metadata SET original=$2, source=$3 WHERE id=$1",

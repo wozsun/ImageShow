@@ -21,7 +21,7 @@ export function assertLocalPublicUrlDomain(
     throw new ApiError(
       400,
       "storage_public_url_host_conflict",
-      "本地图片公开地址不能使用主站或附加站点域名；使用主站地址请将公开 URL 留空"
+      "本地图片公开地址不能使用主站或附加站点域名；随当前站点域名访问请将公开 URL 留空"
     );
   }
 }

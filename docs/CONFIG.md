@@ -20,7 +20,7 @@
 | 配置项 | 默认值 | 说明 |
 | --- | --- | --- |
 | `site.domain` | `"example.com"` | 主站域名，如 `img.example.com`，可带端口，不写协议和路径。设置后，站点只接受该域名及附加站点域名；已配置的图片和静态资源域名仍只提供对应资源。留空或保持 `example.com` 表示不限制域名 |
-| `site.additional_domains` | `[]` | 附加站点域名列表，后台每行一个，最多 32 项；可带端口，不写协议和路径。与主站共用页面、API、账号和数据，登录状态按域名分别保存。图片和静态资源地址沿用现有配置；不能与本地图片或静态资源专用域名冲突。需要自行完成 DNS、证书及 Nginx 配置，见[多域名入口](DEPLOY.md#多域名入口)。开启外部嵌入时，嵌入页面的安全策略响应头会列出全部附加站点域名 |
+| `site.additional_domains` | `[]` | 附加站点域名列表，后台每行一个，最多 32 项；可带端口，不写协议和路径。与主站共用页面、API、账号和数据，登录状态按域名分别保存。未配置独立公开地址的图片和静态资源随当前站点域名访问，已配置的公开地址保持不变；不能与本地图片或静态资源专用域名冲突。需要自行完成 DNS、证书及 Nginx 配置，见[多域名入口](DEPLOY.md#多域名入口)。开启外部嵌入时，嵌入页面的安全策略响应头会列出全部附加站点域名 |
 | `site.title` | `"ImageShow"` | 浏览器标签页上的网页标题，不能为空 |
 | `site.header_name` | `"ImageShow"` | 页面顶部和后台显示的站点名称，不能为空 |
 | `site.description` | `"画廊与随机图片API"` | 网页描述，供搜索引擎使用，最多 200 字；留空时使用网页标题 |
@@ -107,7 +107,7 @@ SITE_FOOTER='Powered by <a href="https://github.com/wozsun/ImageShow">ImageShow<
 
 ### 静态资源地址
 
-`site.assets_base_url` 让前端的 JS、CSS 等文件从独立域名加载，留空时使用主站的 `/assets/`。
+`site.assets_base_url` 让前端的 JS、CSS 等文件从独立域名加载，留空时使用当前访问域名下的 `/assets/`。
 
 - 地址直接对应静态文件目录，不会自动加 `/assets`：`https://asset.example.com/static` 对应 `https://asset.example.com/static/文件名`。
 - 必须是 HTTPS，域名不能与主站相同，不能带账号密码、查询参数或 `#`。可以与本地存储的图片公开地址共用一个域名。

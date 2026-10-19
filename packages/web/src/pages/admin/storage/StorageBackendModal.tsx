@@ -314,7 +314,7 @@ export function StorageBackendModal({
                   <FieldError message={errorFor("public_base_url")} />
                 </label>
                 <p className="hint">
-                  完整图与缩略图共用，可包含路径前缀；留空使用主站地址。独立 Host
+                  完整图与缩略图共用，可包含路径前缀；留空随当前站点域名访问。独立 Host
                   的图片请求由本机读取本地存储。
                 </p>
               </>

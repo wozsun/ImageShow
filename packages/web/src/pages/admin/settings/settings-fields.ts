@@ -173,7 +173,7 @@ const settingsFields = {
     label: "附加站点域名",
     kind: "lines",
     placeholder: "alternate.example.net\npreview.example.org:8443",
-    hint: "每行一个域名，最多 32 项，不含协议和路径，可带端口。与主站共用数据，图片和静态资源地址保持现有配置。请先自行配置 DNS、证书及 Nginx，回源保留访问域名。"
+    hint: "每行一个域名，最多 32 项，不含协议和路径，可带端口。与主站共用数据，未配置独立公开地址的图片和静态资源随当前站点域名访问。请先自行配置 DNS、证书及 Nginx，回源保留访问域名。"
   },
   "site.title": {
     group: "identity",
@@ -215,7 +215,7 @@ const settingsFields = {
     label: "静态资源公开 URL",
     kind: "text",
     maxLength: 2048,
-    placeholder: "留空使用主站",
+    placeholder: "留空随当前站点域名访问",
     hint: "须使用独立 Host，可带路径前缀。保存后刷新页面生效。"
   },
   "site.script_sources": {

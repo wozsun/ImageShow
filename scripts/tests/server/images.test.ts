@@ -1577,8 +1577,6 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
       readCount += 1;
       return record;
     },
-    displayUrlForOriginalComparison: async () =>
-      `https://img.example.com/images/large/${storageObjectKey(item.id)}`,
     supportsDirectAccess: async () => direct,
     proxyExternalImage: async (...args: unknown[]) => {
       proxyCalls.push(args);

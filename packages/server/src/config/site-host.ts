@@ -8,10 +8,8 @@ export function isAllowedSiteHost(hostHeader: string) {
 }
 
 export function imageResourceBaseUrl() {
-  const site = getRuntimeConfig().site;
   // Same-origin paths follow the request Host without storing it in shared DTOs.
-  if (!hasExplicitSiteDomain(site.domain)) return "/images";
-  return `https://${site.domain}/images`;
+  return "/images";
 }
 
 export function staticResourceBaseUrl(config = getRuntimeConfig()) {

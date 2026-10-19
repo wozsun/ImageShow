@@ -110,12 +110,6 @@ test("[Server/HTTP 与鉴权] 主站 Host、图片路径与域名热加载遵循
       "packages/server/src/config/runtime-config-store.ts"
     )
   ).href;
-  const siteHostUrl = pathToFileURL(
-    resolve(
-      repositoryRoot,
-      "packages/server/src/config/site-host.ts"
-    )
-  ).href;
   const httpAppUrl = pathToFileURL(resolve(
     repositoryRoot,
     "packages/server/src/http-app.ts"
@@ -128,13 +122,11 @@ import {
   reloadRuntimeConfigFromDisk,
   updateRuntimeConfig
 } from ${JSON.stringify(runtimeConfigStoreUrl)};
-import { imageResourceBaseUrl } from ${JSON.stringify(siteHostUrl)};
 import { createHttpApp } from ${JSON.stringify(httpAppUrl)};
 
 initializeRuntimeConfig();
 const config = getRuntimeConfig();
 assert.equal(config.site.domain, "img.example.com");
-assert.equal(imageResourceBaseUrl(), "https://img.example.com/images");
 
 const app = createHttpApp({
   businessGateIsOpen: () => true,
@@ -183,28 +175,21 @@ const spoofed = await app.request("http://internal.test/api/site-config", {
   headers: { Host: "unknown.example.com", "X-Forwarded-Host": "alternate.example.com" }
 });
 assert.equal(spoofed.status, 404);
-assert.equal(imageResourceBaseUrl(), "https://img.example.com/images");
 await updateRuntimeConfig({ site: { additional_domains: [] } });
 assert.equal(await status("alternate.example.com", "/api/ping", "OPTIONS"), 404);
 assert.equal(await status("img.example.com", "/api/ping", "OPTIONS"), 204);
 for (const domain of ["img.example.com:5518", "local.example:5518"]) {
   await updateRuntimeConfig({ site: { domain } });
-  assert.equal(imageResourceBaseUrl(), "https://" + domain + "/images");
   assert.equal(await status(domain, "/images/original/not-a-uuid"), 401);
   assert.equal(await status(domain.split(":")[0], "/images/original/not-a-uuid"), 404);
 }
 for (const domain of ["", "example.com"]) {
   await updateRuntimeConfig({ site: { domain } });
-  assert.equal(imageResourceBaseUrl(), "/images");
   for (const host of ["localhost:5518", "127.0.0.1:5518", "first.example.com", "second.example.com:8443"]) {
     assert.equal(await status(host, "/api/ping", "OPTIONS"), 204, host);
     assert.equal(await status(host, "/images/original/not-a-uuid"), 401, host);
     const response = await app.request("http://internal.test/api/site-config", { headers: { Host: host } });
     assert.equal(response.status, 200);
-    for (const scheme of ["http", "https"]) {
-      assert.equal(new URL(imageResourceBaseUrl() + "/small/test.webp", scheme + "://" + host).href,
-        scheme + "://" + host + "/images/small/test.webp");
-    }
   }
   for (const host of ["", "bad host", "evil.test/path", "user@evil.test", "one.test,two.test", "local.test:0", "local.test:65536"]) {
     assert.equal(await status(host, "/api/ping", "OPTIONS"), 404, host);
@@ -217,7 +202,6 @@ for (const domain of ["", "example.com"]) {
 await updateRuntimeConfig({ site: { domain: "restored.example.com" } });
 assert.equal(await status("localhost:5518", "/api/ping", "OPTIONS"), 404);
 assert.equal(await status("restored.example.com", "/api/ping", "OPTIONS"), 204);
-assert.equal(imageResourceBaseUrl(), "https://restored.example.com/images");
 console.log("host-boundary-ok");
 `;
   try {
