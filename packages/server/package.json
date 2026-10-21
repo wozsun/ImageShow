@@ -1,6 +1,6 @@
 {
   "name": "@imageshow/server",
-  "version": "6.8.17",
+  "version": "6.8.18",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,18 +9,18 @@
     "check": "tsc -p tsconfig.check.json"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1152.0",
+    "@aws-sdk/client-s3": "^3.1154.0",
     "@hono/node-server": "^2.1.5",
     "@imageshow/shared": "file:../shared",
     "@smithy/node-http-handler": "^4.12.1",
-    "altcha-lib": "^2.6.0",
+    "altcha-lib": "^2.7.0",
     "file-type": "^22.2.0",
     "hono": "^4.13.13",
     "ioredis": "^6.0.0",
     "ipaddr.js": "^2.5.0",
     "pg": "^8.23.1",
     "sharp": "^0.35.5",
-    "undici": "^8.12.2",
+    "undici": "^8.12.3",
     "zod": "^4.6.7"
   },
   "devDependencies": {
