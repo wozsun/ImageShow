@@ -1,5 +1,7 @@
 import {
+  adminImageBatchLimit,
   builtInSiteIconPath,
+  randomQueryLimits,
   variantSettingLimits,
   type ApiValidationIssueDto,
   type RuntimeConfig
@@ -25,6 +27,11 @@ export const settingsSections = {
     column: "right",
     title: "外部嵌入",
     description: "额外来源同时用于嵌入授权与图片防盗链白名单。"
+  },
+  random: {
+    column: "right",
+    title: "随机图片 API",
+    description: "设置随机图的默认返回方式、尺寸、单次返回数量上限和零匹配回退顺序。"
   },
   ingestion: {
     column: "wide",
@@ -75,7 +82,7 @@ const settingsGroups = {
   gallery: { section: "browsing", title: "画廊" },
   show: { section: "browsing", title: "展映" },
   original: { section: "browsing", title: "原图访问" },
-  random: { section: "browsing", title: "随机图片 API" },
+  random: { section: "random" },
   embed: { section: "embed" },
   ingestion: { section: "ingestion", title: "原图与入库" },
   upload: { section: "ingestion", title: "本地上传" },
@@ -355,6 +362,14 @@ const settingsFields = {
     kind: "select",
     options: { large: "大图", medium: "中图", small: "小图" }
   },
+  "site.random_max_items": {
+    group: "random",
+    label: "随机图单次返回数量上限",
+    kind: "number",
+    min: 1,
+    max: randomQueryLimits.maxJsonItems,
+    hint: "JSON 请求的 limit 超过此值时按此值处理；不填 limit 时仍返回 1 张。"
+  },
   "site.random_fallback_order": {
     group: "random",
     kind: "csv",
@@ -514,7 +529,7 @@ const settingsFields = {
     label: "图片管理每页数量",
     kind: "number",
     min: 10,
-    max: 200
+    max: adminImageBatchLimit
   },
   "admin.recent_uploads": {
     group: "admin",

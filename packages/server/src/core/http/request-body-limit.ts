@@ -16,6 +16,7 @@ import {
   uploadRawPath
 } from "@imageshow/shared/browser";
 import type { Context, Next } from "hono";
+import { routePath } from "hono/route";
 import { apiErrorResponse } from "./responses.ts";
 import {
   invalidJsonBodyError,
@@ -30,9 +31,14 @@ const adminPreferencesPath = `${adminApiBasePath}/preferences`;
 // escaping. A 1 MiB tier accepts every legal request with finite headroom.
 const weiboImportBodyMaxBytes = appConfig.ingestion.weiboRequestBodyMaxBytes;
 export const imageUpdatePath = `${adminApiBasePath}/images/update`;
-// Two hundred maximum-field items occupy about 5.692 MiB after worst-case JSON
-// escaping. The 6 MiB tier covers every legal request with finite headroom.
-const imageUpdateBodyMaxBytes = 6 * 1024 * 1024;
+// One thousand maximum-field items occupy about 28.46 MiB after worst-case
+// JSON escaping. The 32 MiB tier leaves room for the enclosing request.
+const imageUpdateBodyMaxBytes = 32 * 1024 * 1024;
+// One thousand fully escaped UUIDs occupy about 214 KiB, plus request fields.
+const imageIdsBodyMaxBytes = 256 * 1024;
+// Group additions report invalid IDs per item and accept up to 1,024 characters
+// per input. One thousand fully escaped inputs occupy about 5.863 MiB.
+const imageGroupAddBodyMaxBytes = 8 * 1024 * 1024;
 // A legal 3,600-item batch can contain two 2 KiB URLs plus metadata and fifty
 // tags per item. Keep even worst-case JSON escaping bounded without rejecting
 // an otherwise valid configured ingestion batch.
@@ -120,10 +126,18 @@ export function getRequestBodyBytes(c: Context) {
 export const limitStandardApiBody = measuredBodyLimit(standardApiBodyMaxBytes);
 
 const limitIngestionControlBody = measuredBodyLimit(ingestionControlBodyMaxBytes);
+const limitImageIdsBody = measuredBodyLimit(imageIdsBodyMaxBytes);
 // Select each protected body tier after session and CSRF checks.
 // Route handlers need neither a second limit nor a separate exemption list.
 const protectedBodyLimits = new Map([
   [`POST ${imageUpdatePath}`, measuredBodyLimit(imageUpdateBodyMaxBytes)],
+  [`POST ${adminApiBasePath}/images/snapshot`, limitImageIdsBody],
+  [`POST ${adminApiBasePath}/images/trash`, limitImageIdsBody],
+  [`POST ${adminApiBasePath}/images/restore`, limitImageIdsBody],
+  [`POST ${adminApiBasePath}/images/purge`, limitImageIdsBody],
+  [`POST ${adminApiBasePath}/images/migrate-storage`, limitImageIdsBody],
+  [`POST ${adminApiBasePath}/groups/:slug/members/add`, measuredBodyLimit(imageGroupAddBodyMaxBytes)],
+  [`POST ${adminApiBasePath}/groups/:slug/members/remove`, limitImageIdsBody],
   [`PATCH ${adminPreferencesPath}`, measuredBodyLimit(adminPreferencesBodyMaxBytes)],
   [`POST ${uploadIntentPath}`, limitIngestionControlBody],
   [`POST ${importAcceptPath}`, limitIngestionControlBody],
@@ -149,7 +163,7 @@ export function limitApiRequestBody(c: Context, next: Next) {
 }
 
 export function limitProtectedAdminRequestBody(c: Context, next: Next) {
-  const path = new URL(c.req.url).pathname;
+  const path = routePath(c, -1);
   if (c.req.method === "PUT" && path === uploadRawPath) {
     return next();
   }

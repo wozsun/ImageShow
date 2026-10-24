@@ -957,6 +957,26 @@ test("[Server/图片] 图片 1..N 路由拒绝越权、重复 ID 与错误正文
       })
     );
   const jsonBody = (value: unknown) => JSON.stringify(value);
+  const oversizedIds = Array.from({ length: 1001 }, (_, index) =>
+    `00000000-0000-7000-8000-${index.toString(16).padStart(12, "0")}`);
+  for (const [action, body] of [
+    ["snapshot", { ids: oversizedIds }],
+    ["trash", { ids: oversizedIds }],
+    ["restore", { ids: oversizedIds }],
+    ["purge", { scope: "selected", ids: oversizedIds }],
+    ["migrate-storage", { ids: oversizedIds, target: "archive" }],
+    ["update", { items: oversizedIds.map((id) => ({ id, title: "batch" })) }]
+  ] as const) {
+    const response = await post(`${adminApiBasePath}/images/${action}`, jsonBody(body));
+    assert.equal(response.status, 400, action);
+    assert.equal((await response.json() as { code: string }).code, "validation_error", action);
+  }
+  const acceptedIds = oversizedIds.slice(0, 1000);
+  assert.deepEqual(imageSnapshotInput.parse({ ids: acceptedIds }).ids, acceptedIds);
+  assert.deepEqual(imageActionInput.parse({ ids: acceptedIds }).ids, acceptedIds);
+  assert.equal(imagePurgeInput.parse({ scope: "selected", ids: acceptedIds }).scope, "selected");
+  assert.deepEqual(imageStorageMigrationInput.parse({ ids: acceptedIds, target: "archive" }).ids, acceptedIds);
+  assert.equal(imageUpdateInput.parse({ items: acceptedIds.map((id) => ({ id, title: "batch" })) }).items.length, 1000);
 
   for (const query of [
     "cursor=opaque",
@@ -1077,7 +1097,7 @@ test("[Server/图片] 图片 1..N 路由拒绝越权、重复 ID 与错误正文
   const aboveStandardTier = await post(
     `${adminApiBasePath}/images/update`,
     jsonBody({
-      items: [{ id: imageId, title: "valid", extra: "x".repeat(160 * 1024) }]
+      items: [{ id: imageId, title: "valid", extra: "x".repeat(7 * 1024 * 1024) }]
     })
   );
   assert.equal(aboveStandardTier.status, 400);
@@ -1089,7 +1109,7 @@ test("[Server/图片] 图片 1..N 路由拒绝越权、重复 ID 与错误正文
   const aboveImageUpdateTier = await post(
     `${adminApiBasePath}/images/update`,
     jsonBody({
-      items: [{ id: imageId, title: "valid", extra: "x".repeat(6 * 1024 * 1024) }]
+      items: [{ id: imageId, title: "valid", extra: "x".repeat(32 * 1024 * 1024) }]
     })
   );
   assert.equal(aboveImageUpdateTier.status, 413);
@@ -2332,10 +2352,20 @@ test("[Server/图片] 固定 seed 保留 Unicode 原值并支持 JSON 数量与�
   const ordinary = parse("");
   assert.ok(!(ordinary instanceof Response));
   assert.equal(ordinary.seed, null);
-  for (const limit of [1, 2, 200, 201]) {
+  for (const limit of [1, 2, 100, 101, 500, 501]) {
     const explicit = parse(`seed=fixed&mode=json&limit=${limit}`);
     assert.ok(!(explicit instanceof Response));
-    assert.equal(explicit.limit, Math.min(limit, 200));
+    assert.equal(explicit.limit, Math.min(limit, 100));
+  }
+  for (const maxItems of [1, 100, 500]) {
+    for (const raw of ["1", "2", "100", "501", "9".repeat(300)]) {
+      const result = parseRandomQuery(new URL(`https://img.example.com/random?mode=json&limit=${raw}`), "redirect", "medium", undefined, maxItems);
+      assert.ok(!(result instanceof Response));
+      assert.equal(result.limit, Math.min(Number(raw), maxItems));
+    }
+    const invalidMode = parseRandomQuery(new URL("https://img.example.com/random?limit=2"), "redirect", "medium", undefined, maxItems);
+    assert.ok(invalidMode instanceof Response);
+    assert.equal(invalidMode.status, 400);
   }
   for (const search of ["seed=a&seed=a", "seed=a&mode=redirect&limit=1", `seed=a&id=${imageId}`]) {
     const result = parse(search);

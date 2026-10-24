@@ -257,14 +257,19 @@ function parseLimitCount(raw: string): number | null {
  * Image count used by rate limiting before any other validation. A blank or
  * missing limit asks for one image; null marks a limit that is not a count.
  */
-export function requestedRandomImageCount(query: URLSearchParams): number | null {
+export function requestedRandomImageCount(
+  query: URLSearchParams,
+  maxItems: number = appConfig.runtimeDefaults.site.random_max_items
+): number | null {
   const raw = singleQueryValue(query, "limit")?.trim();
-  return raw ? parseLimitCount(raw) : 1;
+  const count = raw ? parseLimitCount(raw) : 1;
+  return count === null ? null : Math.min(count, maxItems);
 }
 
 function parseJsonLimit(
   query: URLSearchParams,
-  explicitMode: string | null
+  explicitMode: string | null,
+  maxItems: number
 ): number | Response {
   const raw = singleQueryValue(query, "limit")?.trim();
   if (!raw) return 1;
@@ -286,7 +291,7 @@ function parseJsonLimit(
       { field: "limit", hint: "Use a positive integer" }
     );
   }
-  return count;
+  return Math.min(count, maxItems);
 }
 
 function parseTargetedIds(query: URLSearchParams): string[] | Response {
@@ -401,7 +406,8 @@ export function parseRandomQuery(
   url: URL,
   defaultMode: RandomDefaultMethod,
   defaultSize: RandomImageSize = "medium",
-  fallbackOrder: readonly RandomFallbackDimension[] = appConfig.runtimeDefaults.site.random_fallback_order
+  fallbackOrder: readonly RandomFallbackDimension[] = appConfig.runtimeDefaults.site.random_fallback_order,
+  maxItems: number = appConfig.runtimeDefaults.site.random_max_items
 ): ParsedRandomQuery | Response {
   const rawQuery = url.search.startsWith("?") ? url.search.slice(1) : url.search;
   const rawBytes = Buffer.byteLength(rawQuery, "utf8");
@@ -431,7 +437,7 @@ export function parseRandomQuery(
       { field: "size", allowedValues: randomImageSizes }
     );
   }
-  const limit = parseJsonLimit(query, explicitMode);
+  const limit = parseJsonLimit(query, explicitMode, maxItems);
   if (limit instanceof Response) return limit;
   const seed = parseSeed(query);
   if (seed instanceof Response) return seed;

@@ -1,5 +1,5 @@
 import { defaultNormalizeProfile } from "./browser/image-variants.ts";
-import { adminImagePageLimit } from "./browser/admin.ts";
+import { adminImageBatchLimit, adminImagePageLimit } from "./browser/admin.ts";
 import { altchaSolveTimeoutMs } from "./browser/auth.ts";
 import { brightnesses, devices } from "./browser/image-classification.ts";
 import { imageDescriptionMaxLength, imageTitleMaxLength, type RandomFallbackDimension } from "./browser/images.ts";
@@ -23,7 +23,7 @@ export const appConfig = {
   },
 
   pagination: {
-    maxLimit: 200
+    maxLimit: adminImageBatchLimit
   },
 
   randomDedupe: {
@@ -167,6 +167,7 @@ export const appConfig = {
       public_original: false,
       random_method: "redirect",
       random_size: "medium",
+      random_max_items: 100,
       random_fallback_order: ["device", "brightness", "author", "tag", "theme"] as RandomFallbackDimension[],
       assets_base_url: "",
       script_sources: [] as string[],
@@ -186,7 +187,7 @@ export const appConfig = {
       commit_concurrency: 8
     },
     upload: {
-      max_items: 200,
+      max_items: 500,
       browser_concurrency: 2,
       raw_concurrency: 5
     },
@@ -194,7 +195,7 @@ export const appConfig = {
       keep_original_link: ["url", "jsonl", "weibo"] as ImportSourceTypeDto[],
       auto_import: true,
       fetch_timeout_seconds: 30,
-      max_items: 200
+      max_items: 500
     },
     weibo: {
       max_items: 10,

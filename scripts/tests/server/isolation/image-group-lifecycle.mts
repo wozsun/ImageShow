@@ -157,6 +157,8 @@ await runIntegrationScenario(async (runtime) => {
   const { handleApiError } = await import("../../../../packages/server/src/core/http/responses.ts");
   const { requireAdminCsrf } = await import("../../../../packages/server/src/users/admin-session.ts");
   const { registerAdminGroupRoutes } = await import("../../../../packages/server/src/routes/admin-groups.ts");
+  const { registerAdminImageRoutes } = await import("../../../../packages/server/src/routes/admin-images.ts");
+  const { limitProtectedAdminRequestBody } = await import("../../../../packages/server/src/core/http/request-body-limit.ts");
   const app = new Hono<{ Variables: { session: AdminSession } }>();
   app.onError((error, c) => handleApiError(c, error));
   app.use("/api/admin/*", async (c, next) => {
@@ -166,7 +168,9 @@ await runIntegrationScenario(async (runtime) => {
     if (c.req.method !== "GET") return requireAdminCsrf(c, next);
     await next();
   });
+  app.use("/api/admin/*", limitProtectedAdminRequestBody);
   registerAdminGroupRoutes(app as unknown as HonoApp);
+  registerAdminImageRoutes(app as unknown as HonoApp);
   const request = (path: string, body?: unknown, role = "image", csrf = "group-test-csrf") => app.request(
     `http://imageshow.test/api/admin/groups${path}`, {
       method: body === undefined ? "GET" : "POST",
@@ -192,7 +196,7 @@ await runIntegrationScenario(async (runtime) => {
   }
   assert.equal((await request("/missing/sort-order", { sort_order: 0 })).status, 404);
   assert.equal((await request("/http/members/add", { ids: [second, "bad"] })).status, 200);
-  assert.equal((await request("/http/members/add", { ids: Array(201).fill(second) })).status, 400);
+  assert.equal((await request("/http/members/add", { ids: Array(1001).fill(second) })).status, 400);
   assert.equal((await request("/http/members/remove", { ids: [second] })).status, 200);
   assert.equal((await request("/http/delete", {})).status, 403, "direct requests must enforce super-only delete");
   assert.equal((await request("/http/delete", {}, "super")).status, 200);
@@ -254,6 +258,50 @@ await runIntegrationScenario(async (runtime) => {
     return body;
   };
   const sorted = (items: { id: string }[]) => items.map((item) => item.id).sort();
+  const bulkIds = Array.from({ length: 1000 }, (_, index) =>
+    `00000001-0000-7000-8000-${index.toString(16).padStart(12, "0")}`);
+  await pool.query(
+    `INSERT INTO metadata(id,created_by,storage_slug,device,brightness,
+      l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5)
+     SELECT id,'integration-admin','local','pc','dark',1,1,1,$2,1,1,1,$2,1,1,1,$2 FROM unnest($1::uuid[]) AS id`,
+    [bulkIds, "b".repeat(32)]
+  );
+  await groups.createImageGroup("bulk", "Bulk");
+  const escapedIds = bulkIds.map((id) => '"' + [...id].map((char) =>
+    "\\u" + char.charCodeAt(0).toString(16).padStart(4, "0")).join("") + '"').join(",");
+  const rawPost = (path: string, body: string, csrf = "group-test-csrf") => app.request(
+    `http://imageshow.test/api/admin/${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-test-role": "super", "x-csrf-token": csrf },
+      body
+    }
+  );
+  const escapedBody = `{"ids":[${escapedIds}]}`;
+  const bulkAdded = await rawPost("groups/bulk/members/add", escapedBody);
+  assert.equal(bulkAdded.status, 200);
+  assert.equal((await bulkAdded.json()).items.filter((item: { status: string }) => item.status === "added").length, 1000);
+  const snapshot = await rawPost("images/snapshot", escapedBody);
+  assert.equal(snapshot.status, 200);
+  assert.deepEqual(sorted((await snapshot.json()).items), [...bulkIds].sort());
+  const bulkPage = await app.request("http://imageshow.test/api/admin/images?group=bulk&limit=1000", {
+    headers: { "x-test-role": "super" }
+  });
+  assert.equal(bulkPage.status, 200);
+  assert.equal((await bulkPage.json()).items.length, 1000);
+  const invalidIds = `{"ids":[${Array(1000).fill('"' + "\\u0067".repeat(1024) + '"').join(",")}]}`;
+  const invalidBatch = await rawPost("groups/bulk/members/add", invalidIds);
+  assert.equal(invalidBatch.status, 200);
+  assert.equal((await invalidBatch.json()).items.filter((item: { status: string }) => item.status === "invalid_id").length, 1000);
+  const oversizedBody = JSON.stringify({ ids: ["x".repeat(8 * 1024 * 1024)] });
+  assert.equal((await rawPost("groups/bulk/members/add", oversizedBody, "")).status, 403);
+  assert.equal((await rawPost("groups/bulk/members/add", oversizedBody)).status, 413);
+  assert.equal((await rawPost("groups/bulk/members/remove", JSON.stringify({ ids: ["x".repeat(256 * 1024)] }))).status, 413);
+  const bulkRemoved = await rawPost("groups/bulk/members/remove", escapedBody);
+  assert.equal(bulkRemoved.status, 200);
+  assert.equal((await bulkRemoved.json()).removed, 1000);
+  assert.equal((await listImageGroups()).find((group) => group.slug === "bulk")!.image_count, 0);
+  await groups.addImageGroupMembers("bulk", bulkIds);
+  await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { random_max_items: 200 } });
   const queries = [
     "group=large&device=all&limit=17", "group=pair&limit=200", "group=large,pair&limit=146",
     `group=mobile&id=${rows[1]!.id}&limit=200`, `id=${rows[0]!.id},${rows[1]!.id},0000000000dd&limit=200`,
@@ -262,7 +310,29 @@ await runIntegrationScenario(async (runtime) => {
   ].map((query) => query + "&seed=group-window");
   const pgResults = [];
   for (const query of queries) pgResults.push((await read(query)).items.map((item) => item.id));
-  const verify = async () => {
+  let bulkSeededPg: string[] | undefined;
+  const verify = async (redisReady = false) => {
+    for (const maximum of [1, 100, 500]) {
+      await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { random_max_items: maximum } });
+      for (const seed of ["", "&seed=bulk-window"]) {
+        let connections = 0;
+        const restore = redisReady ? interceptPoolConnections(pool, () => { connections += 1; }) : () => {};
+        let capped;
+        try {
+          capped = await read(`group=bulk&device=all&limit=999${seed}`);
+        } finally { restore(); }
+        if (redisReady) assert.equal(connections, 0, "configured bulk selection must use the warm Redis index");
+        assert.equal(capped.items.length, maximum);
+        assert.equal(new Set(sorted(capped.items)).size, maximum);
+        assert.ok(capped.items.every((item) => bulkIds.includes(item.id)));
+        if (maximum === 500 && seed) {
+          const ids = capped.items.map((item) => item.id);
+          if (redisReady) assert.deepEqual(ids, bulkSeededPg, "500 seeded items retain PG/Redis order");
+          else bulkSeededPg = ids;
+        }
+      }
+    }
+    await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { random_max_items: 200 } });
     const historyKeys = await redis.keys("imageshow:random_recent:*");
     if (historyKeys.length) await redis.unlink(...historyKeys);
     for (const query of ["group=missing", "group=empty", "group=missing&fallback=all", `id=${missing}&fallback=all`]) {
@@ -297,7 +367,7 @@ await runIntegrationScenario(async (runtime) => {
     assert.equal((await coordinator.initializeReadyImageCacheCoordinator()).readable, true);
     // Warm only persistent group/attribute results; ID ranges are always request-owned.
     for (const plan of [
-      ...["large", "pair", "mobile", "empty"].map((slug) => createImageFilterPlan({ range: { groups: [slug], ids: [] } })),
+      ...["large", "pair", "mobile", "empty", "bulk"].map((slug) => createImageFilterPlan({ range: { groups: [slug], ids: [] } })),
       createImageFilterPlan({ range: { groups: ["large", "pair"], ids: [] } }),
       createImageFilterPlan({ devices: ["mb"] }),
       createImageFilterPlan({ devices: ["pc"], brightnesses: ["dark"], theme: { include: ["group-theme"] }, tag: { anyOf: [["group-tag"]] }, author: { include: ["group-author"] }, range: { groups: ["large"], ids: [] } })
@@ -314,7 +384,7 @@ await runIntegrationScenario(async (runtime) => {
       }
     } finally { restore(); }
     assert.equal(connections, 0, "warm scope selection must actually use Redis");
-    await verify();
+    await verify(true);
     const registry = (await redis.zrange(READY_IMAGE_DERIVED_REGISTRY_LRU_KEY, "0", "-1")).sort();
     for (let i = 0; i < 4; i += 1) await read(`group=mobile,unknown-${i}&id=${rows[i + 1]!.id}&device=all`);
     assert.deepEqual((await redis.zrange(READY_IMAGE_DERIVED_REGISTRY_LRU_KEY, "0", "-1")).sort(), registry);

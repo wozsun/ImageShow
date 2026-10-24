@@ -5,6 +5,7 @@ import {
   parseGalleryTagFilter,
   TagFilterError,
   adminImagePageLimit,
+  adminImageBatchLimit,
   adminImageSortFields,
   adminImageOrders,
   defaultAdminImageSort,
@@ -95,7 +96,7 @@ const imageUpdateItemInput = z
 
 export const imageUpdateInput = z
   .strictObject({
-    items: z.array(imageUpdateItemInput).min(1).max(200)
+    items: z.array(imageUpdateItemInput).min(1).max(adminImageBatchLimit)
   })
   .superRefine((value, context) => {
     addDuplicateValueIssues(
@@ -109,7 +110,7 @@ export const imageUpdateInput = z
 const uniqueImageIdsInput = z
   .array(uuidInput)
   .min(1)
-  .max(200)
+  .max(adminImageBatchLimit)
   .superRefine((ids, context) => {
     addDuplicateValueIssues(
       ids,

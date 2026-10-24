@@ -1,5 +1,4 @@
 export const imageGroupMembershipLimit = 50;
-export const imageGroupBatchLimit = 200;
 
 export type ImageGroupDto = {
   slug: string;

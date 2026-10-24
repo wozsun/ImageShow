@@ -166,7 +166,9 @@ export type AdminTrashCheckDto = {
   }>;
 };
 
-export const adminImagePageLimit = 60;
+export const adminImagePageLimit = 120;
+// A full admin page must fit a single image or group-membership operation.
+export const adminImageBatchLimit = 1_000;
 
 export const adminBasePath = "/admin";
 

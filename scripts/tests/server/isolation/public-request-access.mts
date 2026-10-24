@@ -174,6 +174,20 @@ await runIntegrationScenario(async (runtime) => {
   await expectStatus(await request(random("mode=json&limit=3"), weighted), 200);
   await expectStatus(await request(random("mode=json&limit=3"), weighted), 200);
   await expectLimited(await request(random("mode=json&limit=3"), weighted));
+  // The configured cap is applied before choosing the image or batch rate bucket.
+  await updateRuntimeConfig({ site: { random_max_items: 1 } });
+  const capped = { "X-Real-IP": "192.0.2.18" };
+  for (let index = 0; index < 4; index++) {
+    const response = await request(random("mode=json&limit=500"), capped);
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).count, 1);
+  }
+  await expectLimited(await request(random("mode=json&limit=500"), capped));
+  await updateRuntimeConfig({ site: { random_max_items: 500 } });
+  await expectStatus(await request(random("mode=json&limit=500"), capped), 200);
+  await expectStatus(await request(random("mode=json&limit=500"), capped), 200);
+  await expectLimited(await request(random("mode=json&limit=500"), capped));
+  await updateRuntimeConfig({ site: { random_max_items: 100 } });
   await updateRuntimeConfig({ security: { random_max_requests: 3 } });
 
   // White-list changes apply to the next request, including after disk reload.

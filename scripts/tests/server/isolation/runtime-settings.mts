@@ -62,6 +62,8 @@ await runIntegrationScenario(async (runtime) => {
 
   const candidate = structuredClone(initial);
   candidate.site.public_original = true;
+  candidate.site.random_max_items = 500;
+  candidate.admin.image_page_size = 1000;
   candidate.site.additional_domains = ["alternate.example.test", "preview.example.test:8443"];
   candidate.site.description = "完整配置表单";
   candidate.site.home.enabled = false;
@@ -105,6 +107,8 @@ await runIntegrationScenario(async (runtime) => {
     {},
     { site: { title: "incomplete" } },
     { ...candidate, site: { ...candidate.site, public_original: "true" } },
+    { ...candidate, site: { ...candidate.site, random_max_items: 501 } },
+    { ...candidate, admin: { ...candidate.admin, image_page_size: 1001 } },
     { ...candidate, security: { ...candidate.security, random_max_requests: 0 } },
     { ...candidate, weibo: { ...candidate.weibo, request_delay_seconds: [5, 2] } },
     { ...candidate, unknown_group: true }

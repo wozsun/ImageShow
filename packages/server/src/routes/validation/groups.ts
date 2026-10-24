@@ -1,4 +1,4 @@
-import { imageGroupBatchLimit } from "@imageshow/shared/browser";
+import { adminImageBatchLimit } from "@imageshow/shared/browser";
 import { z } from "zod";
 import { requestSlugInput, uuidInput } from "./primitives.ts";
 import { sortOrderUpdateInput } from "./sort-order.ts";
@@ -12,8 +12,8 @@ export const groupCreateInput = z.strictObject({
 export const groupRenameInput = groupCreateInput.pick({ display_name: true });
 // Invalid IDs belong to the per-item result, so one typo does not reject a batch.
 export const groupAddInput = z.strictObject({
-  ids: z.array(z.string().max(1024)).min(1).max(imageGroupBatchLimit)
+  ids: z.array(z.string().max(1024)).min(1).max(adminImageBatchLimit)
 });
 export const groupRemoveInput = z.strictObject({
-  ids: z.array(uuidInput).min(1).max(imageGroupBatchLimit)
+  ids: z.array(uuidInput).min(1).max(adminImageBatchLimit)
 });

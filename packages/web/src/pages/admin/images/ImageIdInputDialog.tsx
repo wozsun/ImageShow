@@ -16,11 +16,8 @@ import { OverlayScrollbar } from "../../../components/layout/OverlayScrollbar.js
 import type { ImageEditorIntent, ImageEditorOpenResult } from "../../../components/image/editor/image-editor-capability-loader.js";
 import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
 import { readEditableImageSnapshots } from "../../../lib/api/image-edit.js";
-import {
-  imageIdInputMaxItems,
-  parseImageIdInput
-} from "./image-id-input.js";
-import type { EditableImageSnapshotDto } from "@imageshow/shared/browser";
+import { parseImageIdInput } from "./image-id-input.js";
+import { adminImageBatchLimit, type EditableImageSnapshotDto } from "@imageshow/shared/browser";
 import "../../../styles/admin/import-source-dialog.css";
 
 type ParsedImageIds = {
@@ -106,8 +103,8 @@ export function ImageIdInputDialog({
   const parse = async () => {
     const { ids, invalid } = parseImageIdInput(text);
     const termCount = ids.length + invalid.length;
-    if (termCount > imageIdInputMaxItems) {
-      setError(`已输入 ${termCount} 项，最多 ${imageIdInputMaxItems} 项，请拆分后再操作`);
+    if (termCount > adminImageBatchLimit) {
+      setError(`已输入 ${termCount} 项，最多 ${adminImageBatchLimit} 项，请拆分后再操作`);
       return false;
     }
     const controller = new AbortController();
@@ -208,7 +205,7 @@ export function ImageIdInputDialog({
             </div>
             <div className="import-source-panel">
               <p className="hint import-source-hint" id={hintId}>
-                填写完整的图片 UUID，可用换行、空格或逗号分隔，最多 {imageIdInputMaxItems} 项。
+                填写完整的图片 UUID，可用换行、空格或逗号分隔，最多 {adminImageBatchLimit} 项。
               </p>
               <div className="import-source-input-region">
                 <textarea

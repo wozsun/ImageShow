@@ -32,6 +32,7 @@
 | `site.public_original` | `false` | 允许访客通过 `/images/original/<id>` 访问外部原图，并在有原图的详情中显示按钮；关闭后仅管理员可访问。适用于画廊、展映及嵌入页 |
 | `site.random_method` | `"redirect"` | `/random` 默认的返回方式：`redirect` 跳转到图片地址；`proxy` 由本站直接返回图片，会占用本站带宽 |
 | `site.random_size` | `"medium"` | `/random` 默认的图片尺寸：`large`、`medium`、`small` |
+| `site.random_max_items` | `100` | `/random` JSON 单次返回数量上限，范围 `1–500`；请求的 `limit` 超过此值时按此值处理，不传 `limit` 时仍返回 1 张 |
 | `site.random_fallback_order` | `["device","brightness","author","tag","theme"]` | 零匹配回退时 `all` 展开的顺序，五个维度各出现一次：`fallback=all` 按此顺序放宽全部维度，列表末尾的 `all` 按此顺序放宽其余维度；请求中写明的维度按书写顺序放宽 |
 | `site.assets_base_url` | `""` | 前端静态文件的独立地址，见[静态资源地址](#静态资源地址) |
 | `site.script_sources` | `[]` | 所有页面额外允许加载脚本的地址，JSON 数组，最多 32 个，见[静态资源地址](#静态资源地址)。静态资源地址已自动允许 |
@@ -155,13 +156,13 @@ SITE_FOOTER='Powered by <a href="https://github.com/wozsun/ImageShow">ImageShow<
 | `ingestion.max_long_edge` | `32000` | 原图长边上限（像素），300–32000。超过直接拒绝，不会先缩小 |
 | `ingestion.list_page_size` | `20` | 上传、导入和批量编辑列表每页条数，1–100 |
 | `ingestion.commit_concurrency` | `8` | 服务器同时入库的图片数，1–16。调高会增加数据库、存储和内存压力 |
-| `upload.max_items` | `200` | 每批上传的文件数，1–1000 |
+| `upload.max_items` | `500` | 每批上传的文件数，1–1000 |
 | `upload.browser_concurrency` | `2` | 每个浏览器页面同时上传的文件数，1–8 |
 | `upload.raw_concurrency` | `5` | 服务器同时接收的上传数，所有用户共享，1–8 |
 | `import.keep_original_link` | `["url", "jsonl", "weibo"]` | 哪些导入方式保留原图链接：`url` 链接导入、`jsonl` 清单导入、`weibo` 微博导入。`[]` 表示都不保留 |
 | `import.auto_import` | `true` | 解析没有问题时自动开始导入；设为 `false` 时先显示解析结果，由管理员确认 |
 | `import.fetch_timeout_seconds` | `30` | 下载一张图片的超时时间，5–300 秒 |
-| `import.max_items` | `200` | 每批链接或清单导入的条数，1–1000 |
+| `import.max_items` | `500` | 每批链接或清单导入的条数，1–1000 |
 | `weibo.max_items` | `10` | 每批微博链接数（按帖子计，不是图片数），1–50 |
 | `weibo.source_enabled` | `true` | 把微博帖子页面记为图片来源 |
 | `weibo.request_delay_seconds` | `[2, 5]` | 相邻两次微博请求之间随机等待的秒数 `[最短, 最长]`，每项 0–60，最短不能大于最长 |
@@ -198,7 +199,7 @@ SITE_FOOTER='Powered by <a href="https://github.com/wozsun/ImageShow">ImageShow<
 | 配置项 | 默认值 | 说明 |
 | --- | --- | --- |
 | `admin.login_background` | `""` | 登录页背景图，留空使用本站随机图；可填以 `/` 开头的站内路径（如[自定义静态资源](#自定义静态资源)）或 HTTPS 地址，最多 2048 字符 |
-| `admin.image_page_size` | `60` | 后台图片列表每页数量，10–200 |
+| `admin.image_page_size` | `120` | 后台图片、词表与分组列表每页数量，10–1000 |
 | `admin.recent_uploads` | `16` | 后台概览中“最近上传”的数量，1–60 |
 | `security.session_ttl_seconds` | `604800` | 登录有效期（默认 7 天），300–31536000。登录或页面重新验证登录状态时续期 |
 | `security.login_failure_window_seconds` | `60` | 同一 IP + 用户名的登录次数统计时长，30–300 秒 |

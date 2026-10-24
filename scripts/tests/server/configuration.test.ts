@@ -136,6 +136,18 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
   assert.equal(defaults.site.root, "home");
   assert.equal(defaults.site.public_original, false);
   assert.equal(defaults.site.random_size, "medium");
+  assert.equal(defaults.site.random_max_items, 100);
+  assert.equal(defaults.admin.image_page_size, 120);
+  for (const value of [1, 500]) {
+    assert.equal(parseRuntimeConfig({ ...defaults, site: { ...defaults.site, random_max_items: value } }).site.random_max_items, value);
+    assert.equal(runtimeConfigFromEnvironment({ SITE_RANDOM_MAX_ITEMS: String(value) }).site.random_max_items, value);
+  }
+  for (const value of [0, -1, 1.5, 501]) {
+    assert.throws(() => parseRuntimeConfig({ ...defaults, site: { ...defaults.site, random_max_items: value } }));
+    assert.throws(() => runtimeConfigFromEnvironment({ SITE_RANDOM_MAX_ITEMS: String(value) }), /SITE_RANDOM_MAX_ITEMS/);
+  }
+  assert.equal(parseRuntimeConfig({ ...defaults, admin: { ...defaults.admin, image_page_size: 1000 } }).admin.image_page_size, 1000);
+  assert.throws(() => parseRuntimeConfig({ ...defaults, admin: { ...defaults.admin, image_page_size: 1001 } }));
   assert.equal(defaults.site.assets_base_url, "");
   for (const assets_base_url of [
     "http://asset.example.com",
@@ -236,6 +248,7 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
   delete driftSite.root;
   delete driftSite.public_original;
   delete driftSite.random_size;
+  delete driftSite.random_max_items;
   delete driftSite.assets_base_url;
   driftSite.unknown_site_key = "gallery";
   driftSite.unknown_option = true;
@@ -255,6 +268,7 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
   assert.equal(normalized.site.root, "home");
   assert.equal(normalized.site.public_original, false);
   assert.equal(normalized.site.random_size, "medium");
+  assert.equal(normalized.site.random_max_items, 100);
   assert.equal(normalized.site.assets_base_url, "");
   assert.equal(
     normalized.site.show.autoplay,
@@ -873,8 +887,8 @@ assert.equal(siteConfigPayload().site.gallery.enabled, true);
 assert.deepEqual(siteConfigPayload().site.gallery, { enabled: true, order: "latest" });
 assert.deepEqual(getSettingsForAdmin(), {
   ingestion: { max_file_size_mb: 100, max_long_edge: 32000, list_page_size: 20 },
-  upload: { max_items: 200, browser_concurrency: 2 },
-  import: { keep_original_link: ["url", "jsonl", "weibo"], auto_import: true, max_items: 200 },
+  upload: { max_items: 500, browser_concurrency: 2 },
+  import: { keep_original_link: ["url", "jsonl", "weibo"], auto_import: true, max_items: 500 },
   weibo: { max_items: 10 },
   admin: { image_page_size: getRuntimeConfig().admin.image_page_size }
 });

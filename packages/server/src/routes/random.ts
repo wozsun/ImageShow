@@ -1,5 +1,6 @@
 import type { Context, Hono } from "hono";
 import type { RandomImageJsonResponseDto } from "@imageshow/shared/browser";
+import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { withPublicDatabaseRead } from "../core/database/public-fallback.ts";
 import {
   noStoreCacheControl,
@@ -40,20 +41,22 @@ async function handleRandomImage(c: Context) {
   }
   const url = new URL(c.req.url);
   c.req.raw.signal.throwIfAborted();
+  // Keep the same quantity cap through rate reservation and image selection.
+  const maxItems = getRuntimeConfig().site.random_max_items;
   if (!requestHasTrustedReferer(c)) {
     const reservation = await reserveRandomRequest(
       requestClientIp(c),
-      requestedRandomImageCount(url.searchParams)
+      requestedRandomImageCount(url.searchParams, maxItems)
     );
     if (!reservation.allowed) {
       c.header("Retry-After", String(reservation.retryAfterSeconds));
       throw new ApiError(429, "random_rate_limited", "随机图请求过于频繁，请稍后再试");
     }
   }
-  return respondRandom(c, url);
+  return respondRandom(c, url, maxItems);
 }
 
-async function respondRandom(c: Context, url: URL) {
+async function respondRandom(c: Context, url: URL, maxItems: number) {
   const signal = c.req.raw.signal;
   const selection = await withPublicDatabaseRead(signal, (database, databaseSignal) =>
     selectRandomImages(
@@ -61,7 +64,8 @@ async function respondRandom(c: Context, url: URL) {
       c.req.header("user-agent") ?? "",
       requestClientIp(c),
       databaseSignal,
-      database
+      database,
+      maxItems
     )
   );
   if (selection instanceof Response) return selection;

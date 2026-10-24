@@ -38,7 +38,8 @@ export async function selectRandomImages(
   userAgent: string,
   clientId: string,
   signal: AbortSignal,
-  database: PublicDatabaseReadAccess
+  database: PublicDatabaseReadAccess,
+  maxItems: number = getRuntimeConfig().site.random_max_items
 ): Promise<RandomImageSelection | Response> {
   signal.throwIfAborted();
   const { random_method, random_size, random_fallback_order } = getRuntimeConfig().site;
@@ -46,7 +47,8 @@ export async function selectRandomImages(
     url,
     random_method,
     random_size,
-    random_fallback_order
+    random_fallback_order,
+    maxItems
   );
   if (parsed instanceof Response) return parsed;
 

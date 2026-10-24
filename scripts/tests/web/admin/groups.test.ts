@@ -314,9 +314,9 @@ test("[Web/分组] 按 ID 解析后只读预览，确认加入只写一次，成
   const h = await groupPage(t, "image", true);
   await h.respond(0, { items: [], total: 0 });
   await h.emit(h.node('[aria-label="加入分组"]'), "click");
-  await h.edit('[aria-label="图片 ID"]', Array.from({ length: 201 }, (_, index) => `invalid-${index}`).join(" "));
+  await h.edit('[aria-label="图片 ID"]', Array.from({ length: 1001 }, (_, index) => `invalid-${index}`).join(" "));
   await h.emit(h.node(".import-source-submit-button"), "click");
-  assert.ok(h.document.body.textContent?.includes("最多 200 项"));
+  assert.ok(h.document.body.textContent?.includes("最多 1000 项"));
   assert.equal(h.pending.length, 1);
   const ids = [1, 2].map((value) => `00000000-0000-7000-8000-${String(value).padStart(12, "0")}`);
   await h.edit('[aria-label="图片 ID"]', ids.join("\n"));

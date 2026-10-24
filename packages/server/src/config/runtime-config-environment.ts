@@ -86,6 +86,7 @@ export const runtimeConfigEnvironmentBindings = [
   { path: "site.public_original", environmentVariable: "SITE_PUBLIC_ORIGINAL", valueKind: "boolean" },
   { path: "site.random_method", environmentVariable: "SITE_RANDOM_METHOD", valueKind: "string" },
   { path: "site.random_size", environmentVariable: "SITE_RANDOM_SIZE", valueKind: "string" },
+  { path: "site.random_max_items", environmentVariable: "SITE_RANDOM_MAX_ITEMS", valueKind: "number" },
   { path: "site.random_fallback_order", environmentVariable: "SITE_RANDOM_FALLBACK_ORDER", valueKind: "json-array" },
   {
     path: "site.assets_base_url",

@@ -3,5 +3,5 @@ export const randomQueryLimits = Object.freeze({
   maxSelectorCount: 64,
   maxSelectorsPerField: 32,
   maxSeedCharacters: 128,
-  maxJsonItems: 200
+  maxJsonItems: 500
 });

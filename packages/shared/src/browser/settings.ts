@@ -68,6 +68,7 @@ type RuntimeSiteSettings = {
   public_original: boolean;
   random_method: RandomDefaultMethod;
   random_size: RandomImageSize;
+  random_max_items: number;
   random_fallback_order: RandomFallbackDimension[];
   assets_base_url: string;
   /** Extra script sources for every page document, as CSP host sources. */

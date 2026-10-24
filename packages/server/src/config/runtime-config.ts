@@ -31,6 +31,7 @@ import {
   loginMaxFailures,
   randomDefaultMethod,
   randomImageSize,
+  randomMaxItems,
   randomWindowSeconds,
   randomMaxRequests,
   recentUploads,
@@ -93,6 +94,7 @@ const runtimeConfigSchema = z.strictObject({
     public_original: z.boolean(),
     random_method: randomDefaultMethod,
     random_size: randomImageSize,
+    random_max_items: randomMaxItems,
     random_fallback_order: z.array(z.enum(randomFallbackDimensions, { error: fallbackOrderMessage }), { error: fallbackOrderMessage })
       .length(randomFallbackDimensions.length, { error: fallbackOrderMessage })
       .refine((order) => new Set(order).size === randomFallbackDimensions.length, {
