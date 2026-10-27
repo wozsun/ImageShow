@@ -90,6 +90,9 @@ export default defineConfig({
   base: "./",
   plugins: [react(), ...chunkPlan.plugins, webBuildReport()],
   build: {
+    // Vite's widely available baseline with Chrome / Edge lowered to 109, the
+    // last release on Windows 7 and 8, where browsers only get the gallery.
+    target: ["chrome109", "edge109", "firefox114", "safari16.4", "ios16.4"],
     outDir: "dist",
     emptyOutDir: true,
     // The show page carries its renderer; chunk sizes follow the plan above.

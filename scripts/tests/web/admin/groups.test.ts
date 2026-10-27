@@ -107,7 +107,7 @@ test("[Web/分组] 分组读取失败可重试，不存在时不读取图片并�
   assert.ok(h.document.querySelector(".query-error-state"));
   assert.equal(h.document.querySelector(".group-missing-state"), null);
   assert.equal(h.pending.length, 1);
-  await h.emit(h.node(".query-error-state button"), "click");
+  await h.emit(h.node(".query-error-state > button"), "click");
   await h.respond(1, { items: [] });
   assert.ok(h.node(".group-missing-state").textContent?.includes("分组不存在或已删除"));
   assert.equal(h.document.querySelector(".group-random-link, .image-list-controls, .admin-image-grid, .admin-pagination"), null);

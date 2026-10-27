@@ -48,6 +48,10 @@ export type SiteShowSettings = {
   order: ShowOrder;
 };
 
+/**
+ * The gallery closes only after the home and show pages, so any open public
+ * page can fall back to it.
+ */
 type SiteGallerySettings = {
   enabled: boolean;
   order: GalleryOrder;
@@ -97,33 +101,35 @@ function publicPageEnabled(
   return site.gallery.enabled;
 }
 
+/** The root page, or the gallery when it is closed; null when no public page is open. */
 export function publicRootPath(site: PublicPageAvailability): PublicPagePath | null {
   if (publicPageEnabled(site, site.root)) return `/${site.root}`;
-  for (const fallback of ["gallery", "show", "home"] as const) {
-    if (publicPageEnabled(site, fallback)) return `/${fallback}`;
-  }
-  return null;
+  return site.gallery.enabled ? "/gallery" : null;
 }
 
+/**
+ * Where the home page's browse button leads; the gallery is open whenever any
+ * public page is.
+ */
 export function publicHomeBrowsePath(
   site: {
     home: Pick<SiteHomeSettings, "browse_target">;
     show: Pick<SiteShowSettings, "enabled">;
-    gallery: Pick<SiteGallerySettings, "enabled">;
   },
   embedded = false
-): Extract<PublicPagePath, "/show" | "/gallery"> | "/embed/show" | "/embed/gallery" | null {
-  for (const target of [site.home.browse_target, "gallery", "show"] as const) {
-    if (site[target].enabled) return embedded ? `/embed/${target}` : `/${target}`;
-  }
-  return null;
+): Extract<PublicPagePath, "/show" | "/gallery"> | "/embed/show" | "/embed/gallery" {
+  const target = site.home.browse_target === "show" && site.show.enabled
+    ? "show"
+    : "gallery";
+  return embedded ? `/embed/${target}` : `/${target}`;
 }
 
 /**
  * The public page a path shows under the enable and fallback rules: the path
- * itself, the page it redirects to, or null when no public page is enabled.
- * The root path and unknown paths show the root page. The routes, the
- * startup load and the server's document preloads all follow it.
+ * itself, the page it redirects to, or null when no public page is open. The
+ * root path and unknown paths show the root page; a closed embedded page stays
+ * within the embeds. The routes, the startup load and the server's document
+ * preloads all follow it.
  */
 export function publicPageTarget(
   site: PublicPageAvailability & { home: Pick<SiteHomeSettings, "enabled" | "browse_target"> },
@@ -136,7 +142,8 @@ export function publicPageTarget(
   const embedded = /^\/embed\/(home|show|gallery)$/.exec(path)?.[1] as SiteRoot | undefined;
   if (!embedded || !embedEnabled) return rootPath;
   if (publicPageEnabled(site, embedded)) return `/embed/${embedded}`;
-  return embedded === "home" ? publicHomeBrowsePath(site, true) ?? rootPath : rootPath;
+  if (!site.gallery.enabled) return null;
+  return embedded === "home" ? publicHomeBrowsePath(site, true) : "/embed/gallery";
 }
 
 type EmbedSettings = {

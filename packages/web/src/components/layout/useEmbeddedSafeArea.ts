@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { bytesToHex } from "../../lib/bytes-hex.js";
 
 const channel = "imageshow:embed-safe-area";
 const edges = ["top", "right", "bottom", "left"] as const;
@@ -11,7 +10,7 @@ export function useEmbeddedSafeArea() {
     if (window.parent === window) return;
     const parent = window.parent;
     const root = document.documentElement;
-    const bridgeId = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
+    const bridgeId = crypto.getRandomValues(new Uint8Array(16)).toHex();
     let origin: string | null = null;
     let insets: Insets | null = null;
     const listeners = new AbortController();

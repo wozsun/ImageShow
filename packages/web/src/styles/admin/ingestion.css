@@ -33,7 +33,7 @@
   flex-direction: column;
   overflow: hidden;
   background: var(--admin-color-surface-primary);
-  border-radius: 8px;
+  border-radius: var(--admin-radius-container);
   box-shadow: 0 18px 60px var(--admin-shadow-modal);
   animation: modal-pop 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -227,7 +227,7 @@
   gap: 10px;
   align-items: start;
   border: 1px solid var(--ingestion-job-border);
-  border-radius: 8px;
+  border-radius: var(--admin-radius-container);
   background: var(--ingestion-job-background);
   padding: 10px;
 }
@@ -386,7 +386,7 @@
   padding: 10px;
   background: var(--admin-color-warning-surface);
   border: 1px solid var(--admin-color-warning-border);
-  border-radius: 8px;
+  border-radius: var(--admin-radius-container);
 }
 .duplicate-panel span {
   color: var(--admin-color-text-secondary);
@@ -446,7 +446,7 @@
   color: var(--admin-color-text-secondary);
   background: var(--admin-color-surface-primary);
   border: 1px dashed var(--admin-color-border-control);
-  border-radius: 8px;
+  border-radius: var(--admin-radius-container);
 }
 button.ingestion-empty-state.upload-dropzone {
   width: 100%;

@@ -240,6 +240,13 @@ test("[Web/公开导航] 首页页脚按配置展示备案和受限 HTML，安�
 test("[Web/公开导航] 旧词表刷新失败与未知标签分开提示，期限退出后可保留 URL 再试", async (t) => {
   for (const failure of ["headers", "body", "http"] as const) {
     await t.test(failure, async (t) => {
+      if (failure !== "http") {
+        // Browsers before the full support range lack AbortSignal.any; the entry fills it.
+        t.after(installProperties(AbortSignal, { any: undefined }));
+        await import(
+          new URL(`../../../packages/web/src/lib/browser-support.ts?legacy-${failure}`, import.meta.url).href
+        );
+      }
       const h = await createConfigStreamHarness(t);
       const clock = installControlledClock(t, h.window, { includeGlobalTimers: true });
       const client = new QueryClient({
@@ -582,35 +589,18 @@ test("[Web/公开导航] 站点根入口保持 home、show、gallery 与关闭�
   assert.equal(publicRootPath(site("home", false)), "/gallery");
   assert.equal(publicRootPath(site("show", true, false)), "/gallery");
   assert.equal(publicRootPath(site("gallery", false)), "/gallery");
-  assert.equal(publicRootPath(site("gallery", false, true, "gallery", false)), "/show");
-  assert.equal(publicRootPath(site("gallery", true, false, "gallery", false)), "/home");
+  // The gallery closes only after the home and show pages: then no public page is open.
   assert.equal(publicRootPath(site("gallery", false, false, "gallery", false)), null);
   assert.equal(publicHomeBrowsePath(site("home", true, true, "show")), "/show");
   assert.equal(publicHomeBrowsePath(site("home", true, false, "show")), "/gallery");
   assert.equal(publicHomeBrowsePath(site("home", true, true, "gallery")), "/gallery");
   assert.equal(
-    publicHomeBrowsePath(site("home", true, true, "gallery", false)),
-    "/show"
-  );
-  assert.equal(
-    publicHomeBrowsePath(site("home", true, false, "gallery", false)),
-    null
-  );
-  assert.equal(
     publicHomeBrowsePath(site("home", true, true, "show"), true),
-    "/embed/show"
-  );
-  assert.equal(
-    publicHomeBrowsePath(site("home", true, true, "show", false), true),
     "/embed/show"
   );
   assert.equal(
     publicHomeBrowsePath(site("home", true, false, "show"), true),
     "/embed/gallery"
-  );
-  assert.equal(
-    publicHomeBrowsePath(site("home", true, false, "show", false), true),
-    null
   );
   // Routes, the startup load and document preloads open the page a path falls back to.
   assert.equal(publicPageTarget(site("home", true), true, "/show"), "/show");
@@ -619,7 +609,11 @@ test("[Web/公开导航] 站点根入口保持 home、show、gallery 与关闭�
   assert.equal(publicPageTarget(site("home", true), true, "/missing"), "/home");
   assert.equal(publicPageTarget(site("home", true), true, "/embed/gallery"), "/embed/gallery");
   assert.equal(publicPageTarget(site("home", true), false, "/embed/gallery"), "/home");
-  assert.equal(publicPageTarget(site("home", true, false), true, "/embed/show"), "/home");
+  assert.equal(
+    publicPageTarget(site("home", true, false), true, "/embed/show"),
+    "/embed/gallery",
+    "关闭的嵌入页面留在嵌入内"
+  );
   assert.equal(publicPageTarget(site("gallery", false, true, "show"), true, "/embed/home"), "/embed/show");
   assert.equal(publicPageTarget(site("gallery", false, false, "gallery", false), true, "/show"), null);
 });

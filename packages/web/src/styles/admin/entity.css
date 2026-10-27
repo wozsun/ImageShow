@@ -73,7 +73,7 @@
   gap: 10px;
   padding: 14px;
   border: 1px solid var(--admin-color-border-card);
-  border-radius: 6px;
+  border-radius: var(--admin-radius-control);
   background: var(--admin-color-surface-primary);
 }
 .entity-card-row {
@@ -133,9 +133,13 @@
   border-style: dashed;
 }
 .role-badge {
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 999px;
+  height: var(--admin-badge-height);
+  padding: 0 var(--admin-badge-padding-inline);
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--admin-radius-pill);
+  font-size: var(--admin-badge-font-size);
+  font-weight: 600;
   white-space: nowrap;
 }
 .role-super {

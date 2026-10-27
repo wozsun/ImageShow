@@ -889,6 +889,37 @@ button.active,
   color: var(--color-feedback-error-text);
 }
 
+.error-details {
+  width: min(100%, 560px);
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  text-align: left;
+  color: var(--color-control-text-secondary);
+}
+.error-details-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.error-details pre {
+  height: 168px;
+  max-height: 35dvh;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  font-size: 12px;
+  line-height: 1.6;
+  border: 1px solid var(--color-control-border-subtle);
+  border-radius: 8px;
+  background: var(--color-control-surface-muted);
+}
+
 @keyframes menu-pop {
   from {
     opacity: 0;

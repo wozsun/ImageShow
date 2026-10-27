@@ -9,9 +9,9 @@ import {
   type ReactNode,
   type Ref
 } from "react";
-import { Link } from "react-router";
 import type { ShowOrder } from "@imageshow/shared/browser";
 import { PublicStarfield } from "../../../components/layout/PublicStarfield.js";
+import { ShowUnavailableState } from "../ShowUnavailableState.js";
 import type { ShowImage } from "../show-layout.js";
 import type { ShowCandidateUsage } from "../show-data-pool.js";
 import type { ShowCluster } from "../useShowClusters.js";
@@ -20,7 +20,7 @@ import type {
   ShowClusterEntry,
   ShowClusterFocus
 } from "./show-pixi-cluster-scene.js";
-import { ShowPixiRuntime } from "./show-pixi-runtime.js";
+import { ShowPixiRuntime, WebGLUnavailableError } from "./show-pixi-runtime.js";
 import type {
   ShowPixiSceneKind,
   ShowPixiVisibleItem
@@ -54,6 +54,7 @@ export function ShowPixiStage({
   onNeedClusterImages,
   onNeedImages,
   onOpen,
+  onUnavailable,
   order,
   running,
   scene,
@@ -67,8 +68,8 @@ export function ShowPixiStage({
   dataKey: string;
   dialogOpen: boolean;
   floatSizeIndex: number;
-  /** Where to browse the same images when the stage cannot start; null when the gallery is off. */
-  galleryHref?: string | null;
+  /** Where to browse the same images when the stage cannot start. */
+  galleryHref: string;
   images: readonly ShowImage[];
   hasMore: boolean;
   onClusterFocusChange: (focus: ShowClusterFocus | null, entry?: ShowClusterEntry) => void;
@@ -79,6 +80,8 @@ export function ShowPixiStage({
   onNeedClusterImages: (key: string, retainedIds: readonly string[]) => void;
   onNeedImages: (usage: ShowCandidateUsage) => void;
   onOpen: (image: ShowImage, opener: HTMLElement) => void;
+  /** The stage cannot start in this browser; its notice replaces the scene. */
+  onUnavailable: () => void;
   order: ShowOrder;
   running: boolean;
   scene: ShowPixiSceneKind;
@@ -98,9 +101,11 @@ export function ShowPixiStage({
   const handleMotionActiveChange = useEffectEvent(onMotionActiveChange);
   const handleNeedImages = useEffectEvent(onNeedImages);
   const handleOpen = useEffectEvent(onOpen);
+  const handleUnavailable = useEffectEvent(onUnavailable);
   const [runtime, setRuntime] = useState<ShowPixiRuntime | null>(null);
   const [visibleItems, setVisibleItems] = useState<readonly ShowPixiVisibleItem[]>([]);
-  const [initializationFailed, setInitializationFailed] = useState(false);
+  const [initializationError, setInitializationError] = useState<Error | null>(null);
+  const webglUnavailable = initializationError instanceof WebGLUnavailableError;
   const [diagnosticsEnabled] = useState(
     () => import.meta.env.DEV || window.__imageShowPixiDiagnostics === true
   );
@@ -184,13 +189,13 @@ export function ShowPixiStage({
         if (diagnosticsEnabled) created.exposeDebug();
         runtimeRef.current = created;
         setRuntime(created);
-        setInitializationFailed(false);
+        setInitializationError(null);
       })
       .catch((error: unknown) => {
         if (disposed) return;
-        // The page explains the requirement; the browser's own reason stays in the console.
         console.error("[ImageShow] 展映无法初始化", error);
-        setInitializationFailed(true);
+        setInitializationError(error instanceof Error ? error : new Error(String(error)));
+        handleUnavailable();
       });
     return () => {
       disposed = true;
@@ -272,19 +277,16 @@ export function ShowPixiStage({
         ))}
       </div>
       {/* A stage that cannot start has no data states or hints worth showing over its notice. */}
-      {initializationFailed && (
+      {initializationError && (
         <div className="show-query-state">
-          <div className="query-error-state" role="alert">
-            <p>当前浏览器无法显示展映（需要 WebGL）</p>
-            {galleryHref && (
-              <Link className="button secondary" to={galleryHref}>
-                在画廊中浏览
-              </Link>
-            )}
-          </div>
+          <ShowUnavailableState
+            error={initializationError}
+            galleryHref={galleryHref}
+            webglUnavailable={webglUnavailable}
+          />
         </div>
       )}
-      {!initializationFailed && children}
+      {!initializationError && children}
       {diagnosticsEnabled && <output
         ref={statsRef}
         hidden

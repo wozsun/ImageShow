@@ -79,6 +79,7 @@ export function PublicImageNavigation({
           />
         </div>
       </div>
+      {/* show.css keeps notices clear of these columns as direct children of the page. */}
       {mobile && leadingControls && (
         <>
           <div

@@ -57,10 +57,13 @@
 }
 
 .log-meta span {
-  padding: 3px 8px;
-  border: 1px solid var(--admin-color-border-default);
-  border-radius: 999px;
-  background: var(--admin-color-surface-primary);
+  height: var(--admin-badge-height);
+  padding: 0 var(--admin-badge-padding-inline);
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--admin-radius-pill);
+  background: var(--admin-color-control-surface-muted);
+  font-size: var(--admin-badge-font-size);
   white-space: nowrap;
 }
 

@@ -24,6 +24,7 @@ import { SettingsFieldControl } from "./SettingsFieldControl.js";
 import {
   replaceSettingsField,
   settingsFieldEntries,
+  settingsFieldLockReason,
   settingsFieldValue,
   settingsGroupEntries,
   settingsSections,
@@ -181,28 +182,31 @@ function SettingsPageContent({ snapshot }: { snapshot: RuntimeConfigResponseDto 
     }
   };
 
-  const renderField = ([path, field]: (typeof settingsFieldEntries)[number]) => (
-    <SettingsFieldControl
-      key={path}
-      field={field}
-      value={settingsFieldValue(config, path)}
-      disabled={locked}
-      error={fieldErrors.get(path)}
-      onChange={(value) => {
-        if (locked || actionRef.current) return;
-        if (fieldErrors.has(path)) {
-          setFieldErrors((current) => {
-            const next = new Map(current);
-            next.delete(path);
-            return next;
-          });
-        }
-        const next = { config: replaceSettingsField(configRef.current.config, path, value), revision: configRef.current.revision };
-        configRef.current = next;
-        setDraft(JSON.stringify(next.config) === JSON.stringify(serverConfig) ? null : next);
-      }}
-    />
-  );
+  const renderField = ([path, field]: (typeof settingsFieldEntries)[number]) => {
+    const lockReason = settingsFieldLockReason(config, path);
+    return (
+      <SettingsFieldControl
+        key={path}
+        field={lockReason ? { ...field, hint: lockReason } : field}
+        value={settingsFieldValue(config, path)}
+        disabled={locked || lockReason !== null}
+        error={fieldErrors.get(path)}
+        onChange={(value) => {
+          if (locked || actionRef.current) return;
+          if (fieldErrors.has(path)) {
+            setFieldErrors((current) => {
+              const next = new Map(current);
+              next.delete(path);
+              return next;
+            });
+          }
+          const next = { config: replaceSettingsField(configRef.current.config, path, value), revision: configRef.current.revision };
+          configRef.current = next;
+          setDraft(JSON.stringify(next.config) === JSON.stringify(serverConfig) ? null : next);
+        }}
+      />
+    );
+  };
 
   const renderSections = (column: "left" | "right" | "wide") => Object.entries(settingsSections)
     .filter(([, section]) => section.column === column)

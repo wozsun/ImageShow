@@ -34,7 +34,7 @@ export function HomeFilterBar({
   isPending: boolean;
   isError: boolean;
   isPlaceholderData: boolean;
-  browsePath: "/show" | "/gallery" | "/embed/show" | "/embed/gallery" | null;
+  browsePath: "/show" | "/gallery" | "/embed/show" | "/embed/gallery";
   onFiltersChange: (filters: GalleryFilters) => void;
 }) {
   const entrance = useOneShotAnimation(entranceReady);
@@ -52,20 +52,14 @@ export function HomeFilterBar({
         selectedFacetLabels(facets?.authors ?? [], filters.author).join("/")
       ].filter(Boolean)
     : [];
-  const destination = browsePath ? galleryHref(filters, browsePath) : null;
+  const destination = galleryHref(filters, browsePath);
   const targetIsShow = browsePath === "/show" || browsePath === "/embed/show";
-  const targetLabel = targetIsShow
-    ? "展映"
-    : browsePath
-      ? "画廊"
-      : "展示页";
+  const targetLabel = targetIsShow ? "展映" : "画廊";
   const hasFilters = Object.values(filters).some(Boolean);
   const publicRoutePreloadIntents = usePublicRoutePreloadIntents();
   const targetPreloadProps = targetIsShow
     ? publicRoutePreloadIntents.show
-    : browsePath === "/gallery" || browsePath === "/embed/gallery"
-      ? publicRoutePreloadIntents.gallery
-      : {};
+    : publicRoutePreloadIntents.gallery;
 
   return (
     <section
@@ -83,23 +77,19 @@ export function HomeFilterBar({
     >
       <div>
         <span>IMAGE FILTER</span>
-        <strong>{browsePath
-          ? `选择后进入${targetLabel}`
-          : "暂无可用展示页"}</strong>
+        <strong>{`选择后进入${targetLabel}`}</strong>
         <small>
-          {!browsePath
-            ? "画廊与展映均已关闭，可继续预选筛选条件"
-            : isPending
-              ? "正在读取图库目录"
-              : isError
-                ? "所选组合暂时无法验证"
-                : hasFilters
-                  ? `已选择：${selectedLabels.join(" · ")} · ${
-                      isPlaceholderData
-                        ? "正在检查"
-                        : `共有 ${countLabel(stats?.matching_images ?? 0)}`
-                    }`
-                  : `未设置筛选条件，将在${targetLabel}浏览全部图片`}
+          {isPending
+            ? "正在读取图库目录"
+            : isError
+              ? "所选组合暂时无法验证"
+              : hasFilters
+                ? `已选择：${selectedLabels.join(" · ")} · ${
+                    isPlaceholderData
+                      ? "正在检查"
+                      : `共有 ${countLabel(stats?.matching_images ?? 0)}`
+                  }`
+                : `未设置筛选条件，将在${targetLabel}浏览全部图片`}
         </small>
       </div>
       <button
@@ -114,15 +104,9 @@ export function HomeFilterBar({
         </span>
         <span className="home-filter-reset-label">重置</span>
       </button>
-      {destination ? (
-        <Link className="home-gallery-entry" to={destination} {...targetPreloadProps}>
-          {`进入${targetLabel}`} <span aria-hidden="true">→</span>
-        </Link>
-      ) : (
-        <span className="home-gallery-entry is-disabled" aria-disabled="true">
-          暂无可用展示页
-        </span>
-      )}
+      <Link className="home-gallery-entry" to={destination} {...targetPreloadProps}>
+        {`进入${targetLabel}`} <span aria-hidden="true">→</span>
+      </Link>
     </section>
   );
 }

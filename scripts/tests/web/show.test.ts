@@ -42,6 +42,7 @@ import { ShowPixiFloatScene } from "../../../packages/web/src/pages/show/pixi/sh
 import { ShowPixiWaterfallScene } from "../../../packages/web/src/pages/show/pixi/show-pixi-waterfall-scene.ts";
 import {
   ShowPixiRuntime,
+  WebGLUnavailableError,
   showPixiTextureCacheOptions
 } from "../../../packages/web/src/pages/show/pixi/show-pixi-runtime.ts";
 import type { ShowPixiTextureCache } from "../../../packages/web/src/pages/show/pixi/show-pixi-texture-cache.ts";
@@ -478,6 +479,7 @@ function pixiPointerEvent(
 
 test("[Web/展映] Stage 回调读取已提交版本并保持异步实例生命周期", async (t) => {
   const React = await import("react");
+  const { MemoryRouter, useLocation } = await import("react-router");
   const { createRoot } = await import("react-dom/client");
   const { registerHooks } = await import("node:module");
   const hooks = registerHooks({
@@ -494,7 +496,9 @@ test("[Web/展映] Stage 回调读取已提交版本并保持异步实例生命�
   const { ShowPixiStage } =
     await import("../../../packages/web/src/pages/show/pixi/ShowPixiStage.tsx");
   const { window, document } = parseHTML("<html><body><div id=root></div></body></html>");
-  const restore = installProperties(globalThis, { window, document, React });
+  const restore = installProperties(globalThis, {
+    window, document, React, location: new URL("https://img.example/embed/show")
+  });
   const root = createRoot(document.getElementById("root")!);
   let unmounted = false;
   t.after(async () => {
@@ -564,6 +568,9 @@ test("[Web/展映] Stage 回调读取已提交版本并保持异步实例生命�
     onOpen: (image: (typeof images)[number], opener: HTMLElement) => {
       calls.push({ name: "open", revision, args: [image, opener] });
     },
+    onUnavailable: () => {
+      calls.push({ name: "unavailable", revision, args: [] });
+    },
     onClusterFocusChange: (...args: Parameters<Options["onClusterFocusChange"]>) => {
       calls.push({ name: "cluster-focus", revision, args });
     },
@@ -580,33 +587,51 @@ test("[Web/展映] Stage 回调读取已提交版本并保持异步实例生命�
     }
     return null;
   }
+  function StageRoute({ children }: { children?: React.ReactNode }) {
+    const location = useLocation();
+    return React.createElement(
+      React.Fragment,
+      null,
+      React.createElement("output", { "data-route": "" }, location.pathname + location.search),
+      location.pathname.endsWith("/show") ? children : null
+    );
+  }
   const render = (revision: number, blocked = false, key = "current") =>
     root.render(
       React.createElement(
         React.StrictMode,
         null,
         React.createElement(
-          React.Suspense,
-          { fallback: "pending" },
+          MemoryRouter,
+          { key, initialEntries: ["/embed/show?mode=waterfall&tag=test"] },
           React.createElement(
-            ShowPixiStage,
-            {
-              key,
-              dataKey: "stage",
-              clusterDataKey: "theme:latest:0",
-              clusters: [],
-              dialogOpen: false,
-              floatSizeIndex: 5,
-              images,
-              hasMore: true,
-              order: "latest",
-              running: false,
-              scene: "waterfall",
-              speed: 28,
-              waterfallColumns: 4,
-              ...callbacks(revision)
-            },
-            React.createElement(Block, { active: blocked })
+            React.Suspense,
+            { fallback: "pending" },
+            React.createElement(
+              StageRoute,
+              null,
+              React.createElement(
+                ShowPixiStage,
+                {
+                  key,
+                  galleryHref: "/embed/gallery?tag=test&order=latest",
+                  dataKey: "stage",
+                  clusterDataKey: "theme:latest:0",
+                  clusters: [],
+                  dialogOpen: false,
+                  floatSizeIndex: 5,
+                  images,
+                  hasMore: true,
+                  order: "latest",
+                  running: false,
+                  scene: "waterfall",
+                  speed: 28,
+                  waterfallColumns: 4,
+                  ...callbacks(revision)
+                },
+                React.createElement(Block, { active: blocked })
+              )
+            )
           )
         )
       )
@@ -665,16 +690,32 @@ test("[Web/展映] Stage 回调读取已提交版本并保持异步实例生命�
   assert.equal(creations[1].destroys, 1, "过期异步初始化结果被销毁");
   const logged = t.mock.method(console, "error", (..._data: unknown[]) => {});
   const failure = new Error("controlled initialization failure");
+  const clock = installControlledClock(t, window as unknown as Window);
   await React.act(async () => creations[2].ready.reject(failure));
   assert.ok(document.querySelector('[role="alert"]'), "初始化失败时显示提示");
+  assert.deepEqual(
+    calls.filter((call) => call.name === "unavailable").map((call) => call.revision),
+    [6],
+    "无法启动时以最新版本通知页面一次"
+  );
+  assert.ok(document.querySelector('a[href="/embed/gallery?tag=test&order=latest"]'), "初始化失败时提供画廊入口");
   assert.ok(
     logged.mock.calls.some((call) => call.arguments.includes(failure)),
     "浏览器给出的原因写入控制台"
   );
+  const route = () => document.querySelector("[data-route]")?.textContent;
+  await React.act(async () => { await clock.advanceBy(4_999); });
+  assert.equal(route(), "/embed/show?mode=waterfall&tag=test");
+  await React.act(async () => { await clock.advanceBy(1); });
+  assert.equal(route(), "/embed/gallery?tag=test&order=latest", "初始化失败五秒后进入画廊");
+  await React.act(async () => render(7, false, "leave-early"));
+  await React.act(async () => creations.at(-1)!.ready.reject(new WebGLUnavailableError()));
+  assert.equal(clock.pendingCount(), 1);
   logged.mock.restore();
   calls.length = 0;
   await React.act(async () => root.unmount());
   unmounted = true;
+  assert.equal(clock.pendingCount(), 0, "提前离开错误页取消自动跳转");
   await React.act(async () => {
     for (const { options } of creations) {
       options.onMotionActiveChange(true);
@@ -3756,6 +3797,9 @@ test("[Web/展映] 漂浮与星群删除释放卡片，星群故障恢复保留�
     const advance = async () => h.React.act(async () => {
       for (let frame = 0; frame < 120; frame++) scene.update(16);
     });
+    // The error state also offers to copy its details; retry is the recovery entry.
+    const retryButton = () => [...h.document.querySelectorAll("button")]
+      .find((button) => button.textContent?.includes("重试"))!;
     const images = showImages(101);
     await render();
     await h.respond(0, { items: images.slice(0, 100), next_cursor: null });
@@ -3763,7 +3807,7 @@ test("[Web/展映] 漂浮与星群删除释放卡片，星群故障恢复保留�
     assert.ok(h.document.querySelector('[role="alert"]'), "部分首批成功仍须显示恢复入口");
     await advance();
     assert.equal(h.pending.length, 2, "失败分类不自动轮询");
-    await h.React.act(async () => h.document.querySelector("button")!.click());
+    await h.React.act(async () => retryButton().click());
     const retryDataKey = current.dataKey;
     assert.equal(current.loading, false, "部分失败重试期间保留已展示画面");
     const heldImages = current.clusters[0]!.images;
@@ -3782,7 +3826,7 @@ test("[Web/展映] 漂浮与星群删除释放卡片，星群故障恢复保留�
       for (let frame = 0; frame < 100; frame++) current.needImages("theme:main", retainedIds);
     });
     assert.equal(h.pending.length, 4);
-    await h.React.act(async () => h.document.querySelector("button")!.click());
+    await h.React.act(async () => retryButton().click());
     await h.respond(4, { items: images.slice(0, 100), next_cursor: null });
     assert.equal(current.dataKey, retryDataKey, "续页重试不重建星群");
     assert.equal(h.document.querySelector('[role="alert"]'), null);

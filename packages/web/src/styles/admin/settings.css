@@ -37,13 +37,11 @@
   padding: 18px;
   background: var(--admin-color-surface-primary);
   border: 1px solid var(--admin-color-border-default);
-  border-radius: 8px;
+  border-radius: var(--admin-radius-container);
   container: settings-card / inline-size;
 }
 .settings-card-heading {
-  padding-bottom: 16px;
-  margin-bottom: 16px;
-  border-bottom: 1px solid var(--admin-color-border-muted);
+  margin-bottom: 20px;
 }
 .settings-heading-row {
   min-height: 28px;
@@ -84,8 +82,7 @@
   min-width: 0;
 }
 .settings-group + .settings-group {
-  padding-top: 16px;
-  border-top: 1px solid var(--admin-color-border-muted);
+  padding-top: 8px;
 }
 .settings-group > .settings-heading-row {
   margin-bottom: 12px;
@@ -106,7 +103,6 @@
 }
 :is(.settings-card-ingestion, .settings-card-normalize) .settings-group {
   padding-top: 0;
-  border-top: 0;
 }
 .settings-group-wide {
   grid-column: 1 / -1;

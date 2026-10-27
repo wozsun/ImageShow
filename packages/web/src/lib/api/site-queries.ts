@@ -2,6 +2,7 @@ import { keepPreviousData, useQuery, type QueryClient } from "@tanstack/react-qu
 import { api } from "./client.js";
 import { requestWithDeadline } from "./request-deadline.js";
 import { queryKeys } from "./query-keys.js";
+import { supportsFullSite } from "../browser-support.js";
 import type {
   GalleryFacetsDto,
   GalleryStatsDto,
@@ -23,11 +24,29 @@ const sessionGlobalQuery = {
   refetchOnWindowFocus: false
 } as const;
 
+/**
+ * Browsers older than the full support range only get the gallery: the home
+ * and show pages count as closed for them, so the routes, the startup load,
+ * the header and the home page's browse target all fall back to it under the
+ * usual rules.
+ */
+function forThisBrowser(config: SiteConfig): SiteConfig {
+  if (supportsFullSite) return config;
+  return {
+    ...config,
+    site: {
+      ...config.site,
+      home: { ...config.site.home, enabled: false },
+      show: { ...config.site.show, enabled: false }
+    }
+  };
+}
+
 const inlinedSiteConfig: SiteConfig | undefined = (() => {
   const raw = document.getElementById("__site_config__")?.textContent;
   if (!raw) return undefined;
   try {
-    return JSON.parse(raw) as SiteConfig;
+    return forThisBrowser(JSON.parse(raw) as SiteConfig);
   } catch {
     return undefined;
   }
@@ -41,7 +60,8 @@ export function initialSiteConfig() {
 export function useSiteConfig() {
   return useQuery<SiteConfig>({
     queryKey: queryKeys.siteConfig,
-    queryFn: ({ signal }) => api("/api/site-config", { signal }),
+    queryFn: ({ signal }) =>
+      api<SiteConfig>("/api/site-config", { signal }).then(forThisBrowser),
     initialData: inlinedSiteConfig,
     ...sessionGlobalQuery
   });

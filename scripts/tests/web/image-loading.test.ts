@@ -68,6 +68,13 @@ function imageHarness(t: TestContext) {
 
 for (const thumbSrc of ["", "/thumb.webp"]) {
   test(`[Web/图片加载] 完整图失败可显式重试且保留可用图层 / ${thumbSrc ? "有缩略图" : "无缩略图"}`, async (t) => {
+    if (!thumbSrc) {
+      // Browsers before the full support range lack Promise.withResolvers; the entry fills it.
+      t.after(installProperties(Promise, { withResolvers: undefined }));
+      await import(
+        new URL("../../../packages/web/src/lib/browser-support.ts?legacy-image-loading", import.meta.url).href
+      );
+    }
     const h = imageHarness(t);
     let parentClicks = 0;
     await h.render(

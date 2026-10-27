@@ -35,7 +35,7 @@
   gap: 4px;
   padding: 16px;
   border: 1px solid var(--admin-color-border-card);
-  border-radius: 10px;
+  border-radius: var(--admin-radius-container);
   background: var(--admin-color-surface-primary);
 }
 .overview-card-value {
@@ -67,11 +67,12 @@ a.overview-card-link {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid var(--admin-color-border-card);
-  border-radius: 999px;
-  background: var(--admin-color-surface-primary);
-  font-size: 13px;
+  height: var(--admin-badge-height);
+  padding: 0 var(--admin-badge-padding-inline);
+  border-radius: var(--admin-radius-pill);
+  background: var(--admin-color-control-surface-muted);
+  font-size: var(--admin-badge-font-size);
+  font-weight: 500;
 }
 .overview-theme-chip b {
   color: var(--admin-color-overview-chip);
@@ -88,9 +89,9 @@ a.overview-card-link {
   width: 100%;
   padding: 0;
   aspect-ratio: 1;
-  border-radius: 10px;
+  border-radius: var(--admin-radius-control);
   overflow: hidden;
-  border: 1px solid var(--admin-color-border-card);
+  border: 0;
   background: var(--admin-color-overview-recent-surface);
   cursor: pointer;
 }

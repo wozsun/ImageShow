@@ -250,12 +250,42 @@
   place-items: center;
 }
 
+/*
+ * Notices always leave the full navigation height, shown or not, and center in
+ * the space below it; one taller than that space, with its error details,
+ * scrolls instead of sliding under the navigation.
+ */
+.show-query-state {
+  overflow: auto;
+  padding: 16px;
+  padding-top: calc(
+    var(--public-navigation-safe-top) + var(--public-page-header-height)
+      + var(--gallery-toolbar-height) + 16px
+  );
+  padding-bottom: max(16px, calc(var(--public-safe-area-bottom) + 12px));
+}
+/*
+ * On narrow screens the playback and zoom controls stay over the bottom
+ * corners while a data error shows, since the compact toolbar has no order or
+ * mode switch; each column holds three 48px buttons with 8px gaps (160px).
+ */
+.show-page:has(> .public-mobile-controls:not([hidden])) .show-query-state {
+  padding-bottom: calc(max(16px, calc(var(--public-safe-area-bottom) + 12px)) + 160px + 16px);
+}
+
 .show-query-state > .query-error-state {
   width: min(440px, calc(100vw - 32px));
+  max-width: 100%;
+  margin: auto;
   background: var(--public-color-gallery-menu-surface);
   border: 1px solid var(--public-color-border-default);
   border-radius: 14px;
   box-shadow: 0 12px 32px var(--public-shadow-gallery-menu);
+}
+
+/* Only the reason reads as an error; the advice and countdown are notes. */
+.show-query-state .show-unavailable-note {
+  color: var(--public-color-text-secondary);
 }
 
 .show-empty {

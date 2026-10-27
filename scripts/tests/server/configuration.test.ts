@@ -599,6 +599,7 @@ test("[Server/配置] 完整环境播种严格覆盖全部已映射 RuntimeConfi
     SITE_HEADER_NAME: "  页头名称  ",
     SITE_DESCRIPTION: "",
     SITE_ROOT: "show",
+    SITE_HOME_ENABLED: "false",
     SITE_HOME_BROWSE_TARGET: "show",
     SITE_HOME_BACKGROUND: "",
     SITE_SHOW_ENABLED: "false",
@@ -703,6 +704,7 @@ test("[Server/配置] 完整环境播种严格覆盖全部已映射 RuntimeConfi
     [{ SITE_ROBOTS_ENABLED: "1" }, /SITE_ROBOTS_ENABLED.*site\.robots_enabled/],
     [{ SITE_ROBOTS_ENABLED: "0" }, /SITE_ROBOTS_ENABLED.*site\.robots_enabled/],
     [{ SITE_GALLERY_ENABLED: "1" }, /SITE_GALLERY_ENABLED.*site\.gallery\.enabled/],
+    [{ SITE_GALLERY_ENABLED: "false" }, /SITE_GALLERY_ENABLED.*site\.gallery\.enabled.*首页与展映都关闭后才能关闭画廊/],
     [{ SITE_ROOT: "landing" }, /SITE_ROOT.*site\.root/],
     [{ SITE_HOME_BROWSE_TARGET: "home" }, /SITE_HOME_BROWSE_TARGET.*site\.home\.browse_target/],
     [{ SITE_SHOW_ENABLED: "1" }, /SITE_SHOW_ENABLED.*site\.show\.enabled/],
@@ -958,6 +960,7 @@ console.log("config-existing-ok");
           SITE_ICP: "测试ICP备123号",
           SITE_MPS: "测试公网安备123456号",
           SITE_FOOTER: 'Powered by <a href="https://example.com/">ImageShow</a>',
+          SITE_HOME_ENABLED: "false",
           SITE_HOME_BROWSE_TARGET: "show",
           SITE_SHOW_ENABLED: "false",
           SITE_SHOW_AUTOPLAY: "false",
@@ -1012,6 +1015,7 @@ console.log("config-existing-ok");
             SITE_ICP: undefined,
             SITE_MPS: undefined,
             SITE_FOOTER: undefined,
+            SITE_HOME_ENABLED: undefined,
             SITE_GALLERY_ENABLED: undefined,
             NORMALIZE_LARGE_MAX_SIZE_KB: undefined,
             UPLOAD_MAX_ITEMS: undefined,
@@ -1419,7 +1423,10 @@ for (const base of ["https://asset.example.test///", "https://asset.example.test
   gateOpen = false;
   assert.equal((await request(parsed.host, path)).status, 503);
   gateOpen = true;
-  await updateRuntimeConfig({ embed: { enabled: true }, site: { home: { enabled: true } } });
+  await updateRuntimeConfig({
+    embed: { enabled: true },
+    site: { home: { enabled: true }, gallery: { enabled: true } }
+  });
   const embed = await request("main.example.test", "/embed/home");
   assert.ok(embed.headers.get("content-security-policy").includes(parsed.origin));
   await embed.text();

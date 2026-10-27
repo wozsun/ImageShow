@@ -103,8 +103,12 @@ async function createBridgeHarness(t: TestContext) {
 }
 
 test("[Web/嵌入光标] 随嵌入启用，握手校验父窗口、来源、版本和实例，独立页面保持原生光标", async (t) => {
-  // Safari before 18.2, within the supported range, has no Uint8Array.prototype.toHex.
+  // Safari before 18.2, within the supported range, has no Uint8Array.prototype.toHex;
+  // the entry fills it.
   t.after(installProperties(Uint8Array.prototype, { toHex: undefined }));
+  await import(
+    new URL("../../../packages/web/src/lib/browser-support.ts?legacy-embed-cursor", import.meta.url).href
+  );
   const h = await createBridgeHarness(t);
   await h.render(false);
   assert.equal(h.messages.length, 0);

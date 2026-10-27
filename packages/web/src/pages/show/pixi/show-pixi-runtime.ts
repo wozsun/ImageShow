@@ -119,6 +119,13 @@ type ShowPixiApplication = {
   destroy(rendererOptions: RendererDestroyOptions, stageOptions: DestroyOptions): void;
 };
 
+export class WebGLUnavailableError extends Error {
+  constructor() {
+    super("WebGL is not supported");
+    this.name = "WebGLUnavailableError";
+  }
+}
+
 /**
  * The stage draws through WebGL only. Pixi's Application picks a renderer at
  * runtime and so brings the WebGPU and canvas renderers into the page's code;
@@ -129,7 +136,7 @@ async function createShowPixiApplication(options: Partial<WebGLOptions>): Promis
   // Like Pixi's automatic choice, check support before creating a renderer:
   // one whose context cannot be created keeps its scheduler on the global
   // ticker, and destroying it as a whole fails on the missing context.
-  if (!isWebGLSupported()) throw new Error("WebGL is not supported");
+  if (!isWebGLSupported()) throw new WebGLUnavailableError();
   const renderer = new WebGLRenderer();
   try {
     await renderer.init(options);

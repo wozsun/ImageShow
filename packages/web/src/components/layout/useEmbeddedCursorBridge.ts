@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { bytesToHex } from "../../lib/bytes-hex.js";
 
 const channel = "imageshow:embed-cursor";
 const version = 1;
@@ -26,7 +25,7 @@ export function useEmbeddedCursorBridge() {
     if (window.parent === window) return;
 
     const parent = window.parent;
-    const bridgeId = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
+    const bridgeId = crypto.getRandomValues(new Uint8Array(16)).toHex();
     const root = document.documentElement;
     const finePointer = window.matchMedia("(pointer: fine)");
     const listeners = new AbortController();

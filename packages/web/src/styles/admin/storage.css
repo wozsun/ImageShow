@@ -1,14 +1,12 @@
 :root {
   --admin-color-storage-border: var(--admin-color-border-card);
-  --admin-color-storage-action-border: light-dark(var(--admin-color-border-muted), #20262e);
   --admin-color-storage-default-surface: light-dark(#e8f1ff, #14304b);
   --admin-color-storage-disabled-text: var(--admin-color-text-subtle);
-  --admin-color-storage-disabled-surface: light-dark(var(--admin-color-surface-subtle), var(--color-dark-surface-muted));
+  --admin-color-storage-disabled-surface: var(--admin-color-control-surface-muted);
   --admin-color-storage-label: var(--admin-color-text-label);
   --admin-color-storage-meta: var(--admin-color-text-subtle);
   --admin-color-storage-add-border: var(--admin-color-border-control);
   --admin-color-storage-add-surface: light-dark(var(--admin-color-surface-raised), var(--color-dark-control-surface));
-  --admin-color-storage-toggle-border: var(--admin-color-border-control);
   --admin-shadow-storage-default: light-dark(rgba(31, 111, 235, 0.25), rgba(65, 132, 191, 0.38));
 }
 
@@ -26,11 +24,15 @@
   color: var(--admin-color-text-primary);
 }
 .storage-default-note strong {
-  padding: 2px 10px;
-  border-radius: 999px;
+  height: var(--admin-badge-height);
+  padding: 0 var(--admin-badge-padding-inline);
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--admin-radius-pill);
   background: var(--admin-color-storage-default-surface);
   color: var(--admin-color-action-text);
-  font-weight: 700;
+  font-size: var(--admin-badge-font-size);
+  font-weight: 600;
 }
 .storage-card-grid {
   display: grid;
@@ -44,7 +46,7 @@
   gap: 10px;
   padding: 14px 16px;
   border: 1px solid var(--admin-color-storage-border);
-  border-radius: 12px;
+  border-radius: var(--admin-radius-container);
   background: var(--admin-color-surface-primary);
 }
 .storage-backend-card.is-default {
@@ -91,18 +93,18 @@
 .storage-default-toggle {
   grid-area: toggle;
   justify-self: center;
-  min-height: 28px;
+  min-height: var(--admin-badge-height);
+  height: var(--admin-badge-height);
   gap: 5px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--admin-color-storage-toggle-border);
-  background: var(--admin-color-surface-primary);
+  padding: 0 var(--admin-badge-padding-inline);
+  border-radius: var(--admin-radius-pill);
+  border: 0;
+  background: var(--admin-color-control-surface-muted);
   color: var(--admin-color-storage-label);
-  font-size: 12px;
+  font-size: var(--admin-badge-font-size);
   font-weight: 600;
 }
 .storage-default-toggle.is-default {
-  border-color: var(--admin-color-control-border-selected);
   background: var(--admin-color-storage-default-surface);
   color: var(--admin-color-action-text);
 }
@@ -121,8 +123,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  border-top: 1px solid var(--admin-color-storage-action-border);
-  padding-top: 8px;
+  padding-top: 4px;
 }
 .storage-card-actions-left {
   display: flex;
@@ -142,18 +143,17 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--admin-color-storage-toggle-border);
+  padding: 0 var(--admin-badge-padding-inline);
+  border-radius: var(--admin-radius-pill);
+  border: 0;
   background: var(--admin-color-storage-disabled-surface);
   color: var(--admin-color-storage-disabled-text);
-  font-size: 12px;
+  font-size: var(--admin-badge-font-size);
   font-weight: 600;
   cursor: pointer;
 }
 .storage-enable-toggle.is-on {
   background: var(--admin-color-success-surface);
-  border-color: var(--admin-color-success-border);
   color: var(--admin-color-success-text-strong);
 }
 .storage-enable-toggle:disabled {
@@ -164,12 +164,12 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--admin-color-warning-border-strong);
+  padding: 0 var(--admin-badge-padding-inline);
+  border-radius: var(--admin-radius-pill);
+  border: 0;
   background: var(--admin-color-warning-surface);
   color: var(--admin-color-warning-action);
-  font-size: 12px;
+  font-size: var(--admin-badge-font-size);
   font-weight: 600;
   cursor: pointer;
 }
@@ -197,7 +197,7 @@
   gap: 6px;
   min-height: 132px;
   border: 1px dashed var(--admin-color-storage-add-border);
-  border-radius: 12px;
+  border-radius: var(--admin-radius-container);
   background: var(--admin-color-storage-add-surface);
   color: var(--admin-color-storage-label);
   font-size: 14px;

@@ -443,7 +443,7 @@ body:has(.gallery-page) {
   text-align: center;
 }
 
-.gallery-query-error > .query-error-state button {
+.gallery-query-error > .query-error-state > button {
   color: var(--color-control-text-on-action);
   background: var(--color-control-action);
   border-color: var(--color-control-action);

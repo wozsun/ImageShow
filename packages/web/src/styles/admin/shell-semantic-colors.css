@@ -8,9 +8,8 @@
   --admin-color-navigation-divider: light-dark(var(--admin-color-border-muted), #282e36);
   --admin-color-navigation-control-surface: light-dark(#fff, var(--color-dark-control-surface));
   --admin-color-navigation-control-border: var(--admin-color-border-control);
-  --admin-color-navigation-version-border: light-dark(var(--admin-color-border-default), #353c45);
   --admin-color-navigation-version-text: light-dark(var(--admin-color-text-secondary), #8b949e);
-  --admin-color-navigation-version-surface: var(--admin-color-surface-raised);
+  --admin-color-navigation-version-surface: var(--admin-color-control-surface-muted);
   --admin-color-navigation-version-hover-text: var(--admin-color-navigation-active-text);
   --admin-color-navigation-version-hover-surface: light-dark(
     var(--admin-color-control-surface-hover),

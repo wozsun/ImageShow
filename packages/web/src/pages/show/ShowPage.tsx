@@ -1,5 +1,4 @@
 import {
-  publicPageTarget,
   readableFilterSearch,
   type ShowClusterGroup,
   type ShowDensity,
@@ -37,7 +36,6 @@ import {
   showOrderFromSearchParams,
   updateImageBrowseSearchParams
 } from "../../lib/gallery/gallery-query.js";
-import { useSiteConfig } from "../../lib/api/site-queries.js";
 import { publicNavigationAutoHideDelayMs } from "../../lib/ui/public-navigation.js";
 import {
   ShowClusterGroupControl,
@@ -110,14 +108,10 @@ export function ShowPage({
   settings: SiteShowSettings;
 }) {
   const browseRoute = useImageBrowseRoute();
-  const { data: siteConfig } = useSiteConfig();
-  // A stage that cannot start offers the gallery, when it shows itself, with
-  // the same filters and order; an embedded stage stays within the embeds.
-  const galleryPath = embedded ? "/embed/gallery" : "/gallery";
-  const galleryHref = siteConfig
-    && publicPageTarget(siteConfig.site, siteConfig.embed.enabled, galleryPath) === galleryPath
-    ? `${embedded ? "/embed" : ""}${imageBrowseNavigationHref("/gallery", browseRoute.browseSearch)}`
-    : null;
+  // A stage that cannot start offers the gallery with the same filters and
+  // order; an embedded stage stays within the embeds. The gallery closes only
+  // after the show page, so it is open whenever this page is.
+  const galleryHref = `${embedded ? "/embed" : ""}${imageBrowseNavigationHref("/gallery", browseRoute.browseSearch)}`;
   const filterDialog = usePublicFilterDialog(browseRoute);
   const {
     params: routeSearchParams,
@@ -178,6 +172,8 @@ export function ShowPage({
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
   const sizeControlRef = useRef<HTMLButtonElement | null>(null);
   const stageRef = useRef<ShowPixiStageHandle | null>(null);
+  // Playback and zoom controls do nothing once the stage cannot start.
+  const [stageUnavailable, setStageUnavailable] = useState(false);
   const [clusterFocus, setClusterFocus] = useState<ShowClusterFocus | null>(null);
   // 点按进入星团后导航自动隐藏，与自动播放时一致；回到星群或以其他方式进入时恢复原有规则。
   const [clusterClicked, setClusterClicked] = useState(false);
@@ -427,7 +423,7 @@ export function ShowPage({
       }
     >
       <PublicImageNavigation
-        floatingControlsHidden={dialogOpen}
+        floatingControlsHidden={dialogOpen || stageUnavailable}
         mobileTrailingControls={
           <ShowMobileControls
             scene={scene}
@@ -543,6 +539,7 @@ export function ShowPage({
         onMotionActiveChange={setMotionActive}
         onNeedImages={data.loadMore}
         onOpen={openImageDetail}
+        onUnavailable={() => setStageUnavailable(true)}
         order={data.committedOrder}
         running={playbackRunning}
         scene={scene}

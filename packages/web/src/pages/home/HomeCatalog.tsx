@@ -35,6 +35,7 @@ import {
   selectedSlugs
 } from "./home-ui.js";
 import { useOneShotSectionReveal } from "./useOneShotSectionReveal.js";
+import { ErrorDetails } from "../../components/feedback/ErrorDetails.js";
 
 function HomeRevealSection({
   armed,
@@ -205,6 +206,7 @@ export function HomeCatalog({
   facets,
   isPending,
   isError,
+  error,
   isRefreshing,
   availabilityUnverified,
   onFiltersChange,
@@ -220,6 +222,7 @@ export function HomeCatalog({
   facets: GalleryFacetsDto | undefined;
   isPending: boolean;
   isError: boolean;
+  error?: unknown;
   isRefreshing: boolean;
   availabilityUnverified: boolean;
   onFiltersChange: (filters: GalleryFilters) => void;
@@ -317,10 +320,11 @@ export function HomeCatalog({
           armed={armed}
           className="home-glass-card home-stats-state"
           revealVariant="state"
-          role="alert"
         >
-          <strong>图库目录暂时无法读取</strong>
+          {/* Only the notice is announced, not the copyable report below it. */}
+          <strong role="alert">图库目录暂时无法读取</strong>
           <p>仍可直接进入完整画廊，或重新尝试加载分类数量。</p>
+          <ErrorDetails error={error} />
           <button type="button" onClick={onRetry}>
             重新加载
           </button>

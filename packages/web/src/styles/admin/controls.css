@@ -15,6 +15,15 @@
   /* 列表滚动区顶部的安全区：桌面列表在自身滚动区内滚动，卡片悬浮上移或阴影不被裁切；
      窄屏整页滚动，只留 2px，像素取整时首张卡片的上边框不被吸顶操作区的底色盖住。 */
   --admin-list-safe-area: 8px;
+  /* 圆角三档：控件（按钮、输入框、下拉框、缩略图，以及与操作区按钮对齐的图片、词表、分组与用户列表卡片）、
+     容器（面板与弹窗）、胶囊（徽标与状态标记）。 */
+  --admin-radius-control: 6px;
+  --admin-radius-container: 8px;
+  --admin-radius-pill: 999px;
+  /* 徽标与状态胶囊共用的几何：不描边，只以语义底色区分。 */
+  --admin-badge-height: 22px;
+  --admin-badge-padding-inline: 8px;
+  --admin-badge-font-size: 12px;
 }
 @media (max-width: 760px) {
   :root {
@@ -476,15 +485,15 @@ textarea.is-changed,
 
 .hint {
   margin: 0 0 12px;
-  color: var(--admin-color-text-secondary);
-  font-size: 14px;
-  line-height: 1.45;
+  color: var(--admin-color-text-subtle);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 pre {
   background: var(--admin-color-surface-primary);
   border: 1px solid var(--admin-color-border-default);
-  border-radius: 8px;
+  border-radius: var(--admin-radius-container);
   padding: 14px;
   overflow: auto;
   max-height: 420px;
@@ -522,7 +531,7 @@ pre {
   max-height: min(92dvh, 100%);
   overflow: auto;
   background: var(--admin-color-surface-primary);
-  border-radius: 8px;
+  border-radius: var(--admin-radius-container);
   box-shadow: 0 18px 60px var(--admin-shadow-modal);
   animation: modal-pop 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
   overscroll-behavior: contain;

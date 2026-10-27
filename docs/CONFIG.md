@@ -27,7 +27,7 @@
 | `site.icon` | `""` | 站点图标，留空使用内置图标；可填以 `/` 开头的站内路径或 HTTPS 地址，最多 2048 字符。自定义图标见[自定义静态资源](#自定义静态资源) |
 | `site.version.enabled` | `true` | 在后台显示版本信息 |
 | `site.version.link_enabled` | `true` | 版本信息可点击打开 GitHub Release |
-| `site.root` | `"home"` | 打开站点根路径 `/` 时显示的页面：`home` 首页、`gallery` 画廊、`show` 展映。所选页面关闭时，依次改用画廊、展映、首页 |
+| `site.root` | `"home"` | 打开站点根路径 `/` 时显示的页面：`home` 首页、`gallery` 画廊、`show` 展映。所选页面关闭时改用画廊 |
 | `site.robots_enabled` | `false` | 提供 `/robots.txt`，只允许搜索引擎抓取首页。关闭时该地址返回 404 |
 | `site.public_original` | `false` | 允许访客通过 `/images/original/<id>` 访问外部原图，并在有原图的详情中显示按钮；关闭后仅管理员可访问。适用于画廊、展映及嵌入页 |
 | `site.random_method` | `"redirect"` | `/random` 默认的返回方式：`redirect` 跳转到图片地址；`proxy` 由本站直接返回图片，会占用本站带宽 |
@@ -54,9 +54,13 @@
 
 ### 画廊与展映
 
+首页或展映关闭时，访问它们会改用根路径页面（`site.root`），根路径页面也关闭时改用画廊；改用画廊或展映时，保留链接中该页面支持的筛选与排序。画廊要在首页和展映都关闭后才能关闭，三者都关闭时站点不提供公开页面，随机图片和后台照常可用。
+
+完整站点支持 Chrome / Edge 119、Firefox 124、Safari 17.4（含 iOS）及以上版本。更早的浏览器只显示画廊，其中 Chrome / Edge 109 与 Safari 16.4 及以上可以正常浏览，更早的版本不保证；后台需要完整站点支持的版本。展映无法启动时（例如浏览器不支持 WebGL）会显示提示，5 秒后进入画廊。
+
 | 配置项 | 默认值 | 说明 |
 | --- | --- | --- |
-| `site.gallery.enabled` | `true` | 开放画廊 `/gallery` |
+| `site.gallery.enabled` | `true` | 开放画廊 `/gallery`。首页和展映都关闭后才能关闭 |
 | `site.gallery.order` | `"latest"` | 画廊默认排序：`latest` 最新优先、`oldest` 最旧优先、`random` 随机 |
 | `site.show.enabled` | `true` | 开放展映 `/show` |
 | `site.show.autoplay` | `true` | 进入展映时自动播放。系统开启了“减少动态效果”时保持暂停 |
@@ -130,7 +134,7 @@ SITE_FOOTER='Powered by <a href="https://github.com/wozsun/ImageShow">ImageShow<
 
 | 配置项 | 默认值 | 说明 |
 | --- | --- | --- |
-| `embed.enabled` | `false` | 开放 `/embed/home`、`/embed/gallery`、`/embed/show`，供其他网站用 iframe 嵌入。对应的首页、画廊、展映也必须开启 |
+| `embed.enabled` | `false` | 开放 `/embed/home`、`/embed/gallery`、`/embed/show`，供其他网站用 iframe 嵌入。首页或展映关闭时，对应的嵌入地址改为显示其他嵌入页面（展映改用画廊；首页改用 `site.home.browse_target` 指定的页面，该页面也关闭时改用画廊），不会离开嵌入页面 |
 | `embed.allowed_origins` | `[]` | 允许嵌入本站的其他网站，JSON 数组，最多 32 个 |
 
 开启后，主站域名、附加站点域名及各自子域名的 HTTPS 页面默认可以嵌入；主站域名留空或为 `example.com` 时还允许当前同源页面。其他网站需要加入 `embed.allowed_origins`，例如：

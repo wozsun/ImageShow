@@ -63,7 +63,7 @@
   color: var(--admin-color-text-secondary);
   background: var(--admin-color-surface-primary);
   border: 1px dashed var(--admin-color-border-control);
-  border-radius: 8px;
+  border-radius: var(--admin-radius-container);
 }
 
 .image-editor-row {
@@ -80,7 +80,7 @@
   padding: 10px;
   background: var(--admin-color-edit-row-surface);
   border: 1px solid var(--admin-color-border-default);
-  border-radius: 8px;
+  border-radius: var(--admin-radius-container);
 }
 .image-editor-preview {
   grid-area: preview;
@@ -168,30 +168,29 @@
 .image-editor-head .changed-badge,
 .image-editor-head .image-editor-save-badge {
   flex: 0 0 auto;
-  padding: 1px 8px;
-  border-radius: 999px;
-  font-size: 12px;
+  height: var(--admin-badge-height);
+  padding: 0 var(--admin-badge-padding-inline);
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--admin-radius-pill);
+  font-size: var(--admin-badge-font-size);
   font-weight: 600;
 }
 .image-editor-head .changed-badge {
   color: var(--admin-color-warning-text-strong);
   background: var(--admin-color-warning-surface-emphasis);
-  border: 1px solid var(--admin-color-warning-border-strong);
 }
 .image-editor-head .image-editor-save-badge.is-saved {
   color: var(--admin-color-success-text-emphasis);
   background: var(--admin-color-success-surface-subtle);
-  border: 1px solid var(--admin-color-success-border-strong);
 }
 .image-editor-head .image-editor-save-badge.is-pending {
   color: var(--admin-color-warning-text-soft);
   background: var(--admin-color-warning-surface-subtle);
-  border: 1px solid var(--admin-color-warning-border-soft);
 }
 .image-editor-head .image-editor-save-badge.is-failed {
   color: var(--admin-color-danger-text);
   background: var(--admin-color-danger-surface);
-  border: 1px solid var(--admin-color-danger-border-strong);
 }
 
 @media (max-width: 760px) {

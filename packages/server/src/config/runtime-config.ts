@@ -106,6 +106,15 @@ const runtimeConfigSchema = z.strictObject({
     icp: siteFooterText,
     mps: siteFooterText,
     footer: siteFooter
+  }).superRefine((site, context) => {
+    // Every open public page falls back to the gallery.
+    if (!site.gallery.enabled && (site.home.enabled || site.show.enabled)) {
+      context.addIssue({
+        code: "custom",
+        message: "首页与展映都关闭后才能关闭画廊",
+        path: ["gallery", "enabled"]
+      });
+    }
   }),
   embed: z.strictObject({
     enabled: z.boolean(),

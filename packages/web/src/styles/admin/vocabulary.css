@@ -173,7 +173,7 @@
   gap: 10px;
   padding: 14px;
   border: 1px solid var(--admin-color-border-card);
-  border-radius: 6px;
+  border-radius: var(--admin-radius-control);
   background: var(--admin-color-surface-primary);
 }
 .vocabulary-item-identity {

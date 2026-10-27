@@ -10,7 +10,7 @@
   max-height: min(90dvh, 100%);
   overflow: auto;
   background: var(--admin-color-surface-primary);
-  border-radius: 8px;
+  border-radius: var(--admin-radius-container);
   padding: 18px;
   display: flex;
   flex-direction: column;

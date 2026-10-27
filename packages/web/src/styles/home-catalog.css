@@ -622,6 +622,10 @@
   color: var(--public-color-text-secondary);
 }
 
+.home-stats-state > .error-details {
+  margin: 0 auto 20px;
+}
+
 .home-stats-state > button {
   min-height: 40px;
   padding: 0 18px;

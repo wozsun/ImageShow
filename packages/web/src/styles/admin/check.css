@@ -22,7 +22,7 @@
   min-width: 0;
   padding: 16px;
   border: 1px solid var(--admin-color-border-default);
-  border-radius: 8px;
+  border-radius: var(--admin-radius-container);
   background: var(--admin-color-surface-primary);
 }
 .check-status-card.ok {
@@ -79,7 +79,7 @@
   margin-bottom: 16px;
   padding: 16px;
   border: 1px solid var(--admin-color-border-default);
-  border-radius: 8px;
+  border-radius: var(--admin-radius-container);
   background: var(--admin-color-surface-primary);
 }
 .ready-cache-panel.ok {
@@ -167,13 +167,13 @@
 .check-result section {
   background: var(--admin-color-surface-primary);
   border: 1px solid var(--admin-color-border-default);
-  border-radius: 8px;
+  border-radius: var(--admin-radius-container);
   padding: 14px;
 }
 .check-summary {
   margin-bottom: 16px;
   padding: 14px;
-  border-radius: 8px;
+  border-radius: var(--admin-radius-container);
   display: grid;
   gap: 4px;
   animation: surface-in 0.18s ease-out;
@@ -202,9 +202,12 @@
   margin: 0;
 }
 .check-card-head span {
-  padding: 4px 8px;
-  border-radius: 999px;
-  font-size: 13px;
+  height: var(--admin-badge-height);
+  padding: 0 var(--admin-badge-padding-inline);
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--admin-radius-pill);
+  font-size: var(--admin-badge-font-size);
   font-weight: 600;
 }
 .check-card.ok .check-card-head span {

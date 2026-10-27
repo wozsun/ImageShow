@@ -11,6 +11,7 @@ import type { AuthState } from "./lib/api/auth-session.js";
 import { initialSiteConfig, useSiteConfig, type SiteConfig } from "./lib/api/site-queries.js";
 import { QueryErrorState } from "./components/feedback/QueryErrorState.js";
 import { RouteLoadBoundary } from "./components/feedback/RouteLoadBoundary.js";
+import { imageBrowseNavigationHref } from "./lib/gallery/gallery-query.js";
 import { AppLoadingScreen } from "./components/feedback/AppLoadingScreen.js";
 import {
   createPageLifetimeModuleLoader,
@@ -99,14 +100,21 @@ function publicFallback(rootPath: ReturnType<typeof publicRootPath>) {
 /**
  * The element for a public path: the page it shows under the enable and
  * fallback rules, which the startup load and the server's preloads follow
- * too. The root path shows its page in place; other paths redirect to it.
+ * too. The root path shows its page in place; other paths redirect to it,
+ * keeping the browse choices a show or gallery target supports.
  */
-function publicPage(path: string, { site, embed }: SiteConfig) {
+function publicPage(path: string, { site, embed }: SiteConfig, search: string) {
   const target = publicPageTarget(site, embed.enabled, path);
   if (target === null) return <PublicPageNotFound />;
-  if (target !== path && path !== "/") return <Navigate to={target} replace />;
   const embedded = target.startsWith("/embed/");
   const page = embedded ? target.slice("/embed".length) : target;
+  if (target !== path && path !== "/") {
+    const browsePage = page === "/show" || page === "/gallery" ? page : null;
+    const href = browsePage
+      ? `${embedded ? "/embed" : ""}${imageBrowseNavigationHref(browsePage, search)}`
+      : target;
+    return <Navigate to={href} replace />;
+  }
   return page === "/home" ? (
     <HomePage embedded={embedded} site={site} />
   ) : page === "/show" ? (
@@ -136,6 +144,7 @@ export function AppRoutes() {
   const embedPaths = data.embed.enabled ? siteRoots.map((root) => `/embed/${root}`) : [];
   const showsItself = (path: string) =>
     publicPageTarget(data.site, data.embed.enabled, path) === path;
+  const pageElement = (path: string) => publicPage(path, data, routeLocation.search);
   return (
     <PublicRoutePreloadProvider intents={publicRoutePreloadIntents}>
       <RouteLoadBoundary resetKey={routeLocation.pathname} fullPage>
@@ -149,7 +158,7 @@ export function AppRoutes() {
               }
             >
               {["/", ...siteRoots.map((root) => `/${root}`)].map((path) => (
-                <Route key={path} path={path} element={publicPage(path, data)} />
+                <Route key={path} path={path} element={pageElement(path)} />
               ))}
               <Route
                 path={`${adminBasePath}/*`}
@@ -159,12 +168,12 @@ export function AppRoutes() {
             {embedPaths.some(showsItself) && (
               <Route element={<EmbeddedPageLayout />}>
                 {embedPaths.filter(showsItself).map((path) => (
-                  <Route key={path} path={path} element={publicPage(path, data)} />
+                  <Route key={path} path={path} element={pageElement(path)} />
                 ))}
               </Route>
             )}
             {embedPaths.filter((path) => !showsItself(path)).map((path) => (
-              <Route key={path} path={path} element={publicPage(path, data)} />
+              <Route key={path} path={path} element={pageElement(path)} />
             ))}
             <Route path="*" element={publicFallback(publicRootPath(data.site))} />
           </Routes>

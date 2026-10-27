@@ -41,7 +41,7 @@ export const settingsSections = {
   normalize: {
     column: "wide",
     title: "图片处理",
-    description: "三档独立生成 WebP。长边与目标体积须满足小图 ≤ 中图 ≤ 大图，最低质量不得高于初始质量。达到最低质量后允许超出体积目标。"
+    description: "三档分别生成 WebP，长边与目标体积须满足小图 ≤ 中图 ≤ 大图；降到最低质量后允许超出目标体积。"
   },
   admin: {
     column: "left",
@@ -51,7 +51,7 @@ export const settingsSections = {
   security: {
     column: "right",
     title: "登录与请求限制",
-    description: "会话时长影响后续签发的会话；限流调整影响后续请求，已有计数按各自窗口到期。随机 API 单次不超过“图片额度 ÷ 批量请求次数”（向下取整，至少 1）张时按张数计入图片额度，更多时计 1 次批量请求。"
+    description: "修改只影响之后签发的会话和之后的请求。随机 API 单次取图不超过“图片额度 ÷ 批量请求次数”（至少 1）张时按张计入图片额度，超过时计 1 次批量请求。"
   },
   altcha: {
     column: "left",
@@ -173,14 +173,14 @@ const settingsFields = {
     kind: "text",
     maxLength: 259,
     placeholder: "img.example.com",
-    hint: "不含协议和路径，可带端口。留空或 example.com 时接受有效访问 Host；设置后只接受主站及附加站点域名。"
+    hint: "不含协议和路径，可带端口；设置后只接受主站与附加站点域名，留空或 example.com 时不限制。"
   },
   "site.additional_domains": {
     group: "addresses",
     label: "附加站点域名",
     kind: "lines",
     placeholder: "alternate.example.net\npreview.example.org:8443",
-    hint: "每行一个域名，最多 32 项，不含协议和路径，可带端口。与主站共用数据，未配置独立公开地址的图片和静态资源随当前站点域名访问。请先自行配置 DNS、证书及 Nginx，回源保留访问域名。"
+    hint: "每行一个，最多 32 项，格式同主站域名。未配置独立公开地址的图片和静态资源随当前访问域名提供；DNS、证书与 Nginx 需自行配置，回源保留访问域名。"
   },
   "site.title": {
     group: "identity",
@@ -205,7 +205,7 @@ const settingsFields = {
     kind: "text",
     maxLength: 2048,
     placeholder: builtInSiteIconPath,
-    hint: "留空使用内置图标；可填站内绝对路径或 HTTPS URL，自定义图标放入 data/asset 后填写 /asset/文件名。该目录文件缓存 1 年，更换时请改用新文件名，同名覆盖需手动刷新 CDN 缓存。"
+    hint: "留空使用内置图标；可填站内绝对路径或 HTTPS URL，自定义图标放入 data/asset 后填写 /asset/文件名。该目录缓存 1 年，更换图标请用新文件名。"
   },
   "site.version.enabled": {
     group: "visibility",
@@ -230,7 +230,7 @@ const settingsFields = {
     label: "额外脚本来源",
     kind: "lines",
     placeholder: "https://*.cdn.example.net\nhttps://static.example.org/js/\nhttps://cdn.example.org/lib/widget.js",
-    hint: "所有页面额外允许加载脚本的来源，静态资源公开 URL 已自动允许。每行一个 HTTPS 地址，最多 32 项；支持最左侧子域通配符，可带路径：以 / 结尾表示该目录，否则只匹配该文件。不含参数。保存后刷新页面生效。"
+    hint: "各页面额外允许的脚本来源，静态资源公开 URL 已自动允许。每行一个 HTTPS 地址，最多 32 项，不含参数；可用最左侧子域通配符，路径以 / 结尾匹配该目录，否则只匹配该文件。刷新页面后生效。"
   },
   "site.robots_enabled": {
     group: "visibility",
@@ -701,6 +701,22 @@ export function settingsValidationFailure(
       : unmatched[0]
     : `${total} 项配置有误：${[...summaries, ...unmatched].join("、")}`;
   return { fieldErrors, message };
+}
+
+/**
+ * Why a field cannot change in this draft, shown in place of its hint. Any
+ * open public page falls back to the gallery, so the gallery closes after the
+ * home and show pages and opens before them; the server enforces the same rule.
+ */
+export function settingsFieldLockReason(config: RuntimeConfig, path: SettingsFieldPath) {
+  const { home, show, gallery } = config.site;
+  if (path === "site.gallery.enabled" && gallery.enabled && (home.enabled || show.enabled)) {
+    return "首页与展映都关闭后才能关闭";
+  }
+  if ((path === "site.home.enabled" || path === "site.show.enabled") && !gallery.enabled) {
+    return "需先启用画廊";
+  }
+  return null;
 }
 
 export function settingsFieldValue(config: RuntimeConfig, path: SettingsFieldPath): unknown {

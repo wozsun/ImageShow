@@ -158,6 +158,7 @@ export function GalleryPage({
   const initialLoading = !filterError && (!filtersReady || galleryData.initialLoading);
   const nextPageLoading = filtersReady && galleryData.nextPageLoading;
   const loading = initialLoading || nextPageLoading;
+  const windowError = galleryData.snapshot.errorRequest?.kind === "hydrate";
   const showBackToTop = backToTopVisible && !dialogOpen;
 
   const openDetail = useCallback((
@@ -275,14 +276,13 @@ export function GalleryPage({
           </div>
         )}
         {filtersReady && galleryData.snapshot.error && (
-          <div
-            className={`gallery-query-error${
-              galleryData.snapshot.errorRequest?.kind === "hydrate"
-                  ? " gallery-window-error"
-                  : ""
-            }`}
-          >
-            <QueryErrorState error={galleryData.snapshot.error} onRetry={galleryData.retry} />
+          <div className={`gallery-query-error${windowError ? " gallery-window-error" : ""}`}>
+            {/* Restoring scrolled-past images floats over the gallery, which stays usable. */}
+            <QueryErrorState
+              error={galleryData.snapshot.error}
+              onRetry={galleryData.retry}
+              details={!windowError}
+            />
           </div>
         )}
         {filtersReady &&

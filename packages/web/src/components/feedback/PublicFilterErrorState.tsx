@@ -1,4 +1,5 @@
 import { TagFilterError } from "@imageshow/shared/browser";
+import { ErrorDetails } from "./ErrorDetails.js";
 import {
   GallerySelectorError,
   gallerySelectorLabels,
@@ -19,14 +20,16 @@ export function PublicFilterErrorState({
   const field = selectorError?.field ?? "tag";
   const label = selectorError ? gallerySelectorLabels[selectorError.field] : "标签";
   return (
-    <div className="query-error-state" role="alert">
-      <p>
+    <div className="query-error-state">
+      <p role="alert">
         {selectorError
           ? selectorError.message
           : tagError
             ? `标签筛选错误：${tagError.message}`
             : "标签词表读取失败，请刷新后重试"}
       </p>
+      {/* A filter the visitor can correct is not a fault; a failed vocabulary read is. */}
+      {!selectorError && !tagError && <ErrorDetails error={error} />}
       {!selectorError && (!tagError || tagError.kind === "unknown") && (
         <button type="button" onClick={onRetry}>
           刷新标签并重试

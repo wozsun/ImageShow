@@ -103,7 +103,6 @@
   --admin-color-warning-surface-strong: light-dark(#f9e7af, #322811);
   --admin-color-warning-border: light-dark(#f0d38a, #7d661c);
   --admin-color-warning-border-soft: light-dark(#d8bc70, #86745d);
-  --admin-color-warning-border-strong: light-dark(#ecc659, #9e7f24);
 
   /* Status: danger */
   --admin-color-danger-text: light-dark(#a12b2b, #cc7975);

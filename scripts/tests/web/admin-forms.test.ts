@@ -269,7 +269,7 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
       }
       const alert = container.querySelector('[role="alert"]');
       assert.ok(alert);
-      assert.match(alert.className, /\bcenter\b/);
+      assert.match(alert.closest(".query-error-state")?.className ?? "", /\bcenter\b/);
       assert.match(alert.textContent ?? "", /加载失败，请稍后重试/);
       assert.equal(document.documentElement.dataset.uiContext, "bootstrap");
       await React.act(async () => root.unmount());

@@ -68,7 +68,7 @@ export function HomePage({
   site
 }: {
   embedded?: boolean;
-  site: Pick<PublicSiteSettings, "home" | "show" | "gallery" | "icp" | "mps" | "footer">;
+  site: Pick<PublicSiteSettings, "home" | "show" | "icp" | "mps" | "footer">;
 }) {
   const catalogRef = useRef<HTMLElement>(null);
   const {
@@ -188,6 +188,7 @@ export function HomePage({
         facets={facets}
         isPending={statsQuery.isPending || facetsQuery.isPending}
         isError={catalogFailed}
+        error={statsQuery.error ?? facetsQuery.error}
         isRefreshing={statsQuery.isFetching}
         availabilityUnverified={statsQuery.availabilityUnverified}
         onFiltersChange={updateFilters}

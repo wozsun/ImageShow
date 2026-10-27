@@ -57,7 +57,6 @@ export function AppHeader({
 
   const homeEnabled = data?.site?.home?.enabled === true;
   const showEnabled = data?.site?.show?.enabled === true;
-  const galleryEnabled = data?.site?.gallery?.enabled === true;
   const rootPath = data?.site ? publicRootPath(data.site) : null;
   const showAdminEntry = Boolean(auth?.authenticated);
   const publicRoutePreloadIntents = usePublicRoutePreloadIntents();
@@ -170,16 +169,14 @@ export function AppHeader({
             展映
           </NavLink>
         )}
-        {galleryEnabled && (
-          <NavLink
-            to={galleryHref}
-            className={navClassName("/gallery")}
-            {...galleryPreloadProps}
-          >
-            <Icon name="image-line" />
-            画廊
-          </NavLink>
-        )}
+        <NavLink
+          to={galleryHref}
+          className={navClassName("/gallery")}
+          {...galleryPreloadProps}
+        >
+          <Icon name="image-line" />
+          画廊
+        </NavLink>
         {showAdminEntry && (
           <NavLink to={adminBasePath}>
             <Icon name="settings-3-line" />
@@ -204,16 +201,14 @@ export function AppHeader({
             展映
           </NavLink>
         )}
-        {galleryEnabled && (
-          <NavLink
-            to={galleryHref}
-            className={navClassName("/gallery")}
-            {...galleryPreloadProps}
-          >
-            <Icon name="image-line" />
-            画廊
-          </NavLink>
-        )}
+        <NavLink
+          to={galleryHref}
+          className={navClassName("/gallery")}
+          {...galleryPreloadProps}
+        >
+          <Icon name="image-line" />
+          画廊
+        </NavLink>
         {showAdminEntry && (
           <NavLink to={adminBasePath}>
             <Icon name="settings-3-line" />

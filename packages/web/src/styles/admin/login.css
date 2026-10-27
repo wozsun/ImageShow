@@ -49,6 +49,7 @@ body:has(.login) {
   backdrop-filter: blur(6px) saturate(110%);
   padding: 24px;
   border: 1px solid var(--admin-color-border-default);
+  /* 容器档圆角：登录页先于声明圆角变量的后台核心样式加载，这里直接写值。 */
   border-radius: 8px;
   animation: login-surface-in 0.2s ease-out;
   transition: top 80ms ease-out;

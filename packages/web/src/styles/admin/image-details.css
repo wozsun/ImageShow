@@ -79,6 +79,7 @@
   margin-top: 6px;
   padding: 12px;
   border: 1px solid var(--color-detail-panel-border);
+  /* 容器档圆角：公开详情只加载本文件、不带后台核心样式，这里直接写值。 */
   border-radius: 8px;
   background: var(--color-detail-surface-raised);
 }
