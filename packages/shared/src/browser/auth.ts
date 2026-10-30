@@ -1,6 +1,7 @@
 import type { AdminPreferences } from "./admin.ts";
 import type { SiteVersionSettings } from "./settings.ts";
 
+// Ordinary clients get up to one minute to solve a login challenge.
 export const altchaSolveTimeoutMs = 60_000;
 
 export type AdminRole = "super" | "image";

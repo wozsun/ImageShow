@@ -37,14 +37,13 @@ function currentViewportHeight() {
 }
 
 function createRuntime(): Omit<GalleryImageRuntimeValue, "galleryPaused"> {
-  const concurrency = window.matchMedia
-    ? preferredImageLoadConcurrency(window.matchMedia.bind(window))
-    : 6;
-  const scheduler = new ImageLoadScheduler(concurrency);
+  const scheduler = new ImageLoadScheduler(
+    preferredImageLoadConcurrency(window.matchMedia.bind(window))
+  );
   return {
     scheduler,
     visibility: new GalleryImageVisibilityController(currentViewportHeight()),
-    debug: import.meta.env?.DEV === true
+    debug: import.meta.env.DEV
       ? new GalleryDebugStats(scheduler)
       : null
   };
@@ -95,7 +94,7 @@ export function GalleryImageRuntime({
 }) {
   const [runtime] = useState(createRuntime);
   const previousResetKeyRef = useRef(resetKey);
-  const development = import.meta.env?.DEV === true;
+  const development = import.meta.env.DEV;
 
   useLayoutEffect(() => {
     if (detailOpen) {
@@ -109,7 +108,7 @@ export function GalleryImageRuntime({
   }, [detailOpen, runtime]);
 
   useLayoutEffect(() => {
-    if (import.meta.env?.DEV !== true) return;
+    if (!import.meta.env.DEV) return;
     if (previousResetKeyRef.current === resetKey) return;
     previousResetKeyRef.current = resetKey;
     runtime.debug?.resetThumbnailFallbacks();
@@ -130,7 +129,6 @@ export function GalleryImageRuntime({
   }, [runtime]);
 
   useEffect(() => {
-    if (!window.matchMedia) return;
     const fine = window.matchMedia("(pointer: fine)");
     const wide = window.matchMedia("(min-width: 1024px)");
     const updateConcurrency = () => {

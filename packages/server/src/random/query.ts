@@ -1,15 +1,16 @@
 import { appConfig } from "@imageshow/shared";
 import {
+  TagFilterError,
   normalizeTagExpression,
   parseTagFilter,
-  TagFilterError,
-  type TagExpression,
-  randomMethods as randomMethodValues,
+  randomFallbackDimensions,
   randomImageSizes,
+  randomMethods as randomMethodValues,
+  randomQueryLimits,
   slugMaxLength,
   slugPattern,
   unsetSelector,
-  randomFallbackDimensions,
+  type TagExpression,
   type RandomFallbackDimension,
   type RandomImageSize,
   type RandomDefaultMethod,
@@ -176,12 +177,12 @@ function parseSelectorGroup(
         );
       }
       submittedCount += 1;
-      if (submittedCount > appConfig.randomQuery.maxSelectorsPerField) {
+      if (submittedCount > randomQueryLimits.maxSelectorsPerField) {
         return apiErrorResponse(
           { status: 400, message: "Bad Request: Too many selectors" },
           {
             field,
-            maxSelectors: appConfig.randomQuery.maxSelectorsPerField
+            maxSelectors: randomQueryLimits.maxSelectorsPerField
           }
         );
       }
@@ -227,12 +228,12 @@ function parseRandomTagFilter(values: readonly string[]) {
     });
     return included.length ? [`${all ? "all:" : ""}${included.join(",")}`] : [];
   });
-  if (segments > appConfig.randomQuery.maxSelectorsPerField) {
+  if (segments > randomQueryLimits.maxSelectorsPerField) {
     throw new TagFilterError("标签条件超过段数限制");
   }
   const parsed = parseTagFilter(positive, "mixed");
   const termCount = parsed.termCount + exclude.size;
-  if (termCount > appConfig.randomQuery.maxSelectorsPerField) {
+  if (termCount > randomQueryLimits.maxSelectorsPerField) {
     throw new TagFilterError("标签词项去重后最多 32 个");
   }
   return { expression: parsed.expression, exclude: [...exclude].sort(), termCount };
@@ -243,12 +244,12 @@ function parseLimitCount(raw: string): number | null {
   if (!/^\d+$/u.test(raw)) return null;
   const significant = raw.replace(/^0+/u, "");
   if (!significant) return null;
-  const maximum = String(appConfig.randomQuery.maxJsonItems);
+  const maximum = String(randomQueryLimits.maxJsonItems);
   if (
     significant.length > maximum.length ||
     (significant.length === maximum.length && significant > maximum)
   ) {
-    return appConfig.randomQuery.maxJsonItems;
+    return randomQueryLimits.maxJsonItems;
   }
   return Number(significant);
 }
@@ -302,12 +303,12 @@ function parseTargetedIds(query: URLSearchParams): string[] | Response {
       const value = rawPart.trim();
       if (!value) continue;
       submittedCount += 1;
-      if (submittedCount > appConfig.randomQuery.maxSelectorsPerField) {
+      if (submittedCount > randomQueryLimits.maxSelectorsPerField) {
         return apiErrorResponse(
           { status: 400, message: "Bad Request: Too many selectors" },
           {
             field: "id",
-            maxSelectors: appConfig.randomQuery.maxSelectorsPerField
+            maxSelectors: randomQueryLimits.maxSelectorsPerField
           }
         );
       }
@@ -339,11 +340,11 @@ function parseTargetedIds(query: URLSearchParams): string[] | Response {
 function parseGroups(query: URLSearchParams): string[] | Response {
   const submitted = query.getAll("group").flatMap((value) => value.split(","))
     .map((value) => value.trim().toLowerCase()).filter(Boolean);
-  if (!submitted.length || submitted.length > appConfig.randomQuery.maxSelectorsPerField
+  if (!submitted.length || submitted.length > randomQueryLimits.maxSelectorsPerField
     || submitted.some((slug) => slug.length > slugMaxLength || !slugPattern.test(slug))) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Invalid group" },
-      { field: "group", maxSelectors: appConfig.randomQuery.maxSelectorsPerField, hint: "Use group slugs" }
+      { field: "group", maxSelectors: randomQueryLimits.maxSelectorsPerField, hint: "Use group slugs" }
     );
   }
   return [...new Set(submitted)].sort();
@@ -355,13 +356,13 @@ function parseSeed(query: URLSearchParams): string | null | Response {
   if (
     !seed.trim() ||
     disallowedSelectorCharacters.test(seed) ||
-    [...seed].length > appConfig.randomQuery.maxSeedCharacters
+    [...seed].length > randomQueryLimits.maxSeedCharacters
   ) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Invalid seed" },
       {
         field: "seed",
-        maxCharacters: appConfig.randomQuery.maxSeedCharacters,
+        maxCharacters: randomQueryLimits.maxSeedCharacters,
         hint: "Use a non-blank string without control characters"
       }
     );
@@ -411,10 +412,10 @@ export function parseRandomQuery(
 ): ParsedRandomQuery | Response {
   const rawQuery = url.search.startsWith("?") ? url.search.slice(1) : url.search;
   const rawBytes = Buffer.byteLength(rawQuery, "utf8");
-  if (rawBytes > appConfig.randomQuery.maxRawBytes) {
+  if (rawBytes > randomQueryLimits.maxRawBytes) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Query string is too large" },
-      { maxBytes: appConfig.randomQuery.maxRawBytes }
+      { maxBytes: randomQueryLimits.maxRawBytes }
     );
   }
 
@@ -473,10 +474,10 @@ export function parseRandomQuery(
   const author = parseSelectorGroup(query, "author");
   if (author instanceof Response) return author;
   const selectorCount = theme.submittedCount + tag.termCount + author.submittedCount;
-  if (selectorCount > appConfig.randomQuery.maxSelectorCount) {
+  if (selectorCount > randomQueryLimits.maxSelectorCount) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Too many selectors" },
-      { maxSelectors: appConfig.randomQuery.maxSelectorCount }
+      { maxSelectors: randomQueryLimits.maxSelectorCount }
     );
   }
 

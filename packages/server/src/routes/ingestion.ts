@@ -1,19 +1,20 @@
 import type { Context, Hono } from "hono";
 import { appConfig } from "@imageshow/shared";
 import {
-  ingestionActionScopeHeader,
+  importAcceptPath,
+  importJsonlParsePath,
+  importWeiboParsePath,
   ingestionActionPath,
+  ingestionActionScopeHeader,
   ingestionCancelPath,
   ingestionCommitPath,
   ingestionDuplicatesPath,
   ingestionEventsPath,
+  ingestionPreviewPath,
+  ingestionQueueSnapshotMaxItems,
   ingestionSnapshotPath,
   ingestionStatusPath,
   ingestionUpdatePath,
-  importAcceptPath,
-  importJsonlParsePath,
-  importWeiboParsePath,
-  ingestionPreviewPath,
   ingestionVocabularyPath,
   uploadCredentialHeader,
   uploadIntentPath,
@@ -141,7 +142,7 @@ export function registerIngestionRoutes(app: Hono) {
       ingestionSnapshotSelectionInput,
       await readJsonBody(c)
     );
-    if (limit + selection.include_items.length > appConfig.ingestionRuntime.snapshotMaxItems) {
+    if (limit + selection.include_items.length > ingestionQueueSnapshotMaxItems) {
       throw new ApiError(
         400,
         "invalid_ingestion_snapshot",

@@ -36,7 +36,7 @@ npm run verify:release
 
 | 命令 | 范围与前提 |
 | --- | --- |
-| `npm run verify:source` | 生产与测试源码类型、无用代码、依赖方向、配置与版本一致性、生成图标、文档链接与语义颜色；已安装依赖 |
+| `npm run verify:source` | 生产与测试源码类型、无用代码（含只被测试引用的导出）、依赖方向、配置与版本一致性、生成图标、文档链接与语义颜色；已安装依赖 |
 | `npm run verify:build` | 生产构建与 Web 产物边界；已安装依赖 |
 | `npm run verify:runtime` | Server / Web 测试与隔离生产镜像；先完成项目构建 |
 | `npm run verify:release` | 按 source → build → runtime 依次运行，失败即停 |
@@ -83,7 +83,7 @@ PowerShell 中使用 `$env:IMAGESHOW_DATABASE_SCENARIO = "cold-redis"`、`$env:I
 | 正式提交 | `ingestion-commit-guards`、`commit-success`、`commit-conflict`、`commit-recovery` |
 | 接入文件生命周期 | `ingestion-raw-lifecycle`、`ingestion-orphan-lifecycle` |
 
-Web 定向命令使用 `--import ./scripts/tests/support/web-assets.mjs` 加载组件样式桩；真实 CSS 排版由浏览器验收覆盖，`test:web` 已包含此选项。
+Web 定向命令使用 `--import ./scripts/tests/support/web-assets.mjs` 加载组件样式桩，并按生产构建的取值注入 `import.meta.env`；真实 CSS 排版由浏览器验收覆盖，`test:web` 已包含此选项。
 
 Web 队列场景值为 `strict-mode`、`empty-reconnect`、`reconnect-pagination`、`handoff-completion`。不设置变量时执行完整场景，未知值会失败而不是产生零测试通过。
 

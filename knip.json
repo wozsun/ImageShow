@@ -30,12 +30,16 @@
       ]
     },
     "packages/shared": {
+      "project": ["src/**/*.ts!"],
       "includeEntryExports": true
     },
     "packages/server": {
-      "entry": ["src/index.ts", "src/healthcheck-cli.ts"]
+      "entry": ["src/index.ts!", "src/*-cli.ts!"],
+      "project": ["src/**/*.ts!"]
     },
     "packages/web": {
+      "entry": ["index.html!"],
+      "project": ["src/**/*.{ts,tsx}!", "*.ts"],
       "ignoreDependencies": ["remixicon"]
     }
   }

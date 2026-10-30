@@ -1,7 +1,7 @@
 import {
   readableFilterSearch,
   type PublicImageListResponseDto,
-  type ShowOrder,
+  type PublicImageOrder,
   type EditableImageSnapshotDto
 } from "@imageshow/shared/browser";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -26,7 +26,7 @@ const recentLimit = 2_000;
 export function useShowData(
   filters: GalleryFilters,
   sourceKey: string,
-  order: ShowOrder,
+  order: PublicImageOrder,
   initialLimit = 200,
   enabled = true
 ) {

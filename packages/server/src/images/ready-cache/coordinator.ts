@@ -32,6 +32,19 @@ export function getReadyImageCacheCoordinatorStatus() {
   return coordinator.getStatus();
 }
 
+/** The projection revision public reads may use, or null while the cache is not readable and ready. */
+export function readyImageCacheRevision() {
+  const status = coordinator.getStatus();
+  return status.readable && status.meta?.state === "ready"
+    ? status.meta.appliedRevision
+    : null;
+}
+
+/** Item count recorded in the last projection meta; unlike the revision it does not require a readable cache. */
+export function readyImageCacheItemCount() {
+  return coordinator.getStatus().meta?.itemCount ?? 0;
+}
+
 export function reportReadyImageCacheFailure(error: unknown) {
   coordinator.reportFailure(error);
 }

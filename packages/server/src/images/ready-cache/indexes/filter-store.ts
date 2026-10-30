@@ -5,7 +5,10 @@ import {
   type ReadyImageFilterSetOperation
 } from "../redis/commands.ts";
 import { execRedisPipeline } from "../../../core/redis/pipeline.ts";
-import { getReadyImageCacheCoordinatorStatus } from "../coordinator.ts";
+import {
+  getReadyImageCacheCoordinatorStatus,
+  readyImageCacheRevision
+} from "../coordinator.ts";
 import {
   discardReadyImageDerivedResult,
   registerReadyImageDerivedResult,
@@ -37,13 +40,6 @@ export type ReadyImageFilterIndex = ReadyImageResolvedIndex &
     | { kind: "attribute"; count: number; metaKey: string; instanceToken: string }
     | { kind: "filter"; count: number; metaKey: string; instanceToken: string }
   );
-
-function currentRevision() {
-  const status = getReadyImageCacheCoordinatorStatus();
-  return status.readable && status.meta?.state === "ready"
-    ? status.meta.appliedRevision
-    : null;
-}
 
 export async function storeReadyImageFilterSetOperation(
   command: ReadyImageFilterSetOperation,
@@ -177,7 +173,7 @@ export async function publishReadyImageFilterIndex(options: {
         count: options.count,
         itemCount: status.meta.itemCount
       });
-      if (!retained || currentRevision() !== options.revision) {
+      if (!retained || readyImageCacheRevision() !== options.revision) {
         await discardReadyImageDerivedResult(finalKey, "filter");
         return null;
       }

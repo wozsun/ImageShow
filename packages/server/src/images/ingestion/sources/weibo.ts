@@ -50,6 +50,7 @@ const weiboRequestScheduler = createWeiboRequestScheduler({
   }
 });
 
+/** @internal Exported only so contract tests can cover it directly. */
 export function weiboPostToJsonl(
   post: ExtractedWeiboPost,
   sourceEnabled: boolean,

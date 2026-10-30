@@ -400,18 +400,7 @@ test("[Web/共享交互] 直接激活在键盘视口中延后目标聚焦并区�
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   const dispatch = (target: Element, type: string, properties: object) => {
     const event = new window.Event(type, {
@@ -1069,13 +1058,7 @@ test("[Web/共享交互] 直接激活在键盘视口中延后目标聚焦并区�
     await React.act(async () => root.unmount());
   } finally {
     for (const timer of frameTimers.values()) clearTimeout(timer);
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/共享交互] 图片成员已知结果必须先呈现再刷新移出当前标签页", async () => {
@@ -1223,18 +1206,7 @@ test("[Web/共享交互] 弹窗触摸边界按意图区分纵向与标签横向 
     Element: window.Element,
     HTMLElement: window.HTMLElement
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   const frame = document.getElementById("frame") as HTMLElement;
   const article = document.getElementById("article") as HTMLElement;
@@ -1394,13 +1366,7 @@ test("[Web/共享交互] 弹窗触摸边界按意图区分纵向与标签横向 
       "无溢出输入框的横向文本手势不得被显式取消"
     );
   } finally {
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/共享交互] 页面滚动 Effect Event 更新回调时不重绑监听器并清理待执行帧", async (t) => {
@@ -1489,18 +1455,7 @@ test("[Web/共享交互] 页面滚动 Effect Event 更新回调时不重绑监�
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   try {
     const { createRoot } = await import("react-dom/client");
@@ -1560,13 +1515,7 @@ test("[Web/共享交互] 页面滚动 Effect Event 更新回调时不重绑监�
     assert.equal(activeScrollListeners.size, 0);
     assert.equal(scrollListenerRemoves, scrollListenerAdds);
   } finally {
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/共享交互] 共享页面锁计数化冻结根节点并按层级归还滚动与焦点", async (t) => {
@@ -1665,18 +1614,7 @@ test("[Web/共享交互] 共享页面锁计数化冻结根节点并按层级归�
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   try {
     const { createRoot } = await import("react-dom/client");
@@ -1928,12 +1866,6 @@ test("[Web/共享交互] 共享页面锁计数化冻结根节点并按层级归�
   } finally {
     window.HTMLElement.prototype.focus = originalFocus;
     window.HTMLElement.prototype.blur = originalBlur;
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });

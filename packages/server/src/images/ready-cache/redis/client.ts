@@ -43,6 +43,7 @@ const readyImageRedisScripts = Object.freeze({
 export type ReadyImageRedisCommandName = keyof typeof readyImageRedisScripts;
 type ReadyImageRedisCommand = (...arguments_: Array<string | number>) => Promise<unknown>;
 
+/** @internal Exported only so contract tests can cover it directly. */
 export type ReadyImageRedisClient = Readonly<
   Record<ReadyImageRedisCommandName, ReadyImageRedisCommand>
 >;
@@ -56,6 +57,7 @@ function readyImageRedisCandidate(client: object) {
   return client as Record<string, unknown>;
 }
 
+/** @internal Exported only so contract tests can cover it directly. */
 export function registerReadyImageRedisCommands(
   client: ReadyImageRedisRegistrar
 ): ReadyImageRedisClient {

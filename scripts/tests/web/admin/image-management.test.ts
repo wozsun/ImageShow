@@ -17,6 +17,8 @@ import { queryKeys } from "../../../../packages/web/src/lib/api/query-keys.ts";
 
 import { adminImageListItem } from "../../support/web-test-context.ts";
 import { inputText } from "../../support/dom-events.ts";
+import { installProperties } from "../../support/property-descriptors.ts";
+import { settleReactUntil } from "../../support/polling.ts";
 
 test("[Web/后台] 概览渲染当前、历史与未知 Redis 占用且重建结束只刷新一次", async () => {
   const React = await import("react");
@@ -24,19 +26,8 @@ test("[Web/后台] 概览渲染当前、历史与未知 Redis 占用且重建结
   const { renderToStaticMarkup } = await import("react-dom/server");
   const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
   const { MemoryRouter } = await import("react-router");
-  const { registerHooks } = await import("node:module");
-  const cssHooks = registerHooks({
-    load(url, context, nextLoad) {
-      if (url.endsWith(".css")) {
-        return { format: "module", source: "", shortCircuit: true };
-      }
-      return nextLoad(url, context);
-    }
-  });
   const { Overview } =
-    await import("../../../../packages/web/src/pages/admin/overview/Overview.tsx").finally(() =>
-      cssHooks.deregister()
-    );
+    await import("../../../../packages/web/src/pages/admin/overview/Overview.tsx");
   const { ActionFeedbackProvider } =
     await import("../../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
 
@@ -259,18 +250,7 @@ test("[Web/后台] 概览渲染当前、历史与未知 Redis 占用且重建结
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } }
   });
@@ -278,15 +258,8 @@ test("[Web/后台] 概览渲染当前、历史与未知 Redis 占用且重建结
   const container = document.getElementById("root");
   assert.ok(container);
   const root = createRoot(container);
-  const settleUntil = async (predicate: () => boolean) => {
-    for (let attempt = 0; attempt < 50; attempt += 1) {
-      if (predicate()) return;
-      await React.act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0));
-      });
-    }
-    assert.fail("overview transition did not settle");
-  };
+  const settleUntil = (predicate: () => boolean) =>
+    settleReactUntil(predicate, "overview transition did not settle");
 
   try {
     await React.act(async () => {
@@ -329,13 +302,7 @@ test("[Web/后台] 概览渲染当前、历史与未知 Redis 占用且重建结
   } finally {
     await React.act(async () => root.unmount());
     client.clear();
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/后台] 图片详情根据链接显示原图并保持来源、标题和后台入口", async () => {
@@ -412,31 +379,9 @@ test("[Web/后台] 图片详情根据链接显示原图并保持来源、标题�
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
-  let deregisterCssHooks = () => {};
   try {
-    const { registerHooks } = await import("node:module");
-    const cssHooks = registerHooks({
-      load(url, context, nextLoad) {
-        if (url.endsWith(".css")) {
-          return { format: "module", source: "", shortCircuit: true };
-        }
-        return nextLoad(url, context);
-      }
-    });
-    deregisterCssHooks = () => cssHooks.deregister();
     const { createRoot } = await import("react-dom/client");
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
     const { MemoryRouter } = await import("react-router");
@@ -716,15 +661,8 @@ test("[Web/后台] 图片详情根据链接显示原图并保持来源、标题�
   } finally {
     window.HTMLElement.prototype.focus = originalFocus;
     window.HTMLElement.prototype.blur = originalBlur;
-    deregisterCssHooks();
     clearCsrfToken();
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/后台] 作者列表空闲时保存采用权威 DTO，新建前置且不追加列表读取", async () => {
@@ -810,31 +748,9 @@ test("[Web/后台] 作者列表空闲时保存采用权威 DTO，新建前置且
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
-  let deregisterCssHooks = () => {};
   try {
-    const { registerHooks } = await import("node:module");
-    const cssHooks = registerHooks({
-      load(url, context, nextLoad) {
-        if (url.endsWith(".css")) {
-          return { format: "module", source: "", shortCircuit: true };
-        }
-        return nextLoad(url, context);
-      }
-    });
-    deregisterCssHooks = () => cssHooks.deregister();
     const { createRoot } = await import("react-dom/client");
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
     const { MemoryRouter } = await import("react-router");
@@ -874,17 +790,13 @@ test("[Web/后台] 作者列表空闲时保存采用权威 DTO，新建前置且
     const container = document.getElementById("root");
     assert.ok(container);
     const root = createRoot(container);
-    const settleUntil = async (predicate: () => boolean) => {
-      for (let attempt = 0; attempt < 100; attempt += 1) {
-        if (predicate()) return;
-        await React.act(async () => {
-          await new Promise((resolve) => setTimeout(resolve, 5));
-        });
-      }
-      assert.fail(
-        `author profile save did not settle; requests=${requestedAuthorPaths.join(",")}; html=${container.innerHTML}`
+    const settleUntil = (predicate: () => boolean) =>
+      settleReactUntil(
+        predicate,
+        () =>
+          `author profile save did not settle; requests=${requestedAuthorPaths.join(",")}; html=${container.innerHTML}`,
+        { delayMs: 5 }
       );
-    };
     try {
       await React.act(async () => {
         root.render(
@@ -1011,14 +923,7 @@ test("[Web/后台] 作者列表空闲时保存采用权威 DTO，新建前置且
       client.clear();
     }
   } finally {
-    deregisterCssHooks();
     clearCsrfToken();
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });

@@ -15,6 +15,8 @@ import {
   adminImageListItem
 } from "../../support/web-test-context.ts";
 import { installControlledClock } from "../../support/controlled-clock.ts";
+import { installProperties } from "../../support/property-descriptors.ts";
+import { settleReactUntil } from "../../support/polling.ts";
 
 const selectedQueueScenario = process.env.IMAGESHOW_WEB_QUEUE_SCENARIO;
 const queueScenarioIds = new Set([
@@ -145,18 +147,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   try {
     const { createRoot } = await import("react-dom/client");
@@ -1056,15 +1047,11 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
         watermark: string;
         error: string;
       };
-    const settleUntil = async (predicate: () => boolean) => {
-      for (let attempt = 0; attempt < 50; attempt += 1) {
-        if (predicate()) return;
-        await React.act(async () => {
-          await new Promise((resolve) => setTimeout(resolve, 0));
-        });
-      }
-      assert.fail(
-        `Server Ingestion queue Hook did not settle: ${container.textContent}; ` +
+    const settleUntil = (predicate: () => boolean) =>
+      settleReactUntil(
+        predicate,
+        () =>
+          `Server Ingestion queue Hook did not settle: ${container.textContent}; ` +
           `pending=${requests
             .filter((request) => !request.aborted
               && !request.resolved)
@@ -1086,7 +1073,6 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             })
             .join(",")}`
       );
-    };
     const respond = (
       request: PendingSnapshot,
       payload: Record<string, unknown>
@@ -5992,12 +5978,6 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
       queryClient.clear();
     }
   } finally {
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });

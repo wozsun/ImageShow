@@ -33,6 +33,8 @@ import {
   adminImageListItem,
   createConfigStreamHarness
 } from "../../support/web-test-context.ts";
+import { installProperties } from "../../support/property-descriptors.ts";
+import { settleReactUntil } from "../../support/polling.ts";
 
 test("[Web/内容接入] placeholder 草稿按批写回并自动跨越 worker 版本推进", async () => {
   const { window, document } = parseHTML(
@@ -156,18 +158,7 @@ test("[Web/内容接入] placeholder 草稿按批写回并自动跨越 worker �
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
   try {
     const { createRoot } = await import("react-dom/client");
     const { useStoredIngestionDraftSync } =
@@ -249,13 +240,7 @@ test("[Web/内容接入] placeholder 草稿按批写回并自动跨越 worker �
     assert.deepEqual(errors, []);
     await React.act(async () => root.unmount());
   } finally {
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/内容接入] 未知 completed 交接在 status 失败后可显式重试", async () => {
@@ -350,18 +335,7 @@ test("[Web/内容接入] 未知 completed 交接在 status 失败后可显式重
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   try {
     const { createRoot } = await import("react-dom/client");
@@ -405,15 +379,8 @@ test("[Web/内容接入] 未知 completed 交接在 status 失败后可显式重
     const container = document.getElementById("root");
     assert.ok(container);
     const root = createRoot(container);
-    const settleUntil = async (predicate: () => boolean) => {
-      for (let attempt = 0; attempt < 50; attempt += 1) {
-        if (predicate()) return;
-        await React.act(async () => {
-          await new Promise((resolve) => setTimeout(resolve, 0));
-        });
-      }
-      assert.fail("authority handoff retry did not settle");
-    };
+    const settleUntil = (predicate: () => boolean) =>
+      settleReactUntil(predicate, "authority handoff retry did not settle");
     await React.act(async () => {
       root.render(React.createElement(Probe));
       await Promise.resolve();
@@ -660,13 +627,7 @@ test("[Web/内容接入] 未知 completed 交接在 status 失败后可显式重
     assert.equal(container.textContent, "false");
     await React.act(async () => root.unmount());
   } finally {
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/内容接入] 取消只在服务端明确丢弃后报告成功", async () => {
@@ -837,18 +798,7 @@ test("[Web/内容接入] 清空队列按 pair 合并 placeholder 与同一 Serve
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   try {
     const { createRoot } = await import("react-dom/client");
@@ -1527,13 +1477,7 @@ test("[Web/内容接入] 清空队列按 pair 合并 placeholder 与同一 Serve
     );
     await React.act(async () => root.unmount());
   } finally {
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/内容接入] Import 批次清空只等待一次 accept 并聚合 50+ 取消", async () => {
@@ -1610,18 +1554,7 @@ test("[Web/内容接入] Import 批次清空只等待一次 accept 并聚合 50+
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   try {
     setCsrfToken("import-batch-cancel-token");
@@ -1753,13 +1686,7 @@ test("[Web/内容接入] Import 批次清空只等待一次 accept 并聚合 50+
     await React.act(async () => root.unmount());
   } finally {
     clearCsrfToken();
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/内容接入] 解析后 202 张按上限接管，明确拒绝与未知结果均可安全清空", async (t) => {

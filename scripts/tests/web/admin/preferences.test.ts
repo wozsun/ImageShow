@@ -12,6 +12,7 @@ import {
 import { queryKeys } from "../../../../packages/web/src/lib/api/query-keys.ts";
 
 import { createConfigStreamHarness } from "../../support/web-test-context.ts";
+import { installProperties } from "../../support/property-descriptors.ts";
 
 test("[Web/后台] 独立视图偏好默认卡片，接收跨窗口 pending 只同步外观并支持重入恢复", async (t) => {
   const h = await createConfigStreamHarness(t);
@@ -379,18 +380,7 @@ test("[Web/后台] 后台偏好五分钟内聚焦零请求且首次过期重验�
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   try {
     const { createRoot } = await import("react-dom/client");
@@ -527,12 +517,6 @@ test("[Web/后台] 后台偏好五分钟内聚焦零请求且首次过期重验�
   } finally {
     const { focusManager } = await import("@tanstack/react-query");
     focusManager.setFocused(undefined);
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });

@@ -1,4 +1,5 @@
 import { appConfig } from "@imageshow/shared";
+import { ingestionBatchHardLimit, ingestionQueueSnapshotMaxItems } from "@imageshow/shared/browser";
 import {
   metadataFromHashReply,
   parseStoredIngestionSession
@@ -52,10 +53,10 @@ export async function readIngestionQueueSnapshot(
     offset < 0 ||
     !Number.isSafeInteger(limit) ||
     limit < 0 ||
-    limit > appConfig.ingestionRuntime.snapshotMaxItems ||
-    excludeItems.length > appConfig.ingestion.batchHardLimit ||
-    includeItems.length > appConfig.ingestionRuntime.snapshotMaxItems ||
-    limit + includeItems.length > appConfig.ingestionRuntime.snapshotMaxItems
+    limit > ingestionQueueSnapshotMaxItems ||
+    excludeItems.length > ingestionBatchHardLimit ||
+    includeItems.length > ingestionQueueSnapshotMaxItems ||
+    limit + includeItems.length > ingestionQueueSnapshotMaxItems
   ) {
     throw new RangeError("Redis ingestion snapshot range is invalid");
   }
@@ -71,10 +72,10 @@ export async function readIngestionQueueSnapshot(
     ingestionCanonicalKeyPrefix(owner),
     owner,
     queue,
-    appConfig.ingestionRuntime.snapshotMaxItems,
+    ingestionQueueSnapshotMaxItems,
     JSON.stringify(excludeItems),
     JSON.stringify(includeItems),
-    appConfig.ingestion.batchHardLimit
+    ingestionBatchHardLimit
   );
   const reply = redisReplyArray(raw, "queue snapshot");
   const status = redisReplyInteger(reply[0], "queue snapshot status");

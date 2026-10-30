@@ -1,8 +1,6 @@
 import { isIP } from "node:net";
 import { z } from "zod";
-import type { RuntimeConfig } from "@imageshow/shared/browser";
-
-const publicBaseUrlMaxLength = 2048;
+import { publicBaseUrlMaxLength, type RuntimeConfig } from "@imageshow/shared/browser";
 
 export const publicBaseUrlSchema = z
   .string()

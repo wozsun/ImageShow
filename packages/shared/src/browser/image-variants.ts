@@ -22,18 +22,9 @@ export type VariantSettings = {
   max_size_kb: number;
 };
 export type NormalizeProfile = Record<ImageVariant, VariantSettings> & { quality_step: number };
+const variantQualityLimits = { quality: [50, 100], min_quality: [1, 80] } as const;
 export const variantSettingLimits = {
-  large: { max_long_edge: [512, 16000], max_size_kb: [256, 5120] },
-  medium: { max_long_edge: [256, 8000], max_size_kb: [128, 2560] },
-  small: { max_long_edge: [128, 2000], max_size_kb: [8, 1280] }
+  large: { ...variantQualityLimits, max_long_edge: [512, 16000], max_size_kb: [256, 5120] },
+  medium: { ...variantQualityLimits, max_long_edge: [256, 8000], max_size_kb: [128, 2560] },
+  small: { ...variantQualityLimits, max_long_edge: [128, 2000], max_size_kb: [8, 1280] }
 } as const;
-
-export function defaultNormalizeProfile(): NormalizeProfile {
-  const common = { quality: 80, min_quality: 60 };
-  return {
-    quality_step: 5,
-    large: { ...common, max_long_edge: 4200, max_size_kb: 700 },
-    medium: { ...common, max_long_edge: 2200, max_size_kb: 350 },
-    small: { ...common, max_long_edge: 600, max_size_kb: 60 }
-  };
-}

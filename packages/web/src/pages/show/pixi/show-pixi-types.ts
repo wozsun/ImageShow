@@ -1,5 +1,5 @@
 import type { Container, Renderer } from "pixi.js";
-import type { ShowMode, ShowOrder } from "@imageshow/shared/browser";
+import type { ShowMode, PublicImageOrder } from "@imageshow/shared/browser";
 import type { ShowCandidateUsage } from "../show-data-pool.js";
 import type { ShowImage } from "../show-layout.js";
 
@@ -76,7 +76,7 @@ export type ShowPixiSceneOptions = {
   images: readonly ShowImage[];
   hasMore: boolean;
   dataKey: string;
-  order: ShowOrder;
+  order: PublicImageOrder;
   width: number;
   height: number;
   renderer: Renderer;
@@ -97,7 +97,7 @@ export interface ShowPixiSceneController {
   setImages(
     images: readonly ShowImage[],
     dataKey: string,
-    order: ShowOrder,
+    order: PublicImageOrder,
     hasMore: boolean
   ): void;
   setInputEnabled(enabled: boolean): void;

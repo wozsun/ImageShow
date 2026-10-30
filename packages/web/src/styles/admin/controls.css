@@ -22,6 +22,8 @@
   --admin-radius-pill: 999px;
   /* 徽标与状态胶囊共用的几何：不描边，只以语义底色区分。 */
   --admin-badge-height: 22px;
+  /* 紧凑档：与 16px 文字同行、随状态出现的徽标，不高于该行在常见字体下的行高（约 18.4–21px），出现或消失时行高不变。 */
+  --admin-badge-height-compact: 18px;
   --admin-badge-padding-inline: 8px;
   --admin-badge-font-size: 12px;
 }

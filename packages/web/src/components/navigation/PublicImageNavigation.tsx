@@ -1,7 +1,8 @@
 import type { useImageBrowseRoute } from "../../hooks/useImageBrowseRoute.js";
 import type { usePublicImageViewportControls } from "../../hooks/usePublicImageViewportControls.js";
 import type { usePublicFilterDialog } from "../../hooks/usePublicFilterDialog.js";
-import type { ShowClusterGroup, ShowOrder, ShowMode } from "@imageshow/shared/browser";
+import type { PublicImageOrder, ShowMode } from "@imageshow/shared/browser";
+import type { ShowClusterGroup } from "../../lib/gallery/gallery-query.js";
 import type { ReactNode } from "react";
 import { AppHeader } from "./AppHeader.js";
 import { PublicImageToolbar } from "./PublicImageToolbar.js";
@@ -29,10 +30,10 @@ export function PublicImageNavigation({
   route: ReturnType<typeof useImageBrowseRoute>;
   controls: ReturnType<typeof usePublicImageViewportControls>;
   filterDialog: ReturnType<typeof usePublicFilterDialog>;
-  order: ShowOrder;
+  order: PublicImageOrder;
   mode?: ShowMode;
   group?: ShowClusterGroup;
-  onOrderChange: (order: ShowOrder) => void;
+  onOrderChange: (order: PublicImageOrder) => void;
   leadingControls?: ReactNode;
   viewControls?: ReactNode;
   filterControls?: ReactNode;

@@ -12,7 +12,7 @@ import {
   type RendererDestroyOptions,
   type WebGLOptions
 } from "pixi.js";
-import type { ShowOrder } from "@imageshow/shared/browser";
+import type { PublicImageOrder } from "@imageshow/shared/browser";
 import { reducedMotionQuery } from "../../../lib/ui/reduced-motion.js";
 import type { ShowImage } from "../show-layout.js";
 import type { ShowCandidateUsage } from "../show-data-pool.js";
@@ -42,7 +42,7 @@ type ShowPixiRuntimeOptions = {
   images: readonly ShowImage[];
   hasMore: boolean;
   dataKey: string;
-  order: ShowOrder;
+  order: PublicImageOrder;
   clusters: readonly ShowCluster[];
   clusterDataKey: string;
   waterfallColumns: number;
@@ -91,6 +91,7 @@ declare global {
 
 const frameSampleCapacity = 36_000;
 
+/** @internal Exported only so contract tests can cover it directly. */
 export function showPixiTextureCacheOptions(
   width: number,
   generateMipmaps: boolean
@@ -180,7 +181,7 @@ export class ShowPixiRuntime {
   #images: readonly ShowImage[];
   #hasMore: boolean;
   #dataKey: string;
-  #order: ShowOrder;
+  #order: PublicImageOrder;
   #clusters: readonly ShowCluster[];
   #clusterDataKey: string;
   #waterfallColumns: number;
@@ -384,7 +385,7 @@ export class ShowPixiRuntime {
     this.#publishStats();
   }
 
-  setImages(images: readonly ShowImage[], dataKey: string, order: ShowOrder, hasMore: boolean) {
+  setImages(images: readonly ShowImage[], dataKey: string, order: PublicImageOrder, hasMore: boolean) {
     this.#images = images;
     this.#hasMore = hasMore;
     this.#dataKey = dataKey;

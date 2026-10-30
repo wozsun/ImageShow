@@ -1,0 +1,2 @@
+# Scripts executed inside the container keep LF line endings in every checkout.
+scripts/runtime/* text eol=lf

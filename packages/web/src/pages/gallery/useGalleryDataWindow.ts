@@ -483,7 +483,7 @@ export function useGalleryDataWindow({
   }, [controller, geometryReady, snapshot, windowRef]);
 
   const debugMetrics = useMemo<GalleryDataWindowMetrics | null>(() => {
-    if (import.meta.env?.DEV !== true) return null;
+    if (!import.meta.env.DEV) return null;
     const debug = controller.debugSnapshot();
     return {
       fetchedPages: debug.fetchedPages,

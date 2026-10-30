@@ -18,6 +18,25 @@ export async function pollUntil<Value>(
   return value;
 }
 
+/**
+ * Lets React and timers advance one macrotask (`delayMs`) per turn, at least
+ * once, until `predicate` holds; fails with `message` after `turns` turns.
+ */
+export async function settleReactUntil(
+  predicate: () => boolean,
+  message: string | (() => string),
+  { turns = 100, delayMs = 0 }: { turns?: number; delayMs?: number } = {}
+) {
+  const { act } = await import("react");
+  for (let turn = 0; turn < turns; turn += 1) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    });
+    if (predicate()) return;
+  }
+  assert.fail(typeof message === "function" ? message() : message);
+}
+
 /** Fails unless in-process work satisfies `predicate` within 100 event-loop turns. */
 export async function waitForTurns(predicate: () => boolean, message: string) {
   for (let attempt = 0; attempt < 100; attempt += 1) {

@@ -4,8 +4,7 @@ import {
   readableFilterSearch,
   tagFilterValues,
   TagFilterError,
-  type ShowClusterGroup,
-  type ShowOrder,
+  type PublicImageOrder,
   type ShowMode
 } from "@imageshow/shared/browser";
 import { useGalleryFacets } from "../lib/api/site-queries.js";
@@ -15,7 +14,8 @@ import {
   readGalleryFilters,
   galleryRandomRequestDevice,
   updateImageBrowseSearchParams,
-  type GalleryFilters
+  type GalleryFilters,
+  type ShowClusterGroup
 } from "../lib/gallery/gallery-query.js";
 import { randomLinkResult } from "../lib/gallery/random-url.js";
 
@@ -86,7 +86,7 @@ export function useImageBrowseRoute() {
       author: filters.author
     });
   };
-  const getPageUrl = (order: ShowOrder, mode?: ShowMode, group?: ShowClusterGroup) => {
+  const getPageUrl = (order: PublicImageOrder, mode?: ShowMode, group?: ShowClusterGroup) => {
     if (!ready && mode !== "cluster") return null;
     const pageParams = galleryRouteSearchParams(mode === "cluster" ? emptyGalleryFilters : parsed.filters);
     pageParams.set("order", order);

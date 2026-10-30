@@ -1,10 +1,17 @@
-import { defaultNormalizeProfile } from "./browser/image-variants.ts";
-import { adminImageBatchLimit, adminImagePageLimit } from "./browser/admin.ts";
-import { altchaSolveTimeoutMs } from "./browser/auth.ts";
-import { brightnesses, devices } from "./browser/image-classification.ts";
-import { imageDescriptionMaxLength, imageTitleMaxLength, type RandomFallbackDimension } from "./browser/images.ts";
-import { ingestionBatchHardLimit, ingestionQueueSnapshotMaxItems, type ImportSourceTypeDto } from "./browser/ingestion.ts";
-import { randomQueryLimits } from "./browser/random-limits.ts";
+import type { NormalizeProfile } from "./browser/image-variants.ts";
+import { adminImagePageLimit } from "./browser/admin.ts";
+import type { RandomFallbackDimension } from "./browser/images.ts";
+import type { ImportSourceTypeDto } from "./browser/ingestion.ts";
+
+function defaultNormalizeProfile(): NormalizeProfile {
+  const common = { quality: 80, min_quality: 60 };
+  return {
+    quality_step: 5,
+    large: { ...common, max_long_edge: 4200, max_size_kb: 700 },
+    medium: { ...common, max_long_edge: 2200, max_size_kb: 350 },
+    small: { ...common, max_long_edge: 600, max_size_kb: 60 }
+  };
+}
 
 const shutdownHardExitMs = 8_000;
 const shutdownCleanupReserveMs = 2_000;
@@ -12,18 +19,8 @@ const shutdownCleanupReserveMs = 2_000;
 export const appConfig = {
   // Container-internal HTTP port. Keep Dockerfile and Compose target ports in sync.
   applicationPort: 5518,
-  devices,
-  brightnesses,
-  imageMetadata: {
-    titleMaxLength: imageTitleMaxLength,
-    descriptionMaxLength: imageDescriptionMaxLength
-  },
   authorIdentity: {
     providers: ["weibo"] as const
-  },
-
-  pagination: {
-    maxLimit: adminImageBatchLimit
   },
 
   randomDedupe: {
@@ -31,14 +28,7 @@ export const appConfig = {
     ttlSeconds: 15 * 60
   },
 
-  randomQuery: randomQueryLimits,
-
   ingestion: {
-    batchHardLimit: ingestionBatchHardLimit,
-    maxInputFileSizeMiB: 200,
-    uploadSoftLimitMax: 1_000,
-    importSoftLimitMax: 1_000,
-    weiboSoftLimitMax: 50,
     weiboImageHardLimit: 1_000,
     weiboRequestBodyMaxBytes: 1024 * 1024,
     jsonlManifestMaxBytes: 128 * 1024 * 1024
@@ -52,7 +42,6 @@ export const appConfig = {
     workerHeartbeatSeconds: 30,
     expiryScanBatchSize: 100,
     ingestionSessionScanBatchSize: 100,
-    snapshotMaxItems: ingestionQueueSnapshotMaxItems,
     snapshotStaleReceiptCleanupBudget: 200,
     queueActionBatchSize: 100,
     orphanCleanupIntervalSeconds: 60,
@@ -97,19 +86,9 @@ export const appConfig = {
     // the reverse proxy read timeout documented for deployment.
     sseHeartbeatSeconds: 60,
     altcha: {
-      // Give ordinary clients up to one minute to solve a challenge. Keep the
-      // configurable work bounded so a challenge cannot run for several minutes.
-      solveTimeoutMs: altchaSolveTimeoutMs,
-      challengeExpirySafetySeconds: 30,
+      // Bound the configurable work so a challenge cannot run for several minutes.
       maximumWorkFactor: 100_000_000
     }
-  },
-
-  // Every configured CSP host-source list: embed ancestors and page scripts.
-  cspHostSources: {
-    maxItems: 32,
-    maxItemLength: 320,
-    maxSerializedLength: 4096
   },
 
   backgroundJob: {

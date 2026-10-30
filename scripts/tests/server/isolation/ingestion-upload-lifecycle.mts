@@ -1,3 +1,4 @@
+import { ingestionQueueSnapshotMaxItems } from "@imageshow/shared/browser";
 import type {
   IngestionSessionSnapshot,
   StoredIngestionSession,
@@ -1323,7 +1324,7 @@ await runIntegrationScenario(async (runtime) => {
       ingestionOwner,
       "upload",
       0,
-      sharedAppConfig.appConfig.ingestionRuntime.snapshotMaxItems + 1
+      ingestionQueueSnapshotMaxItems + 1
     ),
     RangeError
   );

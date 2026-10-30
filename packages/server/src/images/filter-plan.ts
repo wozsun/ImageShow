@@ -1,17 +1,17 @@
 import {
+  TagFilterError,
+  assertKnownTags,
   brightnesses,
   devices,
   normalizeTagExpression,
   parseGalleryTagFilter,
-  assertKnownTags,
+  randomQueryLimits,
   slugMaxLength,
   slugPattern,
-  TagFilterError,
   type TagExpression,
   type Brightness,
   type Device
 } from "@imageshow/shared/browser";
-import { appConfig } from "@imageshow/shared";
 import { ApiError } from "../core/api-error.ts";
 import type { VocabularyReadAccess } from "../vocab/cache.ts";
 import { getTagSlugs } from "../vocab/tags/query.ts";
@@ -54,11 +54,11 @@ function splitSelectors(rawValues: string[]): { include: string[]; exclude: stri
         .filter(Boolean)
     )
   ];
-  if (values.length > appConfig.randomQuery.maxSelectorsPerField) {
+  if (values.length > randomQueryLimits.maxSelectorsPerField) {
     throw new ApiError(
       400,
       "validation_error",
-      `Too many selectors; maximum ${appConfig.randomQuery.maxSelectorsPerField}`
+      `Too many selectors; maximum ${randomQueryLimits.maxSelectorsPerField}`
     );
   }
   const include: string[] = [];

@@ -2,13 +2,14 @@ import { z } from "zod";
 import { appConfig } from "@imageshow/shared";
 import {
   ingestionBatchHardLimit,
-  type IngestionDraftUrlField,
   ingestionDuplicateDecisions,
   ingestionQueueActionTypes,
+  ingestionQueueSnapshotMaxItems,
   ingestionQueueTypes,
   ingestionSourceTypes,
   ingestionStatusBatchMaxItems,
-  normalizeIngestionDraftUrl
+  normalizeIngestionDraftUrl,
+  type IngestionDraftUrlField
 } from "@imageshow/shared/browser";
 import { normalizedImageTagSlugsSchema } from "../../images/metadata-tags.ts";
 import {
@@ -156,7 +157,7 @@ export const ingestionSnapshotQuery = z.strictObject({
   queue: z.enum(ingestionQueueTypes),
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(0)
-    .max(appConfig.ingestionRuntime.snapshotMaxItems)
+    .max(ingestionQueueSnapshotMaxItems)
     .optional()
 });
 
@@ -164,7 +165,7 @@ export const ingestionSnapshotSelectionInput = z
   .strictObject({
     exclude_items: z.array(ingestionPairInput).max(ingestionBatchHardLimit),
     include_items: z.array(ingestionPairInput)
-      .max(appConfig.ingestionRuntime.snapshotMaxItems)
+      .max(ingestionQueueSnapshotMaxItems)
   })
   .superRefine((value, context) => {
     addDuplicateIngestionPairIssues(

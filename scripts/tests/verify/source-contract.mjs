@@ -609,12 +609,12 @@ for (const [serviceName, mount] of [
 if (
   !composePortBinding(imageShowService, {
     hostIp: "127.0.0.1",
-    published: 5518,
-    target: 5518
+    published: appConfig.applicationPort,
+    target: appConfig.applicationPort
   })
 ) {
   throw new Error(
-    "source-contract: default Compose port mapping must stay fixed at 127.0.0.1:5518:5518"
+    `source-contract: default Compose port mapping must stay fixed at 127.0.0.1:${appConfig.applicationPort}:${appConfig.applicationPort}`
   );
 }
 

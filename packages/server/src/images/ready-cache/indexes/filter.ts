@@ -19,7 +19,8 @@ import {
 } from "../cache-errors.ts";
 import {
   getReadyImageCacheCoordinatorStatus,
-  readyImageCacheIsReadable
+  readyImageCacheIsReadable,
+  readyImageCacheRevision
 } from "../coordinator.ts";
 import { discardReadyImageDerivedResult } from "../derived/lifecycle.ts";
 import {
@@ -54,13 +55,6 @@ export type ReadyImageIndexReadAccess =
       mode: "required";
     };
 
-function currentRevision() {
-  const status = getReadyImageCacheCoordinatorStatus();
-  return status.readable && status.meta?.state === "ready"
-    ? status.meta.appliedRevision
-    : null;
-}
-
 async function resolveReadyImageFilterIndexWithMode(
   plan: ImageFilterPlan,
   options: ReadyImageIndexReadAccess
@@ -74,7 +68,7 @@ async function resolveReadyImageFilterIndexWithMode(
       if (required) await requireOperationalRedis();
       return null;
     }
-    const revision = currentRevision();
+    const revision = readyImageCacheRevision();
     if (!revision) {
       if (required) await requireOperationalRedis();
       return null;
@@ -99,7 +93,7 @@ async function resolveReadyImageFilterIndexWithMode(
             revision,
             options.signal
           );
-      if (currentRevision() !== revision) continue;
+      if (readyImageCacheRevision() !== revision) continue;
       if (attribute) return { kind: "attribute", ...attribute };
       // A missing attribute index only builds in the background; retrying
       // within this request cannot find it.
@@ -109,7 +103,7 @@ async function resolveReadyImageFilterIndexWithMode(
     const cached = plan.range?.ids.length ? null : required
       ? await runRequiredRedisCommand(() => readReadyImageFilterIndex(plan.signature, revision))
       : await readReadyImageFilterIndex(plan.signature, revision);
-    if (currentRevision() !== revision) continue;
+    if (readyImageCacheRevision() !== revision) continue;
     if (cached) return cached;
     if (options.mode === "required") {
       scheduleReadyImageFilterIndexBuild(plan);
@@ -122,7 +116,7 @@ async function resolveReadyImageFilterIndexWithMode(
           (sharedSignal) => buildReadyImageFilterIndex(plan, revision, sharedSignal),
           options.signal
         );
-    if (currentRevision() !== revision) {
+    if (readyImageCacheRevision() !== revision) {
       await releaseReadyImageRequestIndex(built);
       continue;
     }
@@ -181,7 +175,7 @@ export async function resolveReadyImageFilterIndexForRequiredRead(
 export async function validateReadyImageFilterIndex(
   index: ReadyImageFilterIndex
 ): Promise<ReadyImageFilterIndexValidation> {
-  if (currentRevision() !== index.revision) return { status: "revision_changed" };
+  if (readyImageCacheRevision() !== index.revision) return { status: "revision_changed" };
   if (index.kind === "core") {
     const transaction = redis.pipeline();
     transaction.hget(READY_IMAGE_INTEGRITY_KEY, index.key);

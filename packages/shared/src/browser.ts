@@ -13,6 +13,7 @@ export * from "./browser/api.ts";
 export * from "./browser/random-limits.ts";
 export * from "./browser/sort-order.ts";
 export * from "./browser/settings.ts";
+export * from "./browser/runtime-config-limits.ts";
 export * from "./browser/images.ts";
 export * from "./browser/groups.ts";
 export * from "./browser/tag-filter.ts";

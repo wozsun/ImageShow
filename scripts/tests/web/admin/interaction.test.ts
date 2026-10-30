@@ -48,15 +48,6 @@ import {
 import { installProperties } from "../../support/property-descriptors.ts";
 
 test("[Web/后台] 无会话上下文的公开详情保持访客身份并隔离管理员缓存", async (t) => {
-  const { registerHooks } = await import("node:module");
-  const hooks = registerHooks({
-    load(url, context, next) {
-      return url.endsWith(".css")
-        ? { format: "module", source: "", shortCircuit: true }
-        : next(url, context);
-    }
-  });
-  t.after(() => hooks.deregister());
   const { PublicImageDetail } =
     await import("../../../../packages/web/src/components/image/PublicImageDetail.tsx");
   const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
@@ -157,15 +148,6 @@ test("[Web/后台] 无会话上下文的公开详情保持访客身份并隔离�
 });
 
 test("[Web/后台] 公开详情等待首次认证，按身份读取并隔离迟到结果", async (t) => {
-  const { registerHooks } = await import("node:module");
-  const hooks = registerHooks({
-    load(url, context, next) {
-      return url.endsWith(".css")
-        ? { format: "module", source: "", shortCircuit: true }
-        : next(url, context);
-    }
-  });
-  t.after(() => hooks.deregister());
   const { PublicImageDetail } =
     await import("../../../../packages/web/src/components/image/PublicImageDetail.tsx");
   const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
@@ -505,18 +487,7 @@ test("[Web/后台] 后台颜色偏好在首个布局观察前接管 bootstrap �
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
   try {
     const { createRoot } = await import("react-dom/client");
     const { useAdminColorScheme } =
@@ -549,13 +520,7 @@ test("[Web/后台] 后台颜色偏好在首个布局观察前接管 bootstrap �
     );
     await React.act(async () => root.unmount());
   } finally {
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/后台] 动画关闭捕获最新回调并在请求阶段冻结完成动作", async () => {
@@ -589,18 +554,7 @@ test("[Web/后台] 动画关闭捕获最新回调并在请求阶段冻结完成�
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
   try {
     const { createRoot } = await import("react-dom/client");
     const { useAnimatedClose } =
@@ -811,13 +765,7 @@ test("[Web/后台] 动画关闭捕获最新回调并在请求阶段冻结完成�
     await React.act(async () => noAnimationRoot.unmount());
     noAnimationHost.remove();
   } finally {
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/后台] 标签切换超限时保持原模式与条件，减少选择后可恢复", async (t) => {
@@ -948,18 +896,7 @@ test("[Web/后台] 共享 FacetSelector 在原按钮位置内联搜索并保持 
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   const elementPrototype = window.HTMLElement.prototype;
   const previousFocus = Object.getOwnPropertyDescriptor(elementPrototype, "focus");
@@ -1419,13 +1356,7 @@ test("[Web/后台] 共享 FacetSelector 在原按钮位置内联搜索并保持 
     } else {
       delete (elementPrototype as unknown as Record<string, unknown>).oninput;
     }
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/后台] 后台图片筛选在临界视口保持清空、无障碍名称与搜索交互", async () => {
@@ -1565,18 +1496,7 @@ test("[Web/后台] 后台图片筛选在临界视口保持清空、无障碍名�
       React,
       IS_REACT_ACT_ENVIRONMENT: true
     };
-    const previousGlobals = new Map(
-      Object.keys(installedGlobals).map(
-        (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-      )
-    );
-    for (const [key, value] of Object.entries(installedGlobals)) {
-      Object.defineProperty(globalThis, key, {
-        configurable: true,
-        writable: true,
-        value
-      });
-    }
+    const restoreGlobals = installProperties(globalThis, installedGlobals);
 
     const elementPrototype = window.HTMLElement.prototype;
     const previousFocus = Object.getOwnPropertyDescriptor(elementPrototype, "focus");
@@ -1861,13 +1781,7 @@ test("[Web/后台] 后台图片筛选在临界视口保持清空、无障碍名�
       } else {
         delete (elementPrototype as unknown as Record<string, unknown>).getBoundingClientRect;
       }
-      for (const [key, descriptor] of previousGlobals) {
-        if (descriptor) {
-          Object.defineProperty(globalThis, key, descriptor);
-        } else {
-          delete (globalThis as Record<string, unknown>)[key];
-        }
-      }
+      restoreGlobals();
     }
   }
   for (const structure of structures.slice(1)) {

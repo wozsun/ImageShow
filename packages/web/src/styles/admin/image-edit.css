@@ -168,7 +168,7 @@
 .image-editor-head .changed-badge,
 .image-editor-head .image-editor-save-badge {
   flex: 0 0 auto;
-  height: var(--admin-badge-height);
+  height: var(--admin-badge-height-compact);
   padding: 0 var(--admin-badge-padding-inline);
   display: inline-flex;
   align-items: center;

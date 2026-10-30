@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { isIP } from "node:net";
-import { appConfig } from "@imageshow/shared";
 import {
   publicImageOrders,
   homeBrowseTargets,
@@ -9,21 +8,32 @@ import {
   randomDefaultMethods,
   randomImageSizes,
   showDensities,
+  runtimeConfigLimits,
   showModes,
   siteRoots
 } from "@imageshow/shared/browser";
 import { isRootRelativeOrHttpsUrl } from "../core/url-validation.ts";
 
+const limits = runtimeConfigLimits;
+
+function integerWithin({ min, max }: Readonly<{ min: number; max: number }>) {
+  return z.coerce.number().int().min(min).max(max);
+}
+
+function decimalAbove({ min, max }: Readonly<{ min: number; max: number; exclusiveMin: true }>) {
+  return z.coerce.number().gt(min).max(max);
+}
+
 export const siteRoot = z.enum(siteRoots);
 export const homeBrowseTarget = z.enum(homeBrowseTargets);
 export const randomDefaultMethod = z.enum(randomDefaultMethods);
 export const randomImageSize = z.enum(randomImageSizes);
-export const randomMaxItems = z.coerce.number().int().min(1).max(appConfig.randomQuery.maxJsonItems);
+export const randomMaxItems = integerWithin(limits["site.random_max_items"]);
 export const galleryOrder = z.enum(publicImageOrders);
 export const showDensity = z.enum(showDensities);
 export const showMode = z.enum(showModes);
 export const showOrder = z.enum(publicImageOrders);
-export const showDriftSpeed = z.coerce.number().int().min(10).max(60);
+export const showDriftSpeed = integerWithin(limits["site.show.drift_speed"]);
 
 export const siteHeaderName = z.string().trim().min(1);
 export const siteTitle = z.string().trim().min(1);
@@ -31,7 +41,7 @@ export const siteDomain = z
   .string()
   .trim()
   .toLowerCase()
-  .max(259)
+  .max(limits["site.domain"].maxLength)
   .refine((value) => {
     if (!value) return true;
     if (!/^[a-z0-9.-]+(?::\d{1,5})?$/.test(value)) return false;
@@ -55,24 +65,25 @@ export const siteDomain = z
   }, "站点域名需为空或不含协议和路径的有效 DNS 域名，可带端口");
 export const siteAdditionalDomains = z
   .array(siteDomain.min(1, "附加站点域名不能为空"))
-  .max(32)
+  .max(limits["site.additional_domains"].maxItems)
   .transform((values) => [...new Set(values)]);
 export const siteIcon = z
   .string()
   .trim()
-  .max(2048)
+  .max(limits["site.icon"].maxLength)
   .refine(
     (value) => !value || isRootRelativeOrHttpsUrl(value),
     "站点图标必须是站内绝对路径或 HTTPS URL"
   );
-export const siteDescription = z.string().trim().max(200);
-export const siteFooterText = z.string().trim().max(200);
-export const siteFooter = z.string().trim().max(2000);
+export const siteDescription = z.string().trim().max(limits["site.description"].maxLength);
+export const siteIcp = z.string().trim().max(limits["site.icp"].maxLength);
+export const siteMps = z.string().trim().max(limits["site.mps"].maxLength);
+export const siteFooter = z.string().trim().max(limits["site.footer"].maxLength);
 
 export const loginBackground = z
   .string()
   .trim()
-  .max(2048)
+  .max(limits["admin.login_background"].maxLength)
   .refine(
     (value) => !value || isRootRelativeOrHttpsUrl(value),
     "登录背景必须是站内绝对路径或 HTTPS URL"
@@ -81,13 +92,13 @@ export const loginBackground = z
 export const homeBackground = z
   .string()
   .trim()
-  .max(2048)
+  .max(limits["site.home.background"].maxLength)
   .refine(
     (value) => !value || isRootRelativeOrHttpsUrl(value),
     "首页背景必须是站内绝对路径或 HTTPS URL"
   );
-export const homeBannerLabel = z.string().trim().min(1).max(160);
-export const homeBannerTitle = z.string().trim().min(1).max(80);
+export const homeBannerLabel = z.string().trim().min(1).max(limits["site.home.banner_label"].maxLength);
+export const homeBannerTitle = z.string().trim().min(1).max(limits["site.home.banner_title"].maxLength);
 
 function isCspSafeHostname(hostname: string) {
   return (
@@ -141,8 +152,11 @@ function canonicalCspHostSource(value: string, allowPath: boolean) {
   }
 }
 
-function cspHostSourceList(subject: string, allowPath: boolean) {
-  const maxItemLength = appConfig.cspHostSources.maxItemLength;
+function cspHostSourceList(
+  subject: string,
+  allowPath: boolean,
+  { maxItems, maxItemLength, maxSerializedLength }: (typeof limits)["site.script_sources"]
+) {
   const source = z
     .string()
     .trim()
@@ -172,77 +186,59 @@ function cspHostSourceList(subject: string, allowPath: boolean) {
     });
   return z
     .array(source)
-    .max(appConfig.cspHostSources.maxItems)
+    .max(maxItems)
     .transform((values) => [...new Set(values)])
     .refine(
       (values) =>
         values.reduce((length, value) => length + value.length, 0) + Math.max(0, values.length - 1) <=
-        appConfig.cspHostSources.maxSerializedLength,
+        maxSerializedLength,
       `${subject}列表过长`
     );
 }
 
-export const embedAllowedOrigins = cspHostSourceList("嵌入来源", false);
+export const embedAllowedOrigins = cspHostSourceList("嵌入来源", false, limits["embed.allowed_origins"]);
 // Scripts may be narrowed to one directory or file of a shared host.
-export const siteScriptSources = cspHostSourceList("脚本来源", true);
+export const siteScriptSources = cspHostSourceList("脚本来源", true, limits["site.script_sources"]);
 
-export const ingestionMaxFileSizeMb = z.coerce
-  .number()
-  .positive()
-  .max(appConfig.ingestion.maxInputFileSizeMiB);
-export const ingestionMaxLongEdge = z.coerce.number().int().min(300).max(32_000);
-export const ingestionListPageSize = z.coerce.number().int().min(1).max(100);
-export const uploadMaxItems = z.coerce
-  .number()
-  .int()
-  .min(1)
-  .max(appConfig.ingestion.uploadSoftLimitMax);
-export const imagePageSize = z.coerce.number().int().min(10).max(appConfig.pagination.maxLimit);
-export const recentUploads = z.coerce.number().int().min(1).max(60);
+export const ingestionMaxFileSizeMb = decimalAbove(limits["ingestion.max_file_size_mb"]);
+export const ingestionMaxLongEdge = integerWithin(limits["ingestion.max_long_edge"]);
+export const ingestionListPageSize = integerWithin(limits["ingestion.list_page_size"]);
+export const uploadMaxItems = integerWithin(limits["upload.max_items"]);
+export const imagePageSize = integerWithin(limits["admin.image_page_size"]);
+export const recentUploads = integerWithin(limits["admin.recent_uploads"]);
 
-export const uploadBrowserConcurrency = z.coerce.number().int().min(1).max(8);
-export const uploadRawConcurrency = z.coerce.number().int().min(1).max(8);
-export const ingestionCommitConcurrency = z.coerce.number().int().min(1).max(16);
-export const importFetchTimeoutSeconds = z.coerce.number().int().min(5).max(300);
-export const importMaxItems = z.coerce
-  .number()
-  .int()
-  .min(1)
-  .max(appConfig.ingestion.importSoftLimitMax);
+export const uploadBrowserConcurrency = integerWithin(limits["upload.browser_concurrency"]);
+export const uploadRawConcurrency = integerWithin(limits["upload.raw_concurrency"]);
+export const ingestionCommitConcurrency = integerWithin(limits["ingestion.commit_concurrency"]);
+export const importFetchTimeoutSeconds = integerWithin(limits["import.fetch_timeout_seconds"]);
+export const importMaxItems = integerWithin(limits["import.max_items"]);
 export const importTypesKeepingOriginalLink = z
   .array(z.enum(importSourceTypes))
   .transform((values) => [...new Set(values)]);
-export const weiboImportMaxItems = z.coerce
+export const weiboImportMaxItems = integerWithin(limits["weibo.max_items"]);
+export const weiboRequestDelaySeconds = z
   .number()
   .int()
-  .min(1)
-  .max(appConfig.ingestion.weiboSoftLimitMax);
-export const weiboRequestDelaySeconds = z.number().int().min(0).max(60);
+  .min(limits["weibo.request_delay_seconds"].min)
+  .max(limits["weibo.request_delay_seconds"].max);
 
-export const sessionTtlSeconds = z.coerce
+export const sessionTtlSeconds = integerWithin(limits["security.session_ttl_seconds"]);
+export const loginFailureWindowSeconds = integerWithin(limits["security.login_failure_window_seconds"]);
+export const loginMaxFailures = integerWithin(limits["security.login_max_failures"]);
+export const loginGlobalWindowSeconds = integerWithin(limits["security.login_global_window_seconds"]);
+export const loginGlobalMaxAttempts = integerWithin(limits["security.login_global_max_attempts"]);
+export const randomWindowSeconds = integerWithin(limits["security.random_window_seconds"]);
+export const randomMaxRequests = integerWithin(limits["security.random_max_requests"]);
+export const randomLimitMaxRequests = integerWithin(limits["security.random_limit_max_requests"]);
+
+export const altchaTtlSeconds = integerWithin(limits["altcha.ttl_seconds"]);
+export const altchaCost = integerWithin(limits["altcha.cost"]);
+export const altchaCounter = z
   .number()
   .int()
-  .min(5 * 60)
-  .max(365 * 24 * 60 * 60);
-export const loginFailureWindowSeconds = z.coerce.number().int().min(30).max(300);
-export const loginMaxFailures = z.coerce.number().int().min(3).max(500);
-export const loginGlobalWindowSeconds = z.coerce.number().int().min(60).max(600);
-export const loginGlobalMaxAttempts = z.coerce.number().int().min(5).max(1_000);
-export const randomWindowSeconds = z.coerce.number().int().min(1).max(3_600);
-export const randomMaxRequests = z.coerce.number().int().min(1).max(10_000);
-
-
-export const altchaTtlSeconds = z.coerce
-  .number()
-  .int()
-  .min(
-    Math.ceil(appConfig.authentication.altcha.solveTimeoutMs / 1000) +
-      appConfig.authentication.altcha.challengeExpirySafetySeconds
-  )
-  .max(60 * 60);
-export const altchaCost = z.coerce.number().int().min(1000).max(100_000);
-export const altchaCounter = z.number().int().min(100).max(100_000);
+  .min(limits["altcha.counter_range"].min)
+  .max(limits["altcha.counter_range"].max);
 
 export const logLevel = z.enum(logLevels);
-export const logMaxSizeMb = z.coerce.number().positive().max(1024);
-export const logMaxFiles = z.coerce.number().int().min(1).max(100);
+export const logMaxSizeMb = decimalAbove(limits["log.max_size_mb"]);
+export const logMaxFiles = integerWithin(limits["log.max_files"]);

@@ -1,6 +1,6 @@
 import { imageVariantUrl } from "@imageshow/shared/browser";
 import { Container, type Renderer } from "pixi.js";
-import type { ShowOrder } from "@imageshow/shared/browser";
+import type { PublicImageOrder } from "@imageshow/shared/browser";
 import { ShowDataPool, type ShowCandidateUsage } from "../show-data-pool.js";
 import {
   showLayoutColumnWidth,
@@ -72,7 +72,7 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
   #running: boolean;
   #reducedMotion: boolean;
   #dataKey = "";
-  #order: ShowOrder = "random";
+  #order: PublicImageOrder = "random";
   #lastUsageRevision = -1;
   #imageIds = new Set<string>();
   #lastReconcileAt = 0;
@@ -145,7 +145,7 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
     this.#reconcile(true);
   }
 
-  setImages(images: readonly ShowImage[], dataKey: string, order: ShowOrder, hasMore: boolean) {
+  setImages(images: readonly ShowImage[], dataKey: string, order: PublicImageOrder, hasMore: boolean) {
     this.#lastVisibleSignature = null;
     const arranged = images;
     const replacing = this.#dataKey !== dataKey || this.#order !== order;

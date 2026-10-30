@@ -37,6 +37,7 @@ const phases = {
     ["workspace types", "npm", ["run", "check"]],
     ["test types", "npx", ["--no-install", "tsc", "--project", "scripts/tests/tsconfig.json"]],
     ["dead code", "npm", ["run", "knip"]],
+    ["test-only exports", "npm", ["run", "knip", "--", "--production"]],
     ["semantic colors", "npm", ["run", "check:colors"]],
     ["generated icons", "npm", ["run", "icons:check"]],
     [

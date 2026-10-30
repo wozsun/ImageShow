@@ -2,6 +2,7 @@ import "../../support/web-environment.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseHTML } from "linkedom";
+import { installProperties } from "../../support/property-descriptors.ts";
 
 test("[Web/后台] 缩略图真实挂载只请求一次并忽略快速换源的迟到结果", async () => {
   const { window, document } = parseHTML("<!doctype html><html><body></body></html>");
@@ -28,18 +29,7 @@ test("[Web/后台] 缩略图真实挂载只请求一次并忽略快速换源的�
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   const imagePrototype = window.HTMLImageElement.prototype;
   const originalSetAttribute = imagePrototype.setAttribute;
@@ -131,12 +121,6 @@ test("[Web/后台] 缩略图真实挂载只请求一次并忽略快速换源的�
     }
   } finally {
     imagePrototype.setAttribute = originalSetAttribute;
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });

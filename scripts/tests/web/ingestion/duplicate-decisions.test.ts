@@ -17,6 +17,8 @@ import {
   ingestionJob,
   adminImageListItem
 } from "../../support/web-test-context.ts";
+import { installProperties } from "../../support/property-descriptors.ts";
+import { settleReactUntil } from "../../support/polling.ts";
 
 test("[Web/内容接入] 重复详情请求单飞执行并及时合并到最新队列", async () => {
   const { window, document } = parseHTML(
@@ -53,18 +55,7 @@ test("[Web/内容接入] 重复详情请求单飞执行并及时合并到最新�
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   try {
     setCsrfToken("duplicate-details-single-flight-token");
@@ -116,15 +107,8 @@ test("[Web/内容接入] 重复详情请求单飞执行并及时合并到最新�
     const container = document.getElementById("root");
     assert.ok(container);
     const root = createRoot(container);
-    const settleUntil = async (predicate: () => boolean) => {
-      for (let attempt = 0; attempt < 50; attempt += 1) {
-        if (predicate()) return;
-        await React.act(async () => {
-          await new Promise((resolve) => setTimeout(resolve, 0));
-        });
-      }
-      assert.fail("duplicate details single-flight request did not settle");
-    };
+    const settleUntil = (predicate: () => boolean) =>
+      settleReactUntil(predicate, "duplicate details single-flight request did not settle");
     await React.act(async () => {
       root.render(React.createElement(Probe, { jobs: jobsFor(1) }));
       await Promise.resolve();
@@ -207,13 +191,7 @@ test("[Web/内容接入] 重复详情请求单飞执行并及时合并到最新�
     await React.act(async () => root.unmount());
   } finally {
     clearCsrfToken();
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/内容接入] 新完成图片按 MD5 精确刷新仍在展示的重复详情", async () => {
@@ -264,18 +242,7 @@ test("[Web/内容接入] 新完成图片按 MD5 精确刷新仍在展示的重�
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   try {
     setCsrfToken("duplicate-completed-invalidation-token");
@@ -326,15 +293,8 @@ test("[Web/内容接入] 新完成图片按 MD5 精确刷新仍在展示的重�
     const container = document.getElementById("root");
     assert.ok(container);
     const root = createRoot(container);
-    const settleUntil = async (predicate: () => boolean) => {
-      for (let attempt = 0; attempt < 50; attempt += 1) {
-        if (predicate()) return;
-        await React.act(async () => {
-          await new Promise((resolve) => setTimeout(resolve, 0));
-        });
-      }
-      assert.fail("completed duplicate invalidation did not settle");
-    };
+    const settleUntil = (predicate: () => boolean) =>
+      settleReactUntil(predicate, "completed duplicate invalidation did not settle");
     await React.act(async () => {
       root.render(
         React.createElement(
@@ -356,13 +316,7 @@ test("[Web/内容接入] 新完成图片按 MD5 精确刷新仍在展示的重�
     queryClient.clear();
   } finally {
     clearCsrfToken();
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/内容接入] 重复归零 CAS 失败保留可操作卡片并允许刷新重试", async () => {
@@ -405,18 +359,7 @@ test("[Web/内容接入] 重复归零 CAS 失败保留可操作卡片并允许�
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   try {
     setCsrfToken("duplicate-zero-cas-token");
@@ -457,15 +400,8 @@ test("[Web/内容接入] 重复归零 CAS 失败保留可操作卡片并允许�
     const container = document.getElementById("root");
     assert.ok(container);
     const root = createRoot(container);
-    const settleUntil = async (predicate: () => boolean) => {
-      for (let attempt = 0; attempt < 50; attempt += 1) {
-        if (predicate()) return;
-        await React.act(async () => {
-          await new Promise((resolve) => setTimeout(resolve, 0));
-        });
-      }
-      assert.fail("duplicate zero CAS did not settle");
-    };
+    const settleUntil = (predicate: () => boolean) =>
+      settleReactUntil(predicate, "duplicate zero CAS did not settle");
     await React.act(async () => {
       root.render(React.createElement(Probe));
       await Promise.resolve();
@@ -486,13 +422,7 @@ test("[Web/内容接入] 重复归零 CAS 失败保留可操作卡片并允许�
     await React.act(async () => root.unmount());
   } finally {
     clearCsrfToken();
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/内容接入] 重复决定合并同一在途请求且拒绝跨 incarnation 响应", async () => {
@@ -534,18 +464,7 @@ test("[Web/内容接入] 重复决定合并同一在途请求且拒绝跨 incarn
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   try {
     setCsrfToken("duplicate-incarnation-token");
@@ -664,13 +583,7 @@ test("[Web/内容接入] 重复决定合并同一在途请求且拒绝跨 incarn
     await React.act(async () => root.unmount());
   } finally {
     clearCsrfToken();
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/内容接入] 双队列重复确认各自单飞且 busy 互不阻塞", async () => {
@@ -691,18 +604,7 @@ test("[Web/内容接入] 双队列重复确认各自单飞且 busy 互不阻塞"
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   try {
     const { createRoot } = await import("react-dom/client");
@@ -826,13 +728,7 @@ test("[Web/内容接入] 双队列重复确认各自单飞且 busy 互不阻塞"
     assert.deepEqual(view(), { uploadBusy: false, importBusy: false });
     await React.act(async () => root.unmount());
   } finally {
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/内容接入] 旧提交点击不会命中同 ID 的新任务尝试", async () => {
@@ -858,18 +754,7 @@ test("[Web/内容接入] 旧提交点击不会命中同 ID 的新任务尝试", 
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   try {
     const { createRoot } = await import("react-dom/client");
@@ -926,12 +811,6 @@ test("[Web/内容接入] 旧提交点击不会命中同 ID 的新任务尝试", 
     assert.equal(jobsRef.current[0]?.attemptKey, "new-attempt");
     await React.act(async () => root.unmount());
   } finally {
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });

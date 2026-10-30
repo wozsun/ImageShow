@@ -52,6 +52,7 @@ export function runWithAdvisoryLockAcquisitionSignal<T>(
   );
 }
 
+/** @internal Exported only so contract tests can cover it directly. */
 export async function acquireAdvisoryLockClient(
   signal: AbortSignal | undefined,
   connect: () => Promise<PoolClient> = connectAdvisoryLockClient

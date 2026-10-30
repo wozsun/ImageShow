@@ -1,7 +1,6 @@
 import "../support/web-environment.ts";
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
-import { registerHooks } from "node:module";
 import { createConfigStreamHarness } from "../support/web-test-context.ts";
 import { dispatchDomEvent, inputText } from "../support/dom-events.ts";
 import { installProperties } from "../support/property-descriptors.ts";
@@ -21,18 +20,10 @@ async function sortingPage(t: TestContext, kind: Kind) {
   t.after(installProperties(globalThis, {
     getComputedStyle: () => ({ overflowY: "auto", getPropertyValue: () => "", animationName: "none", animationDuration: "0s" })
   }));
-  const css = registerHooks({
-    load(url, context, next) {
-      return url.endsWith(".css")
-        ? { format: "module", source: "", shortCircuit: true }
-        : next(url, context);
-    }
-  });
   const { VocabularyAdmin } =
     await import("../../../packages/web/src/pages/admin/vocabulary/VocabularyAdmin.tsx");
   const { StorageSettings } =
     await import("../../../packages/web/src/pages/admin/storage/StorageSettings.tsx");
-  css.deregister();
   const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
   const { MemoryRouter } = await import("react-router");
   const { AuthSessionProvider } =

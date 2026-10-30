@@ -1,7 +1,6 @@
 import "../../support/web-environment.ts";
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
-import { registerHooks } from "node:module";
 import { appConfig } from "../../../../packages/shared/src/app-config.ts";
 import { adminPermissions, type ImageGroupDto } from "../../../../packages/shared/src/browser.ts";
 import { queryKeys } from "../../../../packages/web/src/lib/api/query-keys.ts";
@@ -25,16 +24,10 @@ async function groupPage(t: TestContext, role: "image" | "super", detail = false
     getComputedStyle: () => ({ overflowY: "auto", getPropertyValue: () => "", animationName: "none", animationDuration: "0s" })
   }));
   Object.assign(h.window, { location: new URL("https://img.example/admin/groups") });
-  const css = registerHooks({
-    load(url, context, next) {
-      return url.endsWith(".css") ? { format: "module", source: "", shortCircuit: true } : next(url, context);
-    }
-  });
   const { GroupAdmin } = await import("../../../../packages/web/src/pages/admin/groups/GroupAdmin.tsx");
   const { GroupDetail } = await import("../../../../packages/web/src/pages/admin/groups/GroupDetail.tsx");
   await import("../../../../packages/web/src/pages/admin/images/ImageIdInputDialog.tsx");
   await import("../../../../packages/web/src/components/image/editor/image-editor-capability.ts");
-  css.deregister();
   const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
   const { MemoryRouter, Routes, Route, useLocation } = await import("react-router");
   const { AuthSessionProvider } = await import("../../../../packages/web/src/hooks/useAuthSession.tsx");

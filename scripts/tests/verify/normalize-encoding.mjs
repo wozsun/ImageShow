@@ -5,7 +5,9 @@ import { join } from 'node:path';
 import test, { after } from 'node:test';
 const { default: sharp } = await import(new URL('index.mjs', 'file:///app/node_modules/sharp/dist/'));
 sharp.cache(false);
-const { defaultNormalizeProfile, imageVariants } = await import(new URL('browser.js', 'file:///app/packages/shared/dist/'));
+const { imageVariants } = await import(new URL('browser.js', 'file:///app/packages/shared/dist/'));
+const { appConfig } = await import(new URL('app-config.js', 'file:///app/packages/shared/dist/'));
+const defaultNormalizeProfile = () => structuredClone(appConfig.runtimeDefaults.normalize);
 const { createVariantEncoder, verifyVariantFile } = await loadServer('images/variants/encoding.js');
 const temporary = [];
 async function createTestDirectory(prefix) {

@@ -1,6 +1,6 @@
 ARG NPM_VERSION=12.2.0
 
-FROM node:26.12.1 AS node-base
+FROM node:26.13.0 AS node-base
 ARG NPM_VERSION
 RUN npm install --global npm@${NPM_VERSION}
 
@@ -24,7 +24,7 @@ COPY packages/shared/package.json packages/shared/package.json
 COPY packages/server/package.json packages/server/package.json
 RUN npm ci --omit=dev --workspace @imageshow/shared --workspace @imageshow/server --include-workspace-root=false
 
-FROM node:26.12.1-slim AS runtime
+FROM node:26.13.0-slim AS runtime
 ARG NPM_VERSION
 WORKDIR /app
 ENV NODE_ENV=production \
@@ -40,10 +40,8 @@ COPY --chown=node:node --from=build /app/packages/shared/dist ./packages/shared/
 COPY --chown=node:node --from=build /app/packages/server/package.json ./packages/server/package.json
 COPY --chown=node:node --from=build /app/packages/server/dist ./packages/server/dist
 RUN mkdir -p /app/data/storage /app/data/log && chown -R node:node /app/data
-COPY scripts/runtime/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-COPY scripts/runtime/imageshow /usr/local/bin/imageshow
-RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh /usr/local/bin/imageshow \
-    && chmod +x /usr/local/bin/docker-entrypoint.sh /usr/local/bin/imageshow
+COPY --chmod=755 scripts/runtime/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY --chmod=755 scripts/runtime/imageshow /usr/local/bin/imageshow
 EXPOSE 5518
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --start-interval=3s --retries=3 CMD node packages/server/dist/healthcheck-cli.js
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

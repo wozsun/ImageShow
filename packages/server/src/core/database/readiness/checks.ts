@@ -1,5 +1,5 @@
 import { appConfig } from "@imageshow/shared";
-import { sameColumns } from "./constraint-helpers.ts";
+import { sameColumns } from "./constraint-columns.ts";
 import type { DatabaseReader } from "./contract.ts";
 
 type CheckConstraintRow = {

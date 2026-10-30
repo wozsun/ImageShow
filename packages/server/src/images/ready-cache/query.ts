@@ -13,7 +13,7 @@ import {
 } from "../cursor.ts";
 import type { AdminImageSort, PublicImageOrder } from "@imageshow/shared/browser";
 import {
-  getReadyImageCacheCoordinatorStatus,
+  readyImageCacheItemCount,
   reportReadyImageCacheFailure,
   withReadyImageCacheRead
 } from "./coordinator.ts";
@@ -63,10 +63,6 @@ export type ReadyImagePageReadResult<T> =
   | { status: "hit"; value: T }
   | { status: "fallback" }
   | { status: "redis_unavailable"; error: Error };
-
-function cacheItemCount() {
-  return getReadyImageCacheCoordinatorStatus().meta?.itemCount ?? 0;
-}
 
 function reportFilterResolutionFailure(
   error: unknown,
@@ -151,7 +147,7 @@ async function assertDerivedMissingItemsAreNotCore(
       cause
     });
   }
-  const expected = cacheItemCount();
+  const expected = readyImageCacheItemCount();
   const itemCount = Number(results[0]?.[1] ?? -1);
   const allCount = Number(results[1]?.[1] ?? -1);
   const allScores = (results[2]?.[1] as Array<string | null>) ?? [];
@@ -173,7 +169,7 @@ export async function readReadyImageById(
   return readCache(async () => {
     const raw = await redis.hget(READY_IMAGE_ITEMS_KEY, member);
     if (!raw) {
-      if ((await redis.hlen(READY_IMAGE_ITEMS_KEY)) !== cacheItemCount()) {
+      if ((await redis.hlen(READY_IMAGE_ITEMS_KEY)) !== readyImageCacheItemCount()) {
         throw new Error("Ready-image cache item hash is incomplete");
       }
       return null;
@@ -321,7 +317,7 @@ async function readRandomWindowFromIndex(
         context,
         position,
         limit,
-        cacheItemCount(),
+        readyImageCacheItemCount(),
         signal
       );
       if (!members) return null;

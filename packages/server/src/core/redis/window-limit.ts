@@ -56,6 +56,7 @@ export type RedisWindowReservation = {
 
 type RedisWindowCommand = (...arguments_: Array<string | number>) => Promise<unknown>;
 
+/** @internal Exported only so contract tests can cover it directly. */
 export type RedisWindowCommandClient = Readonly<{
   imageshowReserveWindows: RedisWindowCommand;
 }>;
@@ -68,6 +69,7 @@ function hasRedisWindowCommand(
   return typeof (client as Record<string, unknown>).imageshowReserveWindows === "function";
 }
 
+/** @internal Exported only so contract tests can cover it directly. */
 export function registerRedisWindowCommand(
   client: RedisWindowCommandSource
 ): RedisWindowCommandClient {
@@ -87,6 +89,7 @@ function integer(value: unknown, context: string) {
   return parsed;
 }
 
+/** @internal Exported only so contract tests can cover it directly. */
 export async function reserveRedisWindowsCommand(
   client: RedisWindowCommandSource,
   windows: readonly RedisWindow[]

@@ -188,7 +188,7 @@ docker compose logs --tail 100 imageshow
 | 容器不是 `healthy` | 看日志中的错误。镜像给启动留出 30 秒宽限；机器较慢时，在 `compose.yaml` 的 `imageshow` 服务下添加 `healthcheck`，只设置更长的 `start_period`（如 `120s`），其余参数沿用镜像设置 |
 | 网页打不开，返回 502 | 应用未启动或代理上游地址写错；确认应用容器在运行、代理指向 `127.0.0.1:5518` |
 | 用域名访问返回 404 | 检查访问域名是否在主站或附加站点域名中，以及 CDN / Nginx 是否保留了正确的 Host；已有配置文件时修改 `SITE_DOMAIN` 不会覆盖它 |
-| 提示 `redis_unavailable` | Redis 未运行或连不上。应用刚启动、尚未完成 Redis 校验时，业务请求返回 503；成功启动后 Redis 短暂中断，部分公开浏览仍可用，后台和需要限流的随机图请求需等它恢复。应用会自动重连 |
+| 提示 `redis_unavailable` | Redis 未运行或连不上。应用刚启动、尚未完成 Redis 校验时，业务请求返回 503；成功启动后 Redis 短暂中断，部分公开浏览仍可用，后台和需要限流的随机图请求需等它恢复。应用会自动重连。Redis 低于 8.8 时也会出现，日志中的 `missing_commands` 列出缺少的命令 |
 | 图片显示不出来 | 到后台「检查」页查看存储状态；使用云端存储时确认网络和密钥 |
 | 上传大文件失败 | 代理的 `client_max_body_size` 或超时设置太小 |
 
@@ -208,7 +208,7 @@ docker exec -it imageshow imageshow reset-password <用户名>
 
 ### 使用外部数据库或 Redis
 
-支持 PostgreSQL 18 和 Redis 8。一个数据库只能对应一个应用实例。示例：
+支持 PostgreSQL 18 和 Redis 8.8 及以上的 8.x 版本；Redis 版本过低时业务请求返回 `redis_unavailable`（503），容器健康检查失败，日志列出缺少的命令。一个数据库只能对应一个应用实例。示例：
 
 ```bash
 docker run -d --name imageshow --restart unless-stopped \

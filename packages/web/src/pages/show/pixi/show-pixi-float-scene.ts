@@ -1,6 +1,6 @@
 import { imageVariantUrl } from "@imageshow/shared/browser";
 import { Container, type Renderer } from "pixi.js";
-import type { ShowOrder } from "@imageshow/shared/browser";
+import type { PublicImageOrder } from "@imageshow/shared/browser";
 import type { ShowCandidateUsage } from "../show-data-pool.js";
 import { shuffledImageBatch } from "../../../lib/gallery/image-browse.js";
 import type { ShowImage } from "../show-layout.js";
@@ -390,7 +390,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
   #running: boolean;
   #reducedMotion: boolean;
   #dataKey = "";
-  #order: ShowOrder = "random";
+  #order: PublicImageOrder = "random";
   #serial = 0;
   #streamDirection: FloatStreamDirection = -1;
   #lifecycleElapsed = 0;
@@ -486,7 +486,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     else this.#relayout();
   }
 
-  setImages(images: readonly ShowImage[], dataKey: string, order: ShowOrder, hasMore: boolean) {
+  setImages(images: readonly ShowImage[], dataKey: string, order: PublicImageOrder, hasMore: boolean) {
     this.#lastVisibleSignature = null;
     const replacing = dataKey !== this.#dataKey || order !== this.#order;
     const incoming = new Map(images.map((image) => [image.id, image]));

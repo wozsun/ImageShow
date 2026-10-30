@@ -2,12 +2,11 @@ import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } fr
 import { Link } from "react-router";
 import {
   publicImageOrders,
-  showClusterGroups,
   showModes,
-  type ShowClusterGroup,
   type ShowMode,
-  type ShowOrder
+  type PublicImageOrder
 } from "@imageshow/shared/browser";
+import { showClusterGroups, type ShowClusterGroup } from "../../lib/gallery/gallery-query.js";
 import { Icon, type IconName } from "../../components/icon/Icon.js";
 import {
   publicImageOrderIcons,
@@ -26,7 +25,7 @@ export const showClusterGroupLabels: Record<ShowClusterGroup, string> = {
   tag: "标签",
   author: "作者"
 };
-const compactOrderLabels: Record<ShowOrder, string> = {
+const compactOrderLabels: Record<PublicImageOrder, string> = {
   random: "随机",
   latest: "最新",
   oldest: "最旧"
@@ -304,8 +303,8 @@ export function ShowMobileControls({
 }: ShowPlaybackProps & {
   scene: ShowMode;
   getSceneHref: (scene: ShowMode) => string;
-  order: ShowOrder;
-  onOrderChange: (order: ShowOrder) => void;
+  order: PublicImageOrder;
+  onOrderChange: (order: PublicImageOrder) => void;
 }) {
   return (
     <>

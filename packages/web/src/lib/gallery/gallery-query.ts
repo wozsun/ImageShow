@@ -7,13 +7,11 @@ import {
   tagExpressionValues,
   readableFilterSearch,
   detectDeviceFromUserAgent,
-  showClusterGroups,
   showModes,
   publicImageOrders,
   TagFilterError,
-  type ShowClusterGroup,
   type ShowMode,
-  type ShowOrder,
+  type PublicImageOrder,
   type PublicImageView,
   type TagFilterValue
 } from "@imageshow/shared/browser";
@@ -22,6 +20,10 @@ import {
   gallerySelectorValue,
   type GallerySelectorField
 } from "./gallery-selectors.js";
+
+/** 星群模式把图片按一种分类聚成星团；分组维度是访客的浏览选择，不是站点配置。 */
+export const showClusterGroups = ["theme", "tag", "author"] as const;
+export type ShowClusterGroup = (typeof showClusterGroups)[number];
 
 export type GalleryFilters = {
   device: string;
@@ -33,7 +35,7 @@ export type GalleryFilters = {
 
 const galleryDevices = new Set(["pc", "mb", "auto"]);
 const galleryBrightnesses = new Set(["dark", "light"]);
-const showOrderSet = new Set<ShowOrder>(publicImageOrders);
+const publicImageOrderSet = new Set<PublicImageOrder>(publicImageOrders);
 const showModeSet = new Set<ShowMode>(showModes);
 const showClusterGroupSet = new Set<ShowClusterGroup>(showClusterGroups);
 
@@ -151,12 +153,12 @@ export function galleryStatsSearch(
   return readableFilterSearch(params);
 }
 
-export function showOrderFromSearchParams(
+export function publicImageOrderFromSearchParams(
   params: URLSearchParams,
-  fallback: ShowOrder
+  fallback: PublicImageOrder
 ) {
-  const value = params.get("order")?.trim().toLowerCase() as ShowOrder;
-  return showOrderSet.has(value) ? value : fallback;
+  const value = params.get("order")?.trim().toLowerCase() as PublicImageOrder;
+  return publicImageOrderSet.has(value) ? value : fallback;
 }
 
 export function showModeFromSearchParams(
@@ -176,7 +178,7 @@ export function showClusterGroupFromSearchParams(params: URLSearchParams): ShowC
 export function updateImageBrowseSearchParams(
   current: URLSearchParams,
   changes: Partial<
-    GalleryFilters & { order: ShowOrder; mode: ShowMode; group: ShowClusterGroup }
+    GalleryFilters & { order: PublicImageOrder; mode: ShowMode; group: ShowClusterGroup }
   >
 ) {
   const params = new URLSearchParams(current);
@@ -192,7 +194,7 @@ export function updateImageBrowseSearchParams(
 
 export function imageBrowseApiSearchParams(
   filters: GalleryFilters,
-  order: ShowOrder,
+  order: PublicImageOrder,
   options: { view: PublicImageView; limit?: number; cursor?: string; userAgent?: string }
 ) {
   const params = galleryApiFilters(filters, options.userAgent ?? "");

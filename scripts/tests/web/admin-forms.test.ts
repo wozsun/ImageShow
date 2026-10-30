@@ -54,6 +54,8 @@ import {
   inputText
 } from "../support/dom-events.ts";
 import { installControlledClock } from "../support/controlled-clock.ts";
+import { installProperties } from "../support/property-descriptors.ts";
+import { settleReactUntil } from "../support/polling.ts";
 
 function imageUpdateResponse(
   updatedIds: string[],
@@ -209,18 +211,7 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   try {
     const { createRoot } = await import("react-dom/client");
@@ -261,12 +252,10 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
           )
         );
       });
-      for (let attempt = 0; attempt < 20; attempt += 1) {
-        await React.act(async () => {
-          await new Promise((resolve) => setTimeout(resolve, 0));
-        });
-        if (container.querySelector('[role="alert"]')) break;
-      }
+      await settleReactUntil(
+        () => Boolean(container.querySelector('[role="alert"]')),
+        `${path} route load failure did not render an alert`
+      );
       const alert = container.querySelector('[role="alert"]');
       assert.ok(alert);
       assert.match(alert.closest(".query-error-state")?.className ?? "", /\bcenter\b/);
@@ -384,13 +373,10 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
         )
       );
     });
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      await React.act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0));
-      });
-      if (container.textContent === "failed") break;
-    }
-    assert.equal(container.textContent, "failed");
+    await settleReactUntil(
+      () => container.textContent === "failed",
+      "public auth probe did not report the failed session query"
+    );
     assert.deepEqual(requestedPaths, ["/api/admin/auth/me"]);
     assert.equal(localStorage.getItem("site_session_hint"), null);
     await React.act(async () => authRoot.unmount());
@@ -408,13 +394,7 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
     assert.deepEqual(requestedPaths, ["/api/admin/auth/me", "/api/admin/auth/me"]);
     retryClient.clear();
   } finally {
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 for (const itemCount of [1, 3]) {
@@ -1154,18 +1134,7 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   let unmountRoot: (() => Promise<void>) | undefined;
   try {
@@ -1724,13 +1693,7 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
   } finally {
     await unmountRoot?.();
     for (const timer of frameTimers.values()) clearTimeout(timer);
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/后台表单] 后台配置首载失败可重试，配置到达前不挂载，后台刷新失败保留已编辑页面", async (t) => {
@@ -1789,17 +1752,7 @@ test("[Web/后台表单] 后台配置首载失败可重试，配置到达前不�
 test("[Web/后台表单] 日志等级保存隔离旧读取，跨文件缓存采用确认值且刷新失败不回退", async (t) => {
   const h = await createConfigStreamHarness(t, { honorAbort: false });
   const clock = installControlledClock(t, h.window);
-  const { registerHooks } = await import("node:module");
-  const hooks = registerHooks({
-    load(url, context, next) {
-      return url.endsWith(".css")
-        ? { format: "module", source: "", shortCircuit: true }
-        : next(url, context);
-    }
-  });
-  const { LogPage } = await import("../../../packages/web/src/pages/admin/logs/LogPage.tsx").finally(
-    () => hooks.deregister()
-  );
+  const { LogPage } = await import("../../../packages/web/src/pages/admin/logs/LogPage.tsx");
   const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
   const { ActionFeedbackProvider } =
     await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
@@ -1892,18 +1845,8 @@ test("[Web/后台表单] 权威保存完成后列表读取挂起不锁住编辑�
   const { MemoryRouter } = await import("react-router");
   const { AuthSessionProvider } =
     await import("../../../packages/web/src/hooks/useAuthSession.tsx");
-  const { registerHooks } = await import("node:module");
-  const hooks = registerHooks({
-    load(url, context, next) {
-      return url.endsWith(".css")
-        ? { format: "module", source: "", shortCircuit: true }
-        : next(url, context);
-    }
-  });
   const { ImageMetadataEditorDialog } =
-    await import("../../../packages/web/src/components/image/editor/ImageMetadataEditorDialog.tsx").finally(
-      () => hooks.deregister()
-    );
+    await import("../../../packages/web/src/components/image/editor/ImageMetadataEditorDialog.tsx");
   const { adminImageListQuery } =
     await import("../../../packages/web/src/pages/admin/images/image-admin-list-query.ts");
   const client = new QueryClient({
@@ -2013,19 +1956,9 @@ for (const count of [1, 2]) {
     const { MemoryRouter } = await import("react-router");
     const { AuthSessionProvider } =
       await import("../../../packages/web/src/hooks/useAuthSession.tsx");
-    // 定向运行也要准备组件的 CSS 导入，不能依赖其他用例已经预载编辑器。
-    const { registerHooks } = await import("node:module");
-    const hooks = registerHooks({
-      load(url, context, next) {
-        return url.endsWith(".css")
-          ? { format: "module", source: "", shortCircuit: true }
-          : next(url, context);
-      }
-    });
+    // 定向运行时由本用例自行导入编辑器，不依赖其他用例预载。
     const { ImageMetadataEditorDialog } =
-      await import("../../../packages/web/src/components/image/editor/ImageMetadataEditorDialog.tsx").finally(
-        () => hooks.deregister()
-      );
+      await import("../../../packages/web/src/components/image/editor/ImageMetadataEditorDialog.tsx");
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false, staleTime: Infinity } }
     });
@@ -2128,18 +2061,8 @@ test("[Web/后台表单] 存储能力显示三态，连接测试后刷新一次�
   const h = await createConfigStreamHarness(t);
   h.window.scrollTo = () => {};
   const clock = installControlledClock(t, h.window);
-  const { registerHooks } = await import("node:module");
-  const hooks = registerHooks({
-    load(url, context, next) {
-      return url.endsWith(".css")
-        ? { format: "module", source: "", shortCircuit: true }
-        : next(url, context);
-    }
-  });
   const { StorageSettings } =
-    await import("../../../packages/web/src/pages/admin/storage/StorageSettings.tsx").finally(() =>
-      hooks.deregister()
-    );
+    await import("../../../packages/web/src/pages/admin/storage/StorageSettings.tsx");
   const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
   const { ActionFeedbackProvider } =
     await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
@@ -2269,14 +2192,6 @@ for (const kind of ["user", "storage"] as const) {
     const h = await createConfigStreamHarness(t);
     h.window.scrollTo = () => {};
     const clock = installControlledClock(t, h.window);
-    const { registerHooks } = await import("node:module");
-    const hooks = registerHooks({
-      load(url, context, next) {
-        return url.endsWith(".css")
-          ? { format: "module", source: "", shortCircuit: true }
-          : next(url, context);
-      }
-    });
     const Component = await (
       kind === "user"
         ? import("../../../packages/web/src/pages/admin/users/UserAdmin.tsx").then(
@@ -2285,7 +2200,7 @@ for (const kind of ["user", "storage"] as const) {
         : import("../../../packages/web/src/pages/admin/storage/StorageSettings.tsx").then(
             (module) => module.StorageSettings
           )
-    ).finally(() => hooks.deregister());
+    );
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
     const { ActionFeedbackProvider } =
       await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
@@ -2532,18 +2447,8 @@ test("[Web/后台表单] 站点配置完整草稿支持保存与重载确认，�
   const h = await createConfigStreamHarness(t);
   h.window.scrollTo = () => {};
   const clock = installControlledClock(t, h.window);
-  const { registerHooks } = await import("node:module");
-  const hooks = registerHooks({
-    load(url, context, next) {
-      return url.endsWith(".css")
-        ? { format: "module", source: "", shortCircuit: true }
-        : next(url, context);
-    }
-  });
   const { SettingsPage } =
-    await import("../../../packages/web/src/pages/admin/settings/SettingsPage.tsx").finally(() =>
-      hooks.deregister()
-    );
+    await import("../../../packages/web/src/pages/admin/settings/SettingsPage.tsx");
   const { appConfig } = await import("../../../packages/shared/src/app-config.ts");
   const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
   const client = new QueryClient({

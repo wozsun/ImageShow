@@ -5,7 +5,7 @@ import {
   type DatabaseReader,
   type RequiredUniqueIndex
 } from "./contract.ts";
-import { primaryKeyLabel, sameColumns } from "./constraint-helpers.ts";
+import { primaryKeyLabel, sameColumns } from "./constraint-columns.ts";
 
 type UniqueIndexRow = {
   table_name: string;

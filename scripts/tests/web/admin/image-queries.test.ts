@@ -1,5 +1,6 @@
 import "../../support/web-environment.ts";
 import assert from "node:assert/strict";
+import { registerHooks } from "node:module";
 import test from "node:test";
 import { parseHTML } from "linkedom";
 import {
@@ -34,6 +35,8 @@ import { editableImage, galleryCard } from "../../support/web-test-context.ts";
 import { inputText } from "../../support/dom-events.ts";
 
 import { installControlledClock } from "../../support/controlled-clock.ts";
+import { installProperties } from "../../support/property-descriptors.ts";
+import { settleReactUntil } from "../../support/polling.ts";
 
 test("[Web/后台] API 拒绝损坏成功响应且保留已有查询快照和安全 HTTP 错误", async () => {
   const { QueryClient } = await import("@tanstack/react-query");
@@ -498,18 +501,7 @@ test("[Web/后台] 后台数字页 Hook 在 Strict Mode 下直达、重试并一
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   const previousFetch = globalThis.fetch;
   const requests: string[] = [];
@@ -618,15 +610,8 @@ test("[Web/后台] 后台数字页 Hook 在 Strict Mode 下直达、重试并一
     const container = document.getElementById("root");
     assert.ok(container);
     const root = createRoot(container);
-    const waitFor = async (condition: () => boolean) => {
-      for (let attempt = 0; attempt < 40; attempt += 1) {
-        await React.act(async () => {
-          await new Promise((resolve) => setTimeout(resolve, 0));
-        });
-        if (condition()) return;
-      }
-      assert.fail("等待后台数字页 Hook 状态超时");
-    };
+    const waitFor = (condition: () => boolean) =>
+      settleReactUntil(condition, "等待后台数字页 Hook 状态超时");
 
     await React.act(async () => root.render(tree()));
     await waitFor(() => latest.total === 6_000 && !latest.isFetching);
@@ -819,13 +804,7 @@ test("[Web/后台] 后台数字页 Hook 在 Strict Mode 下直达、重试并一
     await React.act(async () => root.unmount());
   } finally {
     globalThis.fetch = previousFetch;
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、操作后夹紧及权限", async (t) => {
@@ -900,18 +879,7 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
   const previousConsoleError = console.error;
   const expectedListErrors: unknown[][] = [];
   const expectedMutationErrors: unknown[][] = [];
@@ -944,19 +912,8 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
       await import("../../../../packages/web/src/hooks/useAdminPreferences.tsx");
     const { ActionFeedbackProvider } =
       await import("../../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
-    const { registerHooks } = await import("node:module");
-    const cssHooks = registerHooks({
-      load(url, context, nextLoad) {
-        if (url.endsWith(".css")) {
-          return { format: "module", source: "", shortCircuit: true };
-        }
-        return nextLoad(url, context);
-      }
-    });
     const { ImageAdmin } =
-      await import("../../../../packages/web/src/pages/admin/images/ImageAdmin.tsx").finally(() =>
-        cssHooks.deregister()
-      );
+      await import("../../../../packages/web/src/pages/admin/images/ImageAdmin.tsx");
     const container = document.getElementById("root");
     assert.ok(container);
 
@@ -966,15 +923,8 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
         headers: { "content-type": "application/json" }
       });
     const image = (serial: string): AdminImageListItemDto => ({...galleryCard(`00000000-0000-7000-8000-${serial}`),device: "pc", brightness: "dark", author: null, description: "",storage_label: "本地存储",source: null,status: "deleted",purge_pending: false,original: "",deleted_at: "2026-08-15T00:00:00.000Z",created_at: "2026-08-14T00:00:00.000Z",updated_at: "2026-08-15T00:00:00.000Z",base_url:"/images",variants:{large:{byte_size:1024},medium:{byte_size:800},small:{byte_size:200}}});
-    const waitFor = async (condition: () => boolean, message: string) => {
-      for (let attempt = 0; attempt < 120; attempt += 1) {
-        await React.act(async () => {
-          await new Promise((resolve) => setTimeout(resolve, 10));
-        });
-        if (condition()) return;
-      }
-      assert.fail(message);
-    };
+    const waitFor = (condition: () => boolean, message: string) =>
+      settleReactUntil(condition, message, { turns: 120, delayMs: 10 });
     const click = async (target: HTMLElement) => {
       await React.act(async () => {
         target.dispatchEvent(new window.Event("click", { bubbles: true }));
@@ -2361,13 +2311,7 @@ test("[Web/后台] 图片后台真实挂载保持排序偏好、弹窗页码、�
     } else {
       delete (window.HTMLElement.prototype as { scrollTo?: unknown }).scrollTo;
     }
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/后台] 图片元数据保存按实际字段失效投影并复用权威详情", async (t) => {

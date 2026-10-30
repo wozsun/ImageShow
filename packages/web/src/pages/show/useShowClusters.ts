@@ -2,8 +2,7 @@ import {
   readableFilterSearch,
   unsetSelector,
   type PublicImageListResponseDto,
-  type ShowClusterGroup,
-  type ShowOrder,
+  type PublicImageOrder,
   type EditableImageSnapshotDto
 } from "@imageshow/shared/browser";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -12,7 +11,8 @@ import { readEditableImageSnapshots } from "../../lib/api/image-edit.js";
 import { useGalleryFacets, useGalleryStats } from "../../lib/api/site-queries.js";
 import {
   emptyGalleryFilters,
-  imageBrowseApiSearchParams
+  imageBrowseApiSearchParams,
+  type ShowClusterGroup
 } from "../../lib/gallery/gallery-query.js";
 import {
   imageBatchTier,
@@ -69,7 +69,7 @@ const noClusters: readonly ShowCluster[] = [];
  * 星群模式的数据所有者：分类数量取自公开统计，名称取自会话词表，
  * 每个星团是一条带单一分类条件的公开列表游标流。此模式不叠加访客筛选。
  */
-export function useShowClusters(group: ShowClusterGroup, order: ShowOrder, enabled: boolean) {
+export function useShowClusters(group: ShowClusterGroup, order: PublicImageOrder, enabled: boolean) {
   const facets = useGalleryFacets(enabled);
   const stats = useGalleryStats("", enabled);
   // 分组或排序变化才重建；失败重试保留已展示星团及其游标。
@@ -101,7 +101,6 @@ export function useShowClusters(group: ShowClusterGroup, order: ShowOrder, enabl
         total: entry.image_count
       }));
     // 后台刷新不重建星群；切换分组或排序才重新选取成员。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, group, order, Boolean(stats.data), Boolean(facets.data)]);
 
   const publish = useCallback(() => {

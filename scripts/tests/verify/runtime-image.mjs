@@ -434,7 +434,7 @@ async function applicationProbe(timeoutMs) {
     "for (const path of paths) {",
     "  const status = await new Promise((resolve, reject) => {",
     "    const signal = AbortSignal.timeout(5000);",
-    "    const outgoing = request({ hostname: '127.0.0.1', port: 5518, path, headers: { Host: 'example.test' }, signal }, (incoming) => {",
+    `    const outgoing = request({ hostname: '127.0.0.1', port: ${appConfig.applicationPort}, path, headers: { Host: 'example.test' }, signal }, (incoming) => {`,
     "      incoming.resume();",
     "      incoming.on('end', () => resolve(incoming.statusCode ?? 0));",
     "    });",
@@ -784,7 +784,7 @@ try {
       "--eval",
       "const { connect } = await import('node:net'); " +
         "const { once } = await import('node:events'); " +
-        "const socket = connect(5518, '127.0.0.1'); " +
+        `const socket = connect(${appConfig.applicationPort}, '127.0.0.1'); ` +
         "socket.on('error', () => {}); " +
         "await once(socket, 'connect'); " +
         "socket.write('POST /api/admin/auth/login HTTP/1.1\\r\\n" +
@@ -841,7 +841,7 @@ try {
     "exec", names.app, "node", "--input-type=module", "--eval",
     "const { connect } = await import('node:net'); " +
     "const { once } = await import('node:events'); " +
-    "const socket = connect(5518, '127.0.0.1'); socket.on('error', () => {}); " +
+    `const socket = connect(${appConfig.applicationPort}, '127.0.0.1'); socket.on('error', () => {}); ` +
     "await once(socket, 'connect'); " +
     "socket.write('POST /api/admin/auth/login HTTP/1.1\\r\\nHost: example.test\\r\\n" +
     "Content-Type: application/json\\r\\nContent-Length: 100\\r\\n\\r\\n{'); " +

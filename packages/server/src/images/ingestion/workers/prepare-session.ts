@@ -32,6 +32,7 @@ import type {
 import { IngestionSessionRepository } from "../repository.ts";
 import { withIngestionPreparationAdmission } from "./preparation-admission.ts";
 
+/** @internal Exported only so contract tests can cover it directly. */
 export function preparedAttemptIsReferenced(
   current: StoredIngestionSession | null,
   expected: Pick<IngestionSessionSnapshot, "session_id" | "image_id">,

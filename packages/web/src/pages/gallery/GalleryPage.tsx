@@ -1,4 +1,4 @@
-import { readableFilterSearch, type GalleryOrder, type GalleryImageCardDto } from "@imageshow/shared/browser";
+import { readableFilterSearch, type PublicImageOrder, type GalleryImageCardDto } from "@imageshow/shared/browser";
 import { useImageBrowseRoute } from "../../hooks/useImageBrowseRoute.js";
 import { PublicFilterErrorState } from "../../components/feedback/PublicFilterErrorState.js";
 import {
@@ -39,7 +39,7 @@ import {
 import {
   imageBrowseApiSearchParams,
   updateImageBrowseSearchParams,
-  showOrderFromSearchParams
+  publicImageOrderFromSearchParams
 } from "../../lib/gallery/gallery-query.js";
 import { GalleryCardRevealRegistry } from "./gallery-card-reveal.js";
 import { PublicImageNavigation } from "../../components/navigation/PublicImageNavigation.js";
@@ -55,7 +55,7 @@ export function GalleryPage({
   order: defaultOrder
 }: {
   embedded?: boolean;
-  order: GalleryOrder;
+  order: PublicImageOrder;
 }) {
   const mobile = useMediaQuery(mobileViewportMediaQuery);
   const [selected, setSelected] = useState<GalleryImageCardDto | null>(null);
@@ -75,7 +75,7 @@ export function GalleryPage({
     ready: filtersReady,
     error: filterError
   } = browseRoute;
-  const order = showOrderFromSearchParams(routeSearchParams, defaultOrder);
+  const order = publicImageOrderFromSearchParams(routeSearchParams, defaultOrder);
   const navigationControls = usePublicImageViewportControls({
     headerPresent: !embedded,
     paused: dialogOpen

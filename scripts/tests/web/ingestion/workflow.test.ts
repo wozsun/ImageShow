@@ -15,6 +15,8 @@ import {
   adminImageListItem
 } from "../../support/web-test-context.ts";
 import { installControlledClock } from "../../support/controlled-clock.ts";
+import { installProperties } from "../../support/property-descriptors.ts";
+import { settleReactUntil } from "../../support/polling.ts";
 
 test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、来源切换和关闭回焦", async (t) => {
   assert.equal(
@@ -110,31 +112,9 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
-  let deregisterCssHooks = () => {};
   try {
-    const { registerHooks } = await import("node:module");
-    const cssHooks = registerHooks({
-      load(url, context, nextLoad) {
-        if (url.endsWith(".css")) {
-          return { format: "module", source: "", shortCircuit: true };
-        }
-        return nextLoad(url, context);
-      }
-    });
-    deregisterCssHooks = () => cssHooks.deregister();
     const { createRoot } = await import("react-dom/client");
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
     const { MemoryRouter } = await import("react-router");
@@ -1314,15 +1294,8 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
     await React.act(async () => root.unmount());
     client.clear();
   } finally {
-    deregisterCssHooks();
     window.HTMLElement.prototype.focus = originalFocus;
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/内容接入] 内容接入入口只在模态边界接管前锁定页面且五类激活与失败都正确交接", async () => {
@@ -1409,35 +1382,15 @@ test("[Web/内容接入] 内容接入入口只在模态边界接管前锁定页�
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   try {
     const { createRoot } = await import("react-dom/client");
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
-    const { registerHooks } = await import("node:module");
-    const cssHooks = registerHooks({
-      load(url, context, nextLoad) {
-        if (url.endsWith(".css")) {
-          return { format: "module", source: "", shortCircuit: true };
-        }
-        return nextLoad(url, context);
-      }
-    });
     const [{ Ingestion }, { IngestionLauncher }] = await Promise.all([
       import("../../../../packages/web/src/pages/admin/ingestion/Ingestion.tsx"),
       import("../../../../packages/web/src/pages/admin/ingestion/IngestionLauncher.tsx")
-    ]).finally(() => cssHooks.deregister());
+    ]);
     const container = document.getElementById("root");
     const opener = document.getElementById("opener") as HTMLButtonElement;
     assert.ok(container);
@@ -1568,15 +1521,8 @@ test("[Web/内容接入] 内容接入入口只在模态边界接管前锁定页�
         await Promise.resolve();
       });
     };
-    const waitFor = async (condition: () => boolean, message: string) => {
-      for (let attempt = 0; attempt < 80; attempt += 1) {
-        await React.act(async () => {
-          await new Promise((resolve) => setTimeout(resolve, 0));
-        });
-        if (condition()) return;
-      }
-      assert.fail(message);
-    };
+    const waitFor = (condition: () => boolean, message: string) =>
+      settleReactUntil(condition, message);
 
     const activationKinds = [
       "workflow",
@@ -1962,13 +1908,7 @@ test("[Web/内容接入] 内容接入入口只在模态边界接管前锁定页�
   } finally {
     window.HTMLElement.prototype.focus = originalFocus;
     window.HTMLElement.prototype.blur = originalBlur;
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/内容接入] 导入组合按钮共同预载且来源选择在菜单退场前取得页面启动锁", async () => {
@@ -2014,34 +1954,12 @@ test("[Web/内容接入] 导入组合按钮共同预载且来源选择在菜单�
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   try {
     const { createRoot } = await import("react-dom/client");
-    const { registerHooks } = await import("node:module");
-    const cssHooks = registerHooks({
-      load(url, context, nextLoad) {
-        if (url.endsWith(".css")) {
-          return { format: "module", source: "", shortCircuit: true };
-        }
-        return nextLoad(url, context);
-      }
-    });
     const { IngestionTriggers } =
-      await import("../../../../packages/web/src/pages/admin/ingestion/IngestionTriggers.tsx").finally(
-        () => cssHooks.deregister()
-      );
+      await import("../../../../packages/web/src/pages/admin/ingestion/IngestionTriggers.tsx");
     const container = document.getElementById("root");
     assert.ok(container);
     let workflowPreloads = 0;
@@ -2135,12 +2053,6 @@ test("[Web/内容接入] 导入组合按钮共同预载且来源选择在菜单�
 
     await React.act(async () => root.unmount());
   } finally {
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });

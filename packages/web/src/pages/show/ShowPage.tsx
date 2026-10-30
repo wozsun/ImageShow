@@ -1,8 +1,7 @@
 import {
   readableFilterSearch,
-  type ShowClusterGroup,
   type ShowDensity,
-  type ShowOrder,
+  type PublicImageOrder,
   type SiteShowSettings
 } from "@imageshow/shared/browser";
 import { useImageBrowseRoute } from "../../hooks/useImageBrowseRoute.js";
@@ -32,9 +31,10 @@ import {
   imageBrowseApiSearchParams,
   imageBrowseNavigationHref,
   showClusterGroupFromSearchParams,
+  publicImageOrderFromSearchParams,
   showModeFromSearchParams,
-  showOrderFromSearchParams,
-  updateImageBrowseSearchParams
+  updateImageBrowseSearchParams,
+  type ShowClusterGroup
 } from "../../lib/gallery/gallery-query.js";
 import { publicNavigationAutoHideDelayMs } from "../../lib/ui/public-navigation.js";
 import {
@@ -123,7 +123,7 @@ export function ShowPage({
   } = browseRoute;
   const routeQuery = routeSearchParams.toString();
   const order = useMemo(
-    () => showOrderFromSearchParams(
+    () => publicImageOrderFromSearchParams(
       new URLSearchParams(routeQuery),
       settings.order
     ),
@@ -363,7 +363,7 @@ export function ShowPage({
     ));
   }, [waterfallDensity]);
 
-  const changeOrder = (nextOrder: ShowOrder) =>
+  const changeOrder = (nextOrder: PublicImageOrder) =>
     setRouteSearchParams((current) =>
       updateImageBrowseSearchParams(current, { order: nextOrder })
     );

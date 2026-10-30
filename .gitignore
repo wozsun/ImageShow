@@ -2,6 +2,7 @@
 /*
 !/.dockerignore
 !/.env.example
+!/.gitattributes
 !/.github/
 !/.gitignore
 !/AGENTS.md

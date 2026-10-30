@@ -2,11 +2,16 @@ import { imageAuthorInput, imageThemeInput } from "../../metadata-named-slugs.ts
 import { z } from "zod";
 import { appConfig } from "@imageshow/shared";
 import {
+  brightnesses,
+  devices,
+  imageDescriptionMaxLength,
+  imageTitleMaxLength,
+  ingestionBatchHardLimit,
+  slugMaxLength,
+  slugPattern,
   type ImportManifestItemDto,
   type ImportManifestParseErrorDto,
-  type ImportManifestResultDto,
-  slugMaxLength,
-  slugPattern
+  type ImportManifestResultDto
 } from "@imageshow/shared/browser";
 import { normalizedImageTagSlugsSchema } from "../../metadata-tags.ts";
 import { ImageTimeError, parseImageTime } from "../../image-time.ts";
@@ -33,11 +38,11 @@ const jsonlRowSchema = z
     image_time: z.string().trim().min(1).max(64).optional(),
     author: imageAuthorInput.optional(),
     tags: normalizedImageTagSlugsSchema.optional(),
-    title: z.string().trim().max(appConfig.imageMetadata.titleMaxLength).optional(),
-    description: z.string().trim().max(appConfig.imageMetadata.descriptionMaxLength).optional(),
+    title: z.string().trim().max(imageTitleMaxLength).optional(),
+    description: z.string().trim().max(imageDescriptionMaxLength).optional(),
     theme: imageThemeInput.optional(),
-    device: z.enum([...appConfig.devices, "auto"]).optional(),
-    brightness: z.enum([...appConfig.brightnesses, "auto"]).optional(),
+    device: z.enum([...devices, "auto"]).optional(),
+    brightness: z.enum([...brightnesses, "auto"]).optional(),
     storage_slug: slug.optional()
   })
   .strict();
@@ -67,7 +72,7 @@ export function parseJsonlManifest(
   options: { maxItems: number; timeZone?: string }
 ): ImportManifestResultDto {
   const maxItems = Math.min(
-    appConfig.ingestion.batchHardLimit,
+    ingestionBatchHardLimit,
     Math.max(1, Math.floor(options.maxItems))
   );
   if (Buffer.byteLength(content, "utf8") > appConfig.ingestion.jsonlManifestMaxBytes) {

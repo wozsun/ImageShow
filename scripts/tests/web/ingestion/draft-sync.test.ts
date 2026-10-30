@@ -17,6 +17,7 @@ import {
   inputText
 } from "../../support/dom-events.ts";
 import { installControlledClock } from "../../support/controlled-clock.ts";
+import { installProperties } from "../../support/property-descriptors.ts";
 
 test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语义 no-op 收敛响应丢失", async () => {
   const { window, document } = parseHTML(
@@ -149,18 +150,7 @@ test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语�
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   try {
     const { createRoot } = await import("react-dom/client");
@@ -605,13 +595,7 @@ test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语�
     );
     await React.act(async () => root.unmount());
   } finally {
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/内容接入] 任务卡片连续文本只在失焦发布一次并围栏旧 incarnation", async (t) => {
@@ -679,18 +663,7 @@ test("[Web/内容接入] 任务卡片连续文本只在失焦发布一次并围�
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   try {
     const { createRoot } = await import("react-dom/client");
@@ -936,13 +909,7 @@ test("[Web/内容接入] 任务卡片连续文本只在失焦发布一次并围�
     });
     assert.equal(publications.length, beforeReplacementBlur, "卡片卸载不得补发临时值");
   } finally {
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/内容接入] 任务卡片慢速键入与 URL 格式校验只产生必要的失焦草稿请求", async (t) => {
@@ -996,18 +963,7 @@ test("[Web/内容接入] 任务卡片慢速键入与 URL 格式校验只产生�
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
   const consoleMessages: string[] = [];
   const previousConsoleInfo = console.info;
   console.info = (...values: unknown[]) => {
@@ -1172,13 +1128,7 @@ test("[Web/内容接入] 任务卡片慢速键入与 URL 格式校验只产生�
     await React.act(async () => root.unmount());
   } finally {
     console.info = previousConsoleInfo;
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/内容接入] 未接管 placeholder 的草稿 fence 不阻塞 Server 全局动作", async () => {
@@ -1200,18 +1150,7 @@ test("[Web/内容接入] 未接管 placeholder 的草稿 fence 不阻塞 Server 
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   try {
     const { createRoot } = await import("react-dom/client");
@@ -1264,13 +1203,7 @@ test("[Web/内容接入] 未接管 placeholder 的草稿 fence 不阻塞 Server 
     assert.equal(container.textContent, "false");
     await React.act(async () => root.unmount());
   } finally {
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/内容接入] 离页草稿 owner 可按 session incarnation 静默退休", async (t) => {
@@ -1301,18 +1234,7 @@ test("[Web/内容接入] 离页草稿 owner 可按 session incarnation 静默退
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   try {
     const { createRoot } = await import("react-dom/client");
@@ -1392,12 +1314,6 @@ test("[Web/内容接入] 离页草稿 owner 可按 session incarnation 静默退
     assert.equal(fetchCalls, 0);
     await React.act(async () => root.unmount());
   } finally {
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });

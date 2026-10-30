@@ -95,7 +95,7 @@ export const GalleryTile = memo(function GalleryTile({
         }
       }}
     >
-      {import.meta.env?.DEV === true && (
+      {import.meta.env.DEV && (
         <GalleryTileDevelopmentStats imageIndex={position.index} />
       )}
       <LazyGalleryImage

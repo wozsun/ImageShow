@@ -38,6 +38,7 @@ import {
 } from "../sessions/transitions.ts";
 import { withImportPrefetchAdmission } from "./import-prefetch.ts";
 
+/** @internal Exported only so contract tests can cover it directly. */
 export function isSameFailedIngestionExecution(
   current: StoredIngestionSession,
   failed: IngestionSessionSnapshot
@@ -121,6 +122,7 @@ function ingestionWorkerLaneForSession(
   return null;
 }
 
+/** @internal Exported only so contract tests can cover it directly. */
 export function planIngestionWorkerLanes(
   sessions: readonly StoredIngestionSession[],
   active: Iterable<

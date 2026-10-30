@@ -1,7 +1,6 @@
 import {
-  adminImageBatchLimit,
   builtInSiteIconPath,
-  randomQueryLimits,
+  runtimeConfigLimits,
   variantSettingLimits,
   type ApiValidationIssueDto,
   type RuntimeConfig
@@ -136,15 +135,15 @@ const normalizeFields = (tier: keyof typeof variantSettingLimits, label: string)
     group: tier,
     label: `${label}初始质量`,
     kind: "number",
-    min: 50,
-    max: 100
+    min: variantSettingLimits[tier].quality[0],
+    max: variantSettingLimits[tier].quality[1]
   },
   min_quality: {
     group: tier,
     label: `${label}最低质量`,
     kind: "number",
-    min: 1,
-    max: 80
+    min: variantSettingLimits[tier].min_quality[0],
+    max: variantSettingLimits[tier].min_quality[1]
   },
   max_long_edge: {
     group: tier,
@@ -171,7 +170,7 @@ const settingsFields = {
     group: "addresses",
     label: "主站域名",
     kind: "text",
-    maxLength: 259,
+    ...runtimeConfigLimits["site.domain"],
     placeholder: "img.example.com",
     hint: "不含协议和路径，可带端口；设置后只接受主站与附加站点域名，留空或 example.com 时不限制。"
   },
@@ -180,7 +179,7 @@ const settingsFields = {
     label: "附加站点域名",
     kind: "lines",
     placeholder: "alternate.example.net\npreview.example.org:8443",
-    hint: "每行一个，最多 32 项，格式同主站域名。未配置独立公开地址的图片和静态资源随当前访问域名提供；DNS、证书与 Nginx 需自行配置，回源保留访问域名。"
+    hint: `每行一个，最多 ${runtimeConfigLimits["site.additional_domains"].maxItems} 项，格式同主站域名。未配置独立公开地址的图片和静态资源随当前访问域名提供；DNS、证书与 Nginx 需自行配置，回源保留访问域名。`
   },
   "site.title": {
     group: "identity",
@@ -191,7 +190,7 @@ const settingsFields = {
     group: "identity",
     label: "站点描述",
     kind: "textarea",
-    maxLength: 200
+    ...runtimeConfigLimits["site.description"]
   },
   "site.header_name": {
     group: "identity",
@@ -203,7 +202,7 @@ const settingsFields = {
     wide: true,
     label: "站点图标",
     kind: "text",
-    maxLength: 2048,
+    ...runtimeConfigLimits["site.icon"],
     placeholder: builtInSiteIconPath,
     hint: "留空使用内置图标；可填站内绝对路径或 HTTPS URL，自定义图标放入 data/asset 后填写 /asset/文件名。该目录缓存 1 年，更换图标请用新文件名。"
   },
@@ -221,7 +220,7 @@ const settingsFields = {
     group: "addresses",
     label: "静态资源公开 URL",
     kind: "text",
-    maxLength: 2048,
+    ...runtimeConfigLimits["site.assets_base_url"],
     placeholder: "留空随当前站点域名访问",
     hint: "须使用独立 Host，可带路径前缀。保存后刷新页面生效。"
   },
@@ -230,7 +229,7 @@ const settingsFields = {
     label: "额外脚本来源",
     kind: "lines",
     placeholder: "https://*.cdn.example.net\nhttps://static.example.org/js/\nhttps://cdn.example.org/lib/widget.js",
-    hint: "各页面额外允许的脚本来源，静态资源公开 URL 已自动允许。每行一个 HTTPS 地址，最多 32 项，不含参数；可用最左侧子域通配符，路径以 / 结尾匹配该目录，否则只匹配该文件。刷新页面后生效。"
+    hint: `各页面额外允许的脚本来源，静态资源公开 URL 已自动允许。每行一个 HTTPS 地址，最多 ${runtimeConfigLimits["site.script_sources"].maxItems} 项，不含参数；可用最左侧子域通配符，路径以 / 结尾匹配该目录，否则只匹配该文件。刷新页面后生效。`
   },
   "site.robots_enabled": {
     group: "visibility",
@@ -260,19 +259,19 @@ const settingsFields = {
     group: "homeBanner",
     label: "首页 Banner 上方标识",
     kind: "text",
-    maxLength: 160
+    ...runtimeConfigLimits["site.home.banner_label"]
   },
   "site.home.banner_title": {
     group: "homeBanner",
     label: "首页 Banner 标题",
     kind: "textarea",
-    maxLength: 80
+    ...runtimeConfigLimits["site.home.banner_title"]
   },
   "site.home.background": {
     group: "homeBanner",
     label: "首页背景图",
     kind: "text",
-    maxLength: 2048,
+    ...runtimeConfigLimits["site.home.background"],
     placeholder: "留空使用随机图片",
     hint: "站内绝对路径或 HTTPS URL。"
   },
@@ -280,19 +279,19 @@ const settingsFields = {
     group: "homeFooter",
     label: "ICP备案号",
     kind: "text",
-    maxLength: 200
+    ...runtimeConfigLimits["site.icp"]
   },
   "site.footer": {
     group: "homeFooter",
     label: "首页页脚",
     kind: "textarea",
-    maxLength: 2000
+    ...runtimeConfigLimits["site.footer"]
   },
   "site.mps": {
     group: "homeFooter",
     label: "公安备案号",
     kind: "text",
-    maxLength: 200
+    ...runtimeConfigLimits["site.mps"]
   },
   "site.gallery.enabled": {
     group: "gallery",
@@ -335,8 +334,7 @@ const settingsFields = {
     label: "展映播放速度",
     hint: "调整瀑布滚动、漂浮移动，以及星群转动与自动播放的速度。",
     kind: "number",
-    min: 10,
-    max: 60
+    ...runtimeConfigLimits["site.show.drift_speed"]
   },
   "site.show.order": {
     group: "show",
@@ -366,8 +364,7 @@ const settingsFields = {
     group: "random",
     label: "随机图单次返回数量上限",
     kind: "number",
-    min: 1,
-    max: randomQueryLimits.maxJsonItems,
+    ...runtimeConfigLimits["site.random_max_items"],
     hint: "JSON 请求的 limit 超过此值时按此值处理；不填 limit 时仍返回 1 张。"
   },
   "site.random_fallback_order": {
@@ -389,58 +386,50 @@ const settingsFields = {
     label: "额外允许来源",
     kind: "lines",
     placeholder: "https://example.org\nhttps://*.example.net",
-    hint: "每行一个 HTTPS origin，最多 32 项；支持最左侧子域通配符，不含路径或参数。"
+    hint: `每行一个 HTTPS origin，最多 ${runtimeConfigLimits["embed.allowed_origins"].maxItems} 项；支持最左侧子域通配符，不含路径或参数。`
   },
   "ingestion.max_file_size_mb": {
     group: "ingestion",
     label: "原始图片体积上限（MiB）",
     kind: "number",
-    min: 0,
-    max: 200,
-    step: "any",
-    exclusiveMin: true
+    ...runtimeConfigLimits["ingestion.max_file_size_mb"],
+    step: "any"
   },
   "ingestion.max_long_edge": {
     group: "ingestion",
     label: "原始图片长边上限（px）",
     kind: "number",
-    min: 300,
-    max: 32000
+    ...runtimeConfigLimits["ingestion.max_long_edge"]
   },
   "ingestion.list_page_size": {
     group: "ingestion",
     label: "接入队列与批量编辑每页数量",
     kind: "number",
-    min: 1,
-    max: 100
+    ...runtimeConfigLimits["ingestion.list_page_size"]
   },
   "ingestion.commit_concurrency": {
     group: "ingestion",
     label: "服务器最终入库并发数",
     kind: "number",
-    min: 1,
-    max: 16
+    ...runtimeConfigLimits["ingestion.commit_concurrency"]
   },
   "upload.max_items": {
     group: "upload",
     label: "单次本地上传数量上限",
     kind: "number",
-    min: 1,
-    max: 1000
+    ...runtimeConfigLimits["upload.max_items"]
   },
   "upload.browser_concurrency": {
     group: "upload",
     label: "单页面上传并发数",
     kind: "number",
-    min: 1,
-    max: 8
+    ...runtimeConfigLimits["upload.browser_concurrency"]
   },
   "upload.raw_concurrency": {
     group: "upload",
     label: "服务器原始文件接收并发数",
     kind: "number",
-    min: 1,
-    max: 8
+    ...runtimeConfigLimits["upload.raw_concurrency"]
   },
   "import.keep_original_link": {
     group: "import",
@@ -458,22 +447,19 @@ const settingsFields = {
     group: "import",
     label: "远程下载超时（秒）",
     kind: "number",
-    min: 5,
-    max: 300
+    ...runtimeConfigLimits["import.fetch_timeout_seconds"]
   },
   "import.max_items": {
     group: "import",
     label: "单次 URL / JSONL 导入数量上限",
     kind: "number",
-    min: 1,
-    max: 1000
+    ...runtimeConfigLimits["import.max_items"]
   },
   "weibo.max_items": {
     group: "weibo",
     label: "单次微博链接数量上限",
     kind: "number",
-    min: 1,
-    max: 50
+    ...runtimeConfigLimits["weibo.max_items"]
   },
   "weibo.source_enabled": {
     group: "weibo",
@@ -485,23 +471,20 @@ const settingsFields = {
     wide: true,
     label: "微博请求间隔（秒）",
     kind: "range",
-    min: 0,
-    max: 60,
+    ...runtimeConfigLimits["weibo.request_delay_seconds"],
     hint: "在最小值与最大值之间随机等待。"
   },
   "normalize.concurrency": {
     group: "normalize",
     label: "服务器图片处理并发数",
     kind: "number",
-    min: 1,
-    max: 8
+    ...runtimeConfigLimits["normalize.concurrency"]
   },
   "normalize.quality_step": {
     group: "normalize",
     label: "超体积质量递减步长",
     kind: "number",
-    min: 1,
-    max: 20
+    ...runtimeConfigLimits["normalize.quality_step"]
   },
   "normalize.large.quality": large.quality,
   "normalize.large.min_quality": large.min_quality,
@@ -520,7 +503,7 @@ const settingsFields = {
     wide: true,
     label: "登录页背景图",
     kind: "text",
-    maxLength: 2048,
+    ...runtimeConfigLimits["admin.login_background"],
     placeholder: "留空使用随机图片",
     hint: "站内绝对路径或 HTTPS URL。"
   },
@@ -528,71 +511,61 @@ const settingsFields = {
     group: "admin",
     label: "图片管理每页数量",
     kind: "number",
-    min: 10,
-    max: adminImageBatchLimit
+    ...runtimeConfigLimits["admin.image_page_size"]
   },
   "admin.recent_uploads": {
     group: "admin",
     label: "概览最近上传展示数量",
     kind: "number",
-    min: 1,
-    max: 60
+    ...runtimeConfigLimits["admin.recent_uploads"]
   },
   "security.session_ttl_seconds": {
     group: "session",
     label: "登录会话有效期（秒）",
     kind: "number",
-    min: 300,
-    max: 31536000
+    ...runtimeConfigLimits["security.session_ttl_seconds"]
   },
   "security.login_failure_window_seconds": {
     group: "login",
     label: "单 IP 登录失败统计窗口（秒）",
     kind: "number",
-    min: 30,
-    max: 300
+    ...runtimeConfigLimits["security.login_failure_window_seconds"]
   },
   "security.login_max_failures": {
     group: "login",
     label: "单 IP 登录失败次数上限",
     kind: "number",
-    min: 3,
-    max: 500
+    ...runtimeConfigLimits["security.login_max_failures"]
   },
   "security.login_global_window_seconds": {
     group: "login",
     label: "全局登录尝试统计窗口（秒）",
     kind: "number",
-    min: 60,
-    max: 600
+    ...runtimeConfigLimits["security.login_global_window_seconds"]
   },
   "security.login_global_max_attempts": {
     group: "login",
     label: "全局登录尝试次数上限",
     kind: "number",
-    min: 5,
-    max: 1000
+    ...runtimeConfigLimits["security.login_global_max_attempts"]
   },
   "security.random_window_seconds": {
     group: "rate",
     label: "随机 API 限流窗口（秒）",
     kind: "number",
-    min: 1,
-    max: 3600
+    ...runtimeConfigLimits["security.random_window_seconds"]
   },
   "security.random_max_requests": {
     group: "rate",
     label: "单 IP 随机图片额度（张）",
     kind: "number",
-    min: 1,
-    max: 10000
+    ...runtimeConfigLimits["security.random_max_requests"]
   },
   "security.random_limit_max_requests": {
     group: "rate",
     label: "单 IP 批量请求次数上限",
     kind: "number",
-    min: 1,
-    max: 10000
+    ...runtimeConfigLimits["security.random_limit_max_requests"]
   },
   "altcha.enabled": {
     group: "altcha",
@@ -604,23 +577,20 @@ const settingsFields = {
     group: "altcha",
     label: "验证挑战有效期（秒）",
     kind: "number",
-    min: 90,
-    max: 3600
+    ...runtimeConfigLimits["altcha.ttl_seconds"]
   },
   "altcha.cost": {
     group: "altcha",
     label: "验证工作成本",
     kind: "number",
-    min: 1000,
-    max: 100000
+    ...runtimeConfigLimits["altcha.cost"]
   },
   "altcha.counter_range": {
     group: "altcha",
     wide: true,
     label: "验证计数范围",
     kind: "range",
-    min: 100,
-    max: 100000
+    ...runtimeConfigLimits["altcha.counter_range"]
   },
   "log.level": {
     group: "log",
@@ -632,17 +602,14 @@ const settingsFields = {
     group: "log",
     label: "单个日志文件上限（MiB）",
     kind: "number",
-    min: 0,
-    max: 1024,
-    step: "any",
-    exclusiveMin: true
+    ...runtimeConfigLimits["log.max_size_mb"],
+    step: "any"
   },
   "log.max_files": {
     group: "log",
     label: "日志文件保留数量",
     kind: "number",
-    min: 1,
-    max: 100
+    ...runtimeConfigLimits["log.max_files"]
   }
 } satisfies { [P in SettingsFieldPath]: FieldDefinition<ValueAtPath<RuntimeConfig, P>> };
 

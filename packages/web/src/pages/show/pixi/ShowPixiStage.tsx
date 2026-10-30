@@ -9,7 +9,7 @@ import {
   type ReactNode,
   type Ref
 } from "react";
-import type { ShowOrder } from "@imageshow/shared/browser";
+import type { PublicImageOrder } from "@imageshow/shared/browser";
 import { PublicStarfield } from "../../../components/layout/PublicStarfield.js";
 import { ShowUnavailableState } from "../ShowUnavailableState.js";
 import type { ShowImage } from "../show-layout.js";
@@ -82,7 +82,7 @@ export function ShowPixiStage({
   onOpen: (image: ShowImage, opener: HTMLElement) => void;
   /** The stage cannot start in this browser; its notice replaces the scene. */
   onUnavailable: () => void;
-  order: ShowOrder;
+  order: PublicImageOrder;
   running: boolean;
   scene: ShowPixiSceneKind;
   speed: number;
@@ -205,7 +205,6 @@ export function ShowPixiStage({
     };
     // The runtime is intentionally created exactly once per mounted route.
     // Subsequent data, scene and control changes use its imperative boundary.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => runtime?.setScene(scene), [runtime, scene]);

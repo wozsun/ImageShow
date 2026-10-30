@@ -784,7 +784,8 @@ test("[Web/画廊] 画廊图片同节点换源隔离失败与迟到解码并保�
   Object.assign(window, {
     innerWidth: 1280,
     innerHeight: 720,
-    location: new URL("https://img.example.test/gallery")
+    location: new URL("https://img.example.test/gallery"),
+    matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} })
   });
   const { GalleryImageVisibilityController } =
     await import("../../../packages/web/src/pages/gallery/gallery-image-visibility.ts");

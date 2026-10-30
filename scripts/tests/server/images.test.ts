@@ -1,4 +1,3 @@
-import { defaultNormalizeProfile } from "@imageshow/shared/browser";
 import { storageObjectKey, trashPurgeEventsPath } from "@imageshow/shared/browser";
 import "../support/server-environment.ts";
 import assert from "node:assert/strict";
@@ -27,6 +26,7 @@ import {
 import {
   getIngestionMaxLongEdge
 } from "../../../packages/server/src/config/app-settings.ts";
+import { runtimeConfigDefaults } from "../../../packages/server/src/config/runtime-config.ts";
 import { initializeRuntimeConfig } from "../../../packages/server/src/config/runtime-config-store.ts";
 import { ApiError } from "../../../packages/server/src/core/api-error.ts";
 import {
@@ -1839,7 +1839,7 @@ test("[Server/图片] 标准化生成三档 WebP、保留来源尺寸并响应�
   initializeRuntimeConfig(); configureSharpRuntime();
   assert.equal(sharp.concurrency(), 1);
   const root = await createTestDirectory("imageshow-processing-");
-  const settings = defaultNormalizeProfile();
+  const settings = runtimeConfigDefaults().normalize;
   try {
     for (const format of ["jpeg", "png", "webp", "gif", "avif"] as const) {
       const path = join(root, "source." + format);
@@ -2475,7 +2475,7 @@ test("[Server/图片] 标准化取消等待当前编码收口且不进入后续�
   initializeRuntimeConfig(); const root=await createTestDirectory("encode-cancel-");
   t.after(()=>rm(root,{recursive:true,force:true}));const path=join(root,"source.png");
   await sharp({create:{width:8,height:8,channels:3,background:"red"}}).png().toFile(path);
-  const settings=defaultNormalizeProfile();
+  const settings=runtimeConfigDefaults().normalize;
   await assert.rejects(transcodeStoredImage("missing-file",settings,AbortSignal.abort()),{name:"AbortError"});
   const original=sharp.prototype.toBuffer;t.after(()=>{sharp.prototype.toBuffer=original;});
   for(const cancelAt of [1,2,3]) {

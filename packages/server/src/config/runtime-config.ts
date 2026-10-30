@@ -33,6 +33,7 @@ import {
   randomImageSize,
   randomMaxItems,
   randomWindowSeconds,
+  randomLimitMaxRequests,
   randomMaxRequests,
   recentUploads,
   showDensity,
@@ -45,7 +46,8 @@ import {
   siteAdditionalDomains,
   siteDescription,
   siteFooter,
-  siteFooterText,
+  siteIcp,
+  siteMps,
   siteIcon,
   siteHeaderName,
   siteTitle,
@@ -103,8 +105,8 @@ const runtimeConfigSchema = z.strictObject({
     assets_base_url: publicBaseUrlSchema,
     script_sources: siteScriptSources,
     robots_enabled: z.boolean(),
-    icp: siteFooterText,
-    mps: siteFooterText,
+    icp: siteIcp,
+    mps: siteMps,
     footer: siteFooter
   }).superRefine((site, context) => {
     // Every open public page falls back to the gallery.
@@ -164,7 +166,7 @@ const runtimeConfigSchema = z.strictObject({
     login_global_max_attempts: loginGlobalMaxAttempts,
     random_window_seconds: randomWindowSeconds,
     random_max_requests: randomMaxRequests,
-    random_limit_max_requests: randomMaxRequests
+    random_limit_max_requests: randomLimitMaxRequests
   }),
   altcha: z
     .strictObject({

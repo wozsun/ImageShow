@@ -2,6 +2,8 @@ import "../../support/web-environment.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseHTML } from "linkedom";
+import { installProperties } from "../../support/property-descriptors.ts";
+import { settleReactUntil } from "../../support/polling.ts";
 
 test("[Web/后台] ready cache 检查面板区分当前数量与完整重建进度时间", async () => {
   const React = await import("react");
@@ -11,19 +13,8 @@ test("[Web/后台] ready cache 检查面板区分当前数量与完整重建进�
     await import("../../../../packages/web/src/pages/admin/check/ReadyImageCachePanel.tsx");
   const { readyImageProjectionUsage } =
     await import("../../../../packages/web/src/pages/admin/check/check-redis-inspection.ts");
-  const { registerHooks } = await import("node:module");
-  const cssHooks = registerHooks({
-    load(url, context, nextLoad) {
-      if (url.endsWith(".css")) {
-        return { format: "module", source: "", shortCircuit: true };
-      }
-      return nextLoad(url, context);
-    }
-  });
   const { ReadyImageCacheMaintenancePanel } =
-    await import("../../../../packages/web/src/pages/admin/check/CheckMaintenanceCapability.tsx").finally(
-      () => cssHooks.deregister()
-    );
+    await import("../../../../packages/web/src/pages/admin/check/CheckMaintenanceCapability.tsx");
   const previousReact = Object.getOwnPropertyDescriptor(globalThis, "React");
   Object.defineProperty(globalThis, "React", {
     configurable: true,
@@ -332,18 +323,7 @@ test("[Web/后台] 自动 Redis 占用检测在 Strict Mode 单飞并在重新�
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } }
@@ -368,15 +348,8 @@ test("[Web/后台] 自动 Redis 占用检测在 Strict Mode 单飞并在重新�
         React.createElement(Probe)
       )
     );
-  const settleUntil = async (predicate: () => boolean) => {
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      await React.act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0));
-      });
-      if (predicate()) return;
-    }
-    assert.fail("Redis inspection query did not settle");
-  };
+  const settleUntil = (predicate: () => boolean) =>
+    settleReactUntil(predicate, "Redis inspection query did not settle");
 
   try {
     const firstRoot = createRoot(container);
@@ -409,13 +382,7 @@ test("[Web/后台] 自动 Redis 占用检测在 Strict Mode 单飞并在重新�
     await React.act(async () => secondRoot.unmount());
   } finally {
     client.clear();
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/后台] 存储维护直接合并存储对象与持久彻底删除任务预览", async () => {
@@ -521,31 +488,9 @@ test("[Web/后台] 存储维护直接合并存储对象与持久彻底删除任�
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
-  const { registerHooks } = await import("node:module");
-  const cssHooks = registerHooks({
-    load(url, context, nextLoad) {
-      if (url.endsWith(".css")) {
-        return { format: "module", source: "", shortCircuit: true };
-      }
-      return nextLoad(url, context);
-    }
-  });
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
   const { CheckStorageMaintenanceActions } =
-    await import("../../../../packages/web/src/pages/admin/check/CheckMaintenanceCapability.tsx").finally(
-      () => cssHooks.deregister()
-    );
+    await import("../../../../packages/web/src/pages/admin/check/CheckMaintenanceCapability.tsx");
   const checkNames: string[] = [];
   const published: unknown[] = [];
   let showStorageCount = 0;
@@ -670,13 +615,7 @@ test("[Web/后台] 存储维护直接合并存储对象与持久彻底删除任�
     } else {
       delete (window.HTMLElement.prototype as unknown as Record<string, unknown>).getClientRects;
     }
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/后台] 检查页保留完整 Redis 快照并串行化自动检测与全部检查", async () => {
@@ -686,19 +625,8 @@ test("[Web/后台] 检查页保留完整 Redis 快照并串行化自动检测与
   const { MemoryRouter } = await import("react-router");
   const { AuthSessionProvider } =
     await import("../../../../packages/web/src/hooks/useAuthSession.tsx");
-  const { registerHooks } = await import("node:module");
-  const cssHooks = registerHooks({
-    load(url, context, nextLoad) {
-      if (url.endsWith(".css")) {
-        return { format: "module", source: "", shortCircuit: true };
-      }
-      return nextLoad(url, context);
-    }
-  });
   const { CheckPage } =
-    await import("../../../../packages/web/src/pages/admin/check/CheckPage.tsx").finally(() =>
-      cssHooks.deregister()
-    );
+    await import("../../../../packages/web/src/pages/admin/check/CheckPage.tsx");
   const { document, window } = parseHTML(
     '<!doctype html><html><body><div id="root"></div></body></html>'
   );
@@ -860,18 +788,7 @@ test("[Web/后台] 检查页保留完整 Redis 快照并串行化自动检测与
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } }
@@ -999,12 +916,6 @@ test("[Web/后台] 检查页保留完整 Redis 快照并串行化自动检测与
   } finally {
     await React.act(async () => root.unmount());
     client.clear();
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });

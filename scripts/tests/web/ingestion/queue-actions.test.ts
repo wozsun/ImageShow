@@ -17,6 +17,7 @@ import {
   ingestionJob,
   adminImageListItem
 } from "../../support/web-test-context.ts";
+import { installProperties } from "../../support/property-descriptors.ts";
 
 test("[Web/内容接入] 全队列动作冻结水位并以同一 action ID 有界续传", async () => {
   const { window, document } = parseHTML(
@@ -98,18 +99,7 @@ test("[Web/内容接入] 全队列动作冻结水位并以同一 action ID 有�
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   try {
     const { createRoot } = await import("react-dom/client");
@@ -287,13 +277,7 @@ test("[Web/内容接入] 全队列动作冻结水位并以同一 action ID 有�
     assert.equal(refreshes, 1, "动作失败仍须请求一次权威收敛");
     await React.act(async () => root.unmount());
   } finally {
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/内容接入] 失效动作凭证先恢复 CSRF 再按 owner 刷新权威水位", async () => {
@@ -374,18 +358,7 @@ test("[Web/内容接入] 失效动作凭证先恢复 CSRF 再按 owner 刷新权
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   try {
     setCsrfToken("expired-csrf");
@@ -475,13 +448,7 @@ test("[Web/内容接入] 失效动作凭证先恢复 CSRF 再按 owner 刷新权
     await React.act(async () => root.unmount());
   } finally {
     clearCsrfToken();
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });
 test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀疏 metadata", async () => {
@@ -565,18 +532,7 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   try {
     setCsrfToken("apply-defaults-token");
@@ -1532,12 +1488,6 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
     await React.act(async () => root.unmount());
   } finally {
     clearCsrfToken();
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });

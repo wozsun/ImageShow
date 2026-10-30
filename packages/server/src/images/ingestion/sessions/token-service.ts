@@ -10,6 +10,7 @@ import { stableJson } from "./projection.ts";
 export const uploadCredentialPurpose = "imageshow/ingestion/upload/credential";
 export const ingestionActionWatermarkPurpose = "imageshow/ingestion/action/watermark";
 export const ingestionActionContinuationPurpose = "imageshow/ingestion/action/continuation";
+/** @internal Exported only so contract tests can cover it directly. */
 export const ingestionTokenPurposes = [
   uploadCredentialPurpose,
   ingestionActionWatermarkPurpose,

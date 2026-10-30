@@ -14,7 +14,6 @@ import test from "node:test";
 import { createTestDirectory } from "../support/test-directory.ts";
 import { runProcess } from "../support/process-runner.ts";
 import {
-  defaultNormalizeProfile,
   imageVariants,
   type RuntimeConfig
 } from "../../../packages/shared/src/browser.ts";
@@ -1545,7 +1544,7 @@ test("[Server/配置] 存储显示名统一使用配置值并为缺省名称提�
 });
 
 test("[Server/配置] 三档图片处理参数的范围、顺序与质量边界", () => {
-  const profile = { concurrency: 2, ...defaultNormalizeProfile() };
+  const profile = runtimeConfigDefaults().normalize;
   assert.deepEqual(normalizeSchema.parse(profile), profile);
   for (const variant of imageVariants) {
     for (const [key, invalid] of Object.entries({ quality: [49, 101, 80.5], min_quality: [0, 81] })) {
@@ -1571,10 +1570,6 @@ test("[Server/配置] 三档图片处理参数的范围、顺序与质量边界"
   assert.throws(() => normalizeSchema.parse({ ...profile, quality_step: 0 }));
   assert.throws(() => normalizeSchema.parse({ ...profile, quality_step: 21 }));
   assert.throws(() => normalizeSchema.parse({ ...profile, extra: true }));
-  const another = defaultNormalizeProfile();
-  another.large.quality = 100;
-  assert.equal(profile.large.quality, 80);
-  assert.equal(another.small.quality, 80);
   // 配置对象的属性顺序不影响解析结果。
   const ordered = Object.fromEntries(Object.entries(profile).reverse().map(([key, value]) => [key,
     typeof value === "object" && value !== null ? Object.fromEntries(Object.entries(value).reverse()) : value]));

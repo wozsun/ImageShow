@@ -1,22 +1,25 @@
 import { imageAuthorInput, imageThemeInput } from "../../images/metadata-named-slugs.ts";
 import { z } from "zod";
-import { appConfig } from "@imageshow/shared";
 import {
-  parseGalleryTagFilter,
   TagFilterError,
-  adminImagePageLimit,
   adminImageBatchLimit,
-  adminImageSortFields,
   adminImageOrders,
+  adminImagePageLimit,
+  adminImageSortFields,
+  brightnesses,
   defaultAdminImageSort,
+  devices,
+  imageDescriptionMaxLength,
+  imageTitleMaxLength,
+  parseGalleryTagFilter,
+  publicImageBrowseLimit,
   publicImageOrders,
   publicImageViews,
-  publicImageBrowseLimit,
   publicTagGroupLimit,
-  type ImageUpdateItemInputDto,
-  type ImageUpdateRequestDto,
   slugMaxLength,
-  slugPattern
+  slugPattern,
+  type ImageUpdateItemInputDto,
+  type ImageUpdateRequestDto
 } from "@imageshow/shared/browser";
 import { isHttpsUrl } from "../../core/url-validation.ts";
 import { normalizedImageTagSlugsSchema } from "../../images/metadata-tags.ts";
@@ -33,9 +36,9 @@ import {
 import { storageSlugInput } from "./storage.ts";
 
 const externalImageRejectedMessage = "外部图片请求未通过安全校验";
-const classificationDevices = [...appConfig.devices, "auto"] as const;
+const classificationDevices = [...devices, "auto"] as const;
 const classificationBrightnesses = [
-  ...appConfig.brightnesses,
+  ...brightnesses,
   "auto"
 ] as const;
 
@@ -44,9 +47,9 @@ const imageMetadataFieldInputs = {
   brightness: z.enum(classificationBrightnesses),
   theme: imageThemeInput,
   author: imageAuthorInput,
-  title: z.string().trim().max(appConfig.imageMetadata.titleMaxLength),
+  title: z.string().trim().max(imageTitleMaxLength),
   description: z.string().trim()
-    .max(appConfig.imageMetadata.descriptionMaxLength),
+    .max(imageDescriptionMaxLength),
   source: requestUrlInput("来源页面链接需为有效的 HTTPS 链接"),
   original: requestUrlInput(externalImageRejectedMessage).refine(
     (value) => !value || isHttpsUrl(value, { requireDomain: true }),
@@ -162,8 +165,8 @@ export function imageListQueryValues(params: URLSearchParams) {
 }
 
 const imageListFilterFields = {
-  device: z.enum(appConfig.devices).optional(),
-  brightness: z.enum(appConfig.brightnesses).optional(),
+  device: z.enum(devices).optional(),
+  brightness: z.enum(brightnesses).optional(),
   theme: z.string().trim().toLowerCase().max(1024).optional(),
   tag: tagFilterInput.optional(),
   author: z.string().trim().toLowerCase().max(1024).optional()
@@ -212,8 +215,8 @@ function galleryStatsSelector(noun: string) {
 }
 
 export const galleryStatsQuery = z.strictObject({
-  device: z.enum(appConfig.devices).optional(),
-  brightness: z.enum(appConfig.brightnesses).optional(),
+  device: z.enum(devices).optional(),
+  brightness: z.enum(brightnesses).optional(),
   theme: galleryStatsSelector("主题").optional(),
   tag: tagFilterInput.optional(),
   tag_scope: safePositiveIntegerInput.max(publicTagGroupLimit).optional(),
@@ -242,6 +245,6 @@ export const adminImageListQuery = z.strictObject({
   sort_by: z.enum(adminImageSortFields).default(defaultAdminImageSort.sort_by),
   order: z.enum(adminImageOrders).default(defaultAdminImageSort.order),
   page: safePositiveIntegerInput.default(1),
-  limit: safePositiveIntegerInput.max(appConfig.pagination.maxLimit)
+  limit: safePositiveIntegerInput.max(adminImageBatchLimit)
     .default(adminImagePageLimit)
 }) satisfies z.ZodType<AdminImageListQuery>;

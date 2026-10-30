@@ -18,15 +18,8 @@ export type RandomDefaultMethod = (typeof randomDefaultMethods)[number];
 export const randomMethods = [...randomDefaultMethods, "json"] as const;
 export type RandomMethod = (typeof randomMethods)[number];
 
-export type GalleryOrder = PublicImageOrder;
-export type ShowOrder = PublicImageOrder;
-
 export const showModes = ["waterfall", "float", "cluster"] as const;
 export type ShowMode = (typeof showModes)[number];
-
-/** 星群模式把图片按一种分类聚成星团；分组维度是访客的浏览选择，不是站点配置。 */
-export const showClusterGroups = ["theme", "tag", "author"] as const;
-export type ShowClusterGroup = (typeof showClusterGroups)[number];
 
 export const showDensities = ["relaxed", "balanced", "dense"] as const;
 export type ShowDensity = (typeof showDensities)[number];
@@ -45,7 +38,7 @@ export type SiteShowSettings = {
   mode: ShowMode;
   density: ShowDensity;
   drift_speed: number;
-  order: ShowOrder;
+  order: PublicImageOrder;
 };
 
 /**
@@ -54,7 +47,7 @@ export type SiteShowSettings = {
  */
 type SiteGallerySettings = {
   enabled: boolean;
-  order: GalleryOrder;
+  order: PublicImageOrder;
 };
 
 type RuntimeSiteSettings = {

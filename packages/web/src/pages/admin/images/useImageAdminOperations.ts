@@ -66,6 +66,7 @@ function withIgnoredImageCount(text: string, ignored: number) {
   return ignored ? `${text}，${ignored} 张未处理` : text;
 }
 
+/** @internal Exported only so contract tests can cover it directly. */
 export async function settleConfirmedImageAdminMutation({
   startedAt,
   text,

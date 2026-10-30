@@ -8,7 +8,7 @@ import {
   galleryHref,
   galleryRandomRequestDevice,
   showModeFromSearchParams,
-  showOrderFromSearchParams,
+  publicImageOrderFromSearchParams,
   updateImageBrowseSearchParams
 } from "../../../packages/web/src/lib/gallery/gallery-query.ts";
 import { publicHomeBrowsePath, publicPageTarget, publicRootPath } from "@imageshow/shared/browser";
@@ -40,15 +40,6 @@ import { appConfig } from "../../../packages/shared/src/app-config.ts";
 import { HomeFooter } from "../../../packages/web/src/pages/home/HomeFooter.tsx";
 
 test("[Web/公开导航] 嵌入路由保持访客并在普通页往返时交接认证请求", async (t) => {
-  const { registerHooks } = await import("node:module");
-  const hooks = registerHooks({
-    load(url, context, next) {
-      return url.endsWith(".css")
-        ? { format: "module", source: "", shortCircuit: true }
-        : next(url, context);
-    }
-  });
-  t.after(() => hooks.deregister());
   const h = await createConfigStreamHarness(t);
   Object.assign(h.window, { parent: h.window, scrollY: 0, scrollTo() {} });
   const storage = new Map([["site_session_hint", "1"]]);
@@ -353,17 +344,6 @@ test("[Web/公开导航] 旧词表刷新失败与未知标签分开提示，期�
 });
 
 test("[Web/公开导航] 真实画廊与展映页面刷新词表后按完整原条件恢复请求", async (t) => {
-  const { registerHooks } = await import("node:module");
-  const hooks = registerHooks({
-    load(url, context, next) {
-      if (url.endsWith(".css")) return { format: "module", source: "", shortCircuit: true };
-      const loaded = next(url, context);
-      return url.endsWith("/ShowPixiStage.tsx")
-        ? { ...loaded, source: `import.meta.env = { DEV: false };\n${loaded.source}` }
-        : loaded;
-    }
-  });
-  t.after(() => hooks.deregister());
   const { GalleryPage } = await import("../../../packages/web/src/pages/gallery/GalleryPage.tsx");
   const { ShowPage } = await import("../../../packages/web/src/pages/show/ShowPage.tsx");
   const moduleLoader = createPublicRouteModuleLoader(async () => ({}));
@@ -898,7 +878,7 @@ test("[Web/公开导航] 公开图库筛选与随机图链接使用同一当前�
   assert.equal(galleryRandomRequestDevice(""), "all");
   assert.equal(galleryRandomRequestDevice("auto"), "");
   assert.equal(galleryRandomRequestDevice("pc"), "pc");
-  assert.equal(showOrderFromSearchParams(new URLSearchParams(), "oldest"), "oldest");
+  assert.equal(publicImageOrderFromSearchParams(new URLSearchParams(), "oldest"), "oldest");
   assert.equal(showModeFromSearchParams(new URLSearchParams(), "float"), "float");
   assert.equal(
     showModeFromSearchParams(new URLSearchParams("mode=waterfall"), "float"),
@@ -909,17 +889,17 @@ test("[Web/公开导航] 公开图库筛选与随机图链接使用同一当前�
     "float"
   );
   assert.equal(
-    showOrderFromSearchParams(new URLSearchParams("order=latest"), "random"),
+    publicImageOrderFromSearchParams(new URLSearchParams("order=latest"), "random"),
     "latest"
   );
   assert.equal(
-    showOrderFromSearchParams(new URLSearchParams("order=invalid"), "random"),
+    publicImageOrderFromSearchParams(new URLSearchParams("order=invalid"), "random"),
     "random"
   );
   const implicit = updateImageBrowseSearchParams(new URLSearchParams(), { theme: "stage" });
   assert.equal(implicit.toString(), "theme=stage");
-  assert.equal(showOrderFromSearchParams(implicit, "random"), "random");
-  assert.equal(showOrderFromSearchParams(implicit, "latest"), "latest");
+  assert.equal(publicImageOrderFromSearchParams(implicit, "random"), "random");
+  assert.equal(publicImageOrderFromSearchParams(implicit, "latest"), "latest");
   assert.equal(updateImageBrowseSearchParams(implicit, emptyGalleryFilters).toString(), "");
   const explicit = new URLSearchParams("order=oldest&mode=float&tag=concert&tag=stage");
   const selected = updateImageBrowseSearchParams(explicit, { theme: "stage" });
@@ -929,7 +909,7 @@ test("[Web/公开导航] 公开图库筛选与随机图链接使用同一当前�
   assert.equal(cleared.toString(), "order=oldest&mode=float");
   const ordered = updateImageBrowseSearchParams(selected, { order: "random" });
   assert.equal(ordered.toString(), "order=random&mode=float&tag=concert&tag=stage&theme=stage");
-  assert.equal(showOrderFromSearchParams(ordered, "latest"), "random");
+  assert.equal(publicImageOrderFromSearchParams(ordered, "latest"), "random");
   assert.equal(
     updateImageBrowseSearchParams(implicit, { mode: "float" }).toString(),
     "theme=stage&mode=float"

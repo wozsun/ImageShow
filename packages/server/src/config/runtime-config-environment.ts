@@ -28,6 +28,7 @@ type RuntimeConfigEnvironmentBinding = {
   valueKind: RuntimeConfigEnvironmentValueKind;
 };
 
+/** @internal Exported only so contract tests can cover it directly. */
 export const runtimeConfigEnvironmentBindings = [
   { path: "site.domain", environmentVariable: "SITE_DOMAIN", valueKind: "string" },
   { path: "site.additional_domains", environmentVariable: "SITE_ADDITIONAL_DOMAINS", valueKind: "json-array" },

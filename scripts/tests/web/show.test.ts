@@ -16,7 +16,7 @@ import {
 import {
   emptyGalleryFilters,
   showModeFromSearchParams,
-  showOrderFromSearchParams,
+  publicImageOrderFromSearchParams,
   updateImageBrowseSearchParams
 } from "../../../packages/web/src/lib/gallery/gallery-query.ts";
 import {
@@ -481,18 +481,6 @@ test("[Web/展映] Stage 回调读取已提交版本并保持异步实例生命�
   const React = await import("react");
   const { MemoryRouter, useLocation } = await import("react-router");
   const { createRoot } = await import("react-dom/client");
-  const { registerHooks } = await import("node:module");
-  const hooks = registerHooks({
-    load(url, context, next) {
-      if (url.endsWith(".css")) return { format: "module", source: "", shortCircuit: true };
-      const loaded = next(url, context);
-      if (url.endsWith("/ShowPixiStage.tsx")) {
-        return { ...loaded, source: `import.meta.env = { DEV: false };\n${loaded.source}` };
-      }
-      return loaded;
-    }
-  });
-  t.after(() => hooks.deregister());
   const { ShowPixiStage } =
     await import("../../../packages/web/src/pages/show/pixi/ShowPixiStage.tsx");
   const { window, document } = parseHTML("<html><body><div id=root></div></body></html>");
@@ -897,7 +885,7 @@ test("[Web/展映] 移动端从展开选项切换三种画面与排序并保留�
     return React.createElement(ShowMobileControls, {
       onRunningChange() {},
       getSceneHref: (mode) => `?${updateImageBrowseSearchParams(params, { mode })}`,
-      order: showOrderFromSearchParams(params, "random"),
+      order: publicImageOrderFromSearchParams(params, "random"),
       onOrderChange: (order) => setParams(updateImageBrowseSearchParams(params, { order })),
       reducedMotion: false,
       running: true,

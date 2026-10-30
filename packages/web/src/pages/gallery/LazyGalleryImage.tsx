@@ -156,10 +156,10 @@ export const LazyGalleryImage = memo(function LazyGalleryImage({
         } as CSSProperties
       }
     >
-      {import.meta.env?.DEV === true && renderImage && !failed && (
+      {import.meta.env.DEV && renderImage && !failed && (
         <GalleryImageDevelopmentStats />
       )}
-      {import.meta.env?.DEV === true && failed && (
+      {import.meta.env.DEV && failed && (
         <GalleryThumbnailFallbackDevelopmentStats />
       )}
       {renderImage && !failed && (

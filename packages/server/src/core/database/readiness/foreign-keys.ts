@@ -4,7 +4,7 @@ import {
   type DatabaseReader,
   type RequiredForeignKey
 } from "./contract.ts";
-import { primaryKeyLabel, sameColumns } from "./constraint-helpers.ts";
+import { primaryKeyLabel, sameColumns } from "./constraint-columns.ts";
 
 type ForeignKeyRow = {
   table_name: string;

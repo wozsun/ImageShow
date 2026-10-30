@@ -1,4 +1,5 @@
 import { appConfig } from "@imageshow/shared";
+import { randomQueryLimits } from "@imageshow/shared/browser";
 import {
   sampleReadyImageCoreIndexCommand,
   sampleReadyImageDerivedIndexCommand,
@@ -7,7 +8,7 @@ import {
 } from "./redis/commands.ts";
 import { redis } from "../../core/redis/client.ts";
 import { ReadyImageCoreCacheError } from "./cache-errors.ts";
-import { getReadyImageCacheCoordinatorStatus } from "./coordinator.ts";
+import { readyImageCacheItemCount, readyImageCacheRevision } from "./coordinator.ts";
 import { READY_IMAGE_DERIVED_CACHE_POLICY } from "./derived/policy.ts";
 import type { ReadyImageFilterIndex } from "./indexes/filter.ts";
 import {
@@ -31,20 +32,9 @@ type ReadyImageSampleDependencies = {
   sampleDerived: (input: ReadyImageDerivedSampleInput) => Promise<RedisReadyImageSampleResult>;
 };
 
-function currentReadyImageRevision() {
-  const status = getReadyImageCacheCoordinatorStatus();
-  return status.readable && status.meta?.state === "ready"
-    ? status.meta.appliedRevision
-    : null;
-}
-
-function cacheItemCount() {
-  return getReadyImageCacheCoordinatorStatus().meta?.itemCount ?? 0;
-}
-
 const defaultReadyImageSampleDependencies: ReadyImageSampleDependencies = {
-  currentRevision: currentReadyImageRevision,
-  coreCount: cacheItemCount,
+  currentRevision: readyImageCacheRevision,
+  coreCount: readyImageCacheItemCount,
   sampleCore: (input) => sampleReadyImageCoreIndexCommand(redis, input),
   sampleDerived: (input) => sampleReadyImageDerivedIndexCommand(redis, input)
 };
@@ -90,7 +80,7 @@ export async function sampleResolvedReadyImageIndex(
     limit,
     recentSize: Math.min(recent.size, appConfig.randomDedupe.historySize),
     historySize: appConfig.randomDedupe.historySize,
-    maximumLimit: appConfig.randomQuery.maxJsonItems
+    maximumLimit: randomQueryLimits.maxJsonItems
   };
   const coreKeys = [
     READY_IMAGE_META_KEY,

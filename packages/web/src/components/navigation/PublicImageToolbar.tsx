@@ -2,7 +2,7 @@ import { useCallback, useId, useRef, type ReactNode, type RefObject } from "reac
 import {
   publicImageOrders,
   type GalleryFacetsDto,
-  type ShowOrder
+  type PublicImageOrder
 } from "@imageshow/shared/browser";
 import { CopyableLinkField } from "../actions/CopyableLinkField.js";
 import { SelectMenu } from "../form/SelectMenu.js";
@@ -19,12 +19,12 @@ import {
   publicFilterSections
 } from "../../lib/gallery/public-filter-draft.js";
 
-export const publicImageOrderLabels: Record<ShowOrder, string> = {
+export const publicImageOrderLabels: Record<PublicImageOrder, string> = {
   random: "随机模式",
   latest: "最新优先",
   oldest: "最旧优先"
 };
-export const publicImageOrderIcons: Record<ShowOrder, IconName> = {
+export const publicImageOrderIcons: Record<PublicImageOrder, IconName> = {
   random: "shuffle-line",
   latest: "sort-desc",
   oldest: "sort-asc"
@@ -35,8 +35,8 @@ export function PublicImageOrderControl({
   onChange,
   compact = false
 }: {
-  order: ShowOrder;
-  onChange: (order: ShowOrder) => void;
+  order: PublicImageOrder;
+  onChange: (order: PublicImageOrder) => void;
   compact?: boolean;
 }) {
   if (compact) {
@@ -60,7 +60,7 @@ export function PublicImageOrderControl({
   return (
     <SelectMenu
       value={order}
-      onChange={(value) => onChange(value as ShowOrder)}
+      onChange={(value) => onChange(value as PublicImageOrder)}
       ariaLabel="排列顺序"
       className="public-toolbar-order"
       menuClassName="public-gallery-menu"
@@ -190,8 +190,8 @@ export function PublicImageToolbar({
   filtersOpen: boolean;
   onOpenFilters: () => void;
   onClearFilters: () => void;
-  order: ShowOrder;
-  onOrderChange: (order: ShowOrder) => void;
+  order: PublicImageOrder;
+  onOrderChange: (order: PublicImageOrder) => void;
   leadingControls?: ReactNode;
   viewControls?: ReactNode;
   /** 当前画面不使用筛选时，占据筛选按钮位置的控件及对应的摘要文字。 */

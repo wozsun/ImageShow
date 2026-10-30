@@ -1,5 +1,5 @@
 import { Color, Container, Graphics, Sprite, Text, Texture, type Renderer } from "pixi.js";
-import { imageVariantUrl, type ShowOrder } from "@imageshow/shared/browser";
+import { imageVariantUrl, type PublicImageOrder } from "@imageshow/shared/browser";
 import {
   clusterCardGrowth,
   clusterCardSide,
@@ -377,7 +377,7 @@ export class ShowPixiClusterScene implements ShowPixiSceneController {
 
   // ---------- 数据 ----------
 
-  setImages(_images: readonly ShowImage[], _dataKey: string, _order: ShowOrder, _hasMore: boolean) {
+  setImages(_images: readonly ShowImage[], _dataKey: string, _order: PublicImageOrder, _hasMore: boolean) {
     // 星群不消费展映的单一图片流；它的数据经 setClusters 进入。
   }
 

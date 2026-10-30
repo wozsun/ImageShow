@@ -9,6 +9,8 @@ import {
 } from "../../../../packages/web/src/lib/api/client.ts";
 
 import { AuthSessionRefreshCoordinator } from "../../../../packages/web/src/lib/api/auth-session.ts";
+import { installProperties } from "../../support/property-descriptors.ts";
+import { settleReactUntil } from "../../support/polling.ts";
 
 test("[Web/后台] 认证刷新失败后会释放在途状态并允许成功重试", async () => {
   const coordinator = new AuthSessionRefreshCoordinator();
@@ -111,18 +113,7 @@ test("[Web/后台] 认证会话恢复保持最新刷新并只注册一个过期�
     React,
     IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
+  const restoreGlobals = installProperties(globalThis, installedGlobals);
 
   try {
     const { createRoot } = await import("react-dom/client");
@@ -169,19 +160,14 @@ test("[Web/后台] 认证会话恢复保持最新刷新并只注册一个过期�
           )
         )
       );
-    const settleUntil = async (predicate: () => boolean) => {
-      for (let attempt = 0; attempt < 40; attempt += 1) {
-        await React.act(async () => {
-          await new Promise((resolve) => setTimeout(resolve, 0));
-        });
-        if (predicate()) return;
-      }
-      assert.fail(
-        "auth session recovery did not settle: " +
+    const settleUntil = (predicate: () => boolean) =>
+      settleReactUntil(
+        predicate,
+        () =>
+          "auth session recovery did not settle: " +
           `text=${container.textContent} fetches=${fetchCount} ` +
           `listeners=${activeAuthListeners.size}`
       );
-    };
 
     await React.act(async () => root.render(tree()));
     await settleUntil(
@@ -252,12 +238,6 @@ test("[Web/后台] 认证会话恢复保持最新刷新并只注册一个过期�
     client.clear();
   } finally {
     clearCsrfToken();
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
+    restoreGlobals();
   }
 });

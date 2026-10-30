@@ -652,15 +652,6 @@ for (const failure of [
 }
 
 test("[Web/工作流属性] 移动浮层拥有菜单与确认框，按层关闭且确认不触发父表单保存", async (t) => {
-  const { registerHooks } = await import("node:module");
-  const cssHooks = registerHooks({
-    load(url, context, nextLoad) {
-      return url.endsWith(".css")
-        ? { format: "module", source: "export {};", shortCircuit: true }
-        : nextLoad(url, context);
-    }
-  });
-  t.after(() => cssHooks.deregister());
   let harness!: Awaited<ReturnType<typeof createConfigStreamHarness>>;
   const restorers: Array<() => void> = [];
   t.after(async () => {
