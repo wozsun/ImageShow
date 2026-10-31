@@ -36,6 +36,10 @@ import {
   registerPublicAuthRoutes
 } from "./routes/auth.ts";
 import { registerPublicRoutes } from "./routes/public.ts";
+import {
+  registerAdminAnalyticsRoutes,
+  registerAnalyticsRoutes
+} from "./routes/analytics.ts";
 import { serveRobotsTxt } from "./routes/robots.ts";
 import { registerRandomRoutes } from "./routes/random.ts";
 import { registerSettingsRoutes } from "./routes/settings.ts";
@@ -132,6 +136,7 @@ export function createHttpApp(
 
   registerHealthRoutes(app);
   registerPublicRoutes(app);
+  registerAnalyticsRoutes(app);
   app.use(`${adminApiBasePath}/*`, async (_c, next) => {
     await availability.requireRedis();
     await next();
@@ -167,6 +172,7 @@ export function createHttpApp(
   registerAdminCacheRoutes(app);
   registerIngestionRoutes(app);
   registerAdminLogRoutes(app);
+  registerAdminAnalyticsRoutes(app);
   registerSettingsRoutes(app);
   registerStorageRoutes(app);
   registerCheckRoutes(app);

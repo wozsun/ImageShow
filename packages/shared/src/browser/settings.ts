@@ -172,6 +172,15 @@ type WeiboSettings = {
 
 type NormalizeSettings = NormalizeProfile & { concurrency: number };
 
+type AnalyticsSettings = {
+  enabled: boolean;
+  home_visitors: boolean;
+  visit_retention_days: number;
+  interaction_retention_days: number;
+  collect_events_per_minute: number;
+  collect_events_per_day: number;
+};
+
 type AdminPanelSettings = {
   login_background: string;
   image_page_size: number;
@@ -187,6 +196,7 @@ export type RuntimeConfig = {
   weibo: WeiboSettings;
   normalize: NormalizeSettings;
   admin: AdminPanelSettings;
+  analytics: AnalyticsSettings;
   security: {
     session_ttl_seconds: number;
     login_failure_window_seconds: number;
@@ -243,6 +253,7 @@ export type AdminSettings = {
 export type SiteConfigDto = {
   site: PublicSiteSettings;
   embed: Pick<EmbedSettings, "enabled">;
+  analytics: Pick<AnalyticsSettings, "enabled" | "home_visitors">;
 };
 
 export type AdminSettingsResponseDto = {

@@ -7,5 +7,6 @@ declare module "hono" {
     requestBodyBytes: number | undefined;
     embedDocumentResponse: boolean | undefined;
     adminReadRequest: boolean | undefined;
+    randomImageCount: number | undefined;
   }
 }

@@ -1,3 +1,46 @@
+/* 位于确认弹窗说明与按钮之间，左右与说明文字对齐。 */
+.analytics-clear-scopes {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0 20px 16px;
+  border: 0;
+}
+.analytics-clear-scopes legend {
+  margin-bottom: 8px;
+  padding: 0;
+  color: var(--admin-color-text-label);
+  font-size: 14px;
+  font-weight: 600;
+}
+.analytics-clear-scopes label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--admin-color-border-card);
+  border-radius: var(--admin-radius-control);
+  cursor: pointer;
+}
+.analytics-clear-scopes label:has(input:checked) {
+  border-color: var(--admin-color-control-border-selected);
+  background: var(--admin-color-control-surface-selected);
+}
+.analytics-clear-scopes input {
+  width: auto;
+  margin: 3px 0 0;
+}
+.analytics-clear-scopes span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.analytics-clear-scopes small {
+  color: var(--admin-color-text-secondary);
+  font-size: 12px;
+}
+
 .storage-maintenance-preview {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -39,6 +39,7 @@ function publicCacheableRequest(path: string, method: string) {
     pathname === "/api/site-config" ||
     pathname === "/api/gallery-facets" ||
     pathname === "/api/gallery-stats" ||
+    pathname === "/api/visitors/today" ||
     /^\/api\/images(?:\/[^/]+)?$/.test(pathname)
   );
 }

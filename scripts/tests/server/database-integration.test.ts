@@ -1,7 +1,7 @@
 import "../support/server-environment.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { rm } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import {
   join,
   resolve,
@@ -242,6 +242,11 @@ const storageIngestionScenarios: readonly {
     id: "ready-cache-read-model",
     name: "PostgreSQL ready 真相重建为 Redis 读模型并保持分页一致",
     script: join(isolationRoot, "ready-cache-read-model.mts")
+  },
+  {
+    id: "analytics",
+    name: "访问统计上报、随机 API 计数、汇总裁剪与清空",
+    script: join(isolationRoot, "analytics.mts")
   }
 ];
 
@@ -917,6 +922,16 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
           }
           await client.query("DELETE FROM author WHERE slug LIKE 'identity-test-%'");
         });
+
+        // 6.9.0 – 6.9.1 临时升级模块：既有库启动时补建 6.9 统计表后与干净安装结构一致，重复启动不再改动；6.9.2 随模块删除。
+        const upgraded = databaseName("upgraded");
+        const schemaText = await readFile(join(workspace, "packages/server/schema.sql"), "utf8");
+        await createDatabase(upgraded);
+        await withClient(upgraded, (client) =>
+          client.query(schemaText.slice(0, schemaText.indexOf("-- BEGIN 6.9 analytics tables"))));
+        await initialize(upgraded);
+        await initialize(upgraded);
+        assert.equal(await schemaDump(upgraded), await schemaDump(clean));
       }
     );
 
@@ -1480,6 +1495,31 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
           processResultText(privilegeResult),
           /lacks required table privileges/i
         );
+
+        // 6.9.0 – 6.9.1：缺少 6.9 统计表且账号不能建表时，以明确原因启动失败且不留下部分结构。
+        const missingAnalytics = databaseName("noanalytics");
+        const uncreatingRole = `imageshow_uncreating_${randomUUID().replaceAll("-", "")}`;
+        const uncreatingPassword = `uncreating-${randomUUID()}`;
+        await createCurrentDatabase(missingAnalytics);
+        await withClient(missingAnalytics, async (client) => {
+          await client.query(`
+        DROP TABLE visit_event, random_api_hourly, random_api_option_hourly, analytics_daily;
+        CREATE ROLE "${uncreatingRole}" LOGIN PASSWORD '${uncreatingPassword}';
+        GRANT CONNECT ON DATABASE "${missingAnalytics}" TO "${uncreatingRole}";
+        GRANT USAGE ON SCHEMA public TO "${uncreatingRole}";
+        GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "${uncreatingRole}";
+      `);
+        });
+        const missingAnalyticsBefore = await schemaDump(missingAnalytics);
+        const uncreatingResult = await initializeAs(
+          missingAnalytics,
+          uncreatingRole,
+          uncreatingPassword,
+          true
+        );
+        assert.notEqual(uncreatingResult.code, 0);
+        assert.match(processResultText(uncreatingResult), /cannot create the 6\.9 analytics tables/i);
+        assert.equal(await schemaDump(missingAnalytics), missingAnalyticsBefore);
 
         const invalidSeed = databaseName("seed");
         await createCurrentDatabase(invalidSeed);

@@ -8,7 +8,7 @@ import { ApiError } from "../core/api-error.ts";
 
 const rolePermissionGrants = {
   super: new Set<AdminPermission>(Object.values(adminPermissions)),
-  image: new Set<AdminPermission>()
+  image: new Set<AdminPermission>([adminPermissions.analyticsView])
 } satisfies Record<AdminRole, ReadonlySet<AdminPermission>>;
 
 export function adminPermissionsForRole(role: AdminRole): AdminPermission[] {

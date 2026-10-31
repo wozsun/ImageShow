@@ -1,5 +1,16 @@
-import type { Context, Hono } from "hono";
-import type { RandomImageJsonResponseDto } from "@imageshow/shared/browser";
+import type { Context, Hono, Next } from "hono";
+import {
+  analyticsDirectHost,
+  analyticsHostPattern,
+  analyticsOtherHost,
+  randomApiOptionOther,
+  randomApiOptionUsed,
+  randomImageSizes,
+  randomMethods,
+  type RandomApiStatusClass,
+  type RandomImageJsonResponseDto
+} from "@imageshow/shared/browser";
+import { countRandomApiCall, type RandomApiOption } from "../analytics/random-api-counts.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { withPublicDatabaseRead } from "../core/database/public-fallback.ts";
 import {
@@ -12,7 +23,11 @@ import { ApiError } from "../core/api-error.ts";
 import { reserveRandomRequest } from "../random/rate-limit.ts";
 import { apiErrorResponse, apiSuccess } from "../core/http/responses.ts";
 import { presentRandomJsonItems } from "../random/json-presentation.ts";
-import { requestedRandomImageCount } from "../random/query.ts";
+import {
+  randomBrightnesses,
+  randomRequestDeviceValues,
+  requestedRandomImageCount
+} from "../random/query.ts";
 import { selectRandomImages } from "../random/selection.ts";
 import { resolveReadableObject } from "../storage/objects/access.ts";
 import { imageObjectKey } from "../storage/objects/image-paths.ts";
@@ -21,7 +36,84 @@ import { getStorageBackend } from "../storage/backends/registry.ts";
 import { webReadableFromNode } from "../storage/objects/stream-buffer.ts";
 
 export function registerRandomRoutes(app: Hono) {
-  app.all("/random", handleRandomImage);
+  app.all("/random", countRandomRequest, handleRandomImage);
+}
+
+function randomStatusClass(status: number): RandomApiStatusClass {
+  if (status === 429) return "rate_limited";
+  if (status >= 500) return "server_error";
+  return status >= 400 ? "client_error" : "success";
+}
+
+// Referers are client-controlled; a host statistics cannot key merges into "*".
+function refererHost(value: string | undefined) {
+  if (!value) return analyticsDirectHost;
+  let host: string;
+  try {
+    host = new URL(value).hostname.toLowerCase();
+  } catch {
+    return analyticsOtherHost;
+  }
+  return analyticsHostPattern.test(host) ? host : analyticsOtherHost;
+}
+
+// Parameters with a short list of valid values keep the value (anything else
+// counts as other); selectors, ids and seeds only count as used.
+const enumeratedOptions: Record<string, readonly string[]> = {
+  size: randomImageSizes,
+  device: randomRequestDeviceValues,
+  brightness: [...randomBrightnesses, "all"]
+};
+const presenceOptions = ["seed", "fallback", "theme", "tag", "author", "id", "group"];
+
+function limitBucket(value: string) {
+  const limit = /^\d{1,6}$/u.test(value) ? Number(value) : 0;
+  if (limit < 1) return randomApiOptionOther;
+  if (limit === 1) return "1";
+  if (limit <= 10) return "2-10";
+  return limit <= 50 ? "11-50" : "51+";
+}
+
+function randomOptions(query: URLSearchParams): RandomApiOption[] {
+  const given = (option: string) => query.getAll(option).find((value) => value.trim())?.trim();
+  const options: RandomApiOption[] = [];
+  for (const [option, values] of Object.entries(enumeratedOptions)) {
+    const value = given(option)?.toLowerCase();
+    if (value) options.push({ option, value: values.includes(value) ? value : randomApiOptionOther });
+  }
+  const limit = given("limit");
+  if (limit) options.push({ option: "limit", value: limitBucket(limit) });
+  for (const option of presenceOptions) {
+    if (given(option)) options.push({ option, value: randomApiOptionUsed });
+  }
+  return options;
+}
+
+const randomImageCountKey = "randomImageCount";
+
+/** Anonymous per-hour counts of GET / HEAD calls. */
+async function countRandomRequest(c: Context, next: Next) {
+  const startedAt = performance.now();
+  await next();
+  const durationMs = Math.round(performance.now() - startedAt);
+  const method = c.req.method;
+  if ((method !== "GET" && method !== "HEAD") || !getRuntimeConfig().analytics.enabled) return;
+  const query = new URL(c.req.url).searchParams;
+  const requestedMode = query.get("mode")?.trim().toLowerCase();
+  const mode = randomMethods.find((value) => value === requestedMode)
+    ?? getRuntimeConfig().site.random_method;
+  const statusClass = randomStatusClass(c.res.status);
+  countRandomApiCall({
+    at: Date.now(),
+    mode,
+    method,
+    statusClass,
+    trusted: requestHasTrustedReferer(c),
+    referrerHost: refererHost(c.req.header("referer")),
+    images: statusClass === "success" ? c.get(randomImageCountKey) ?? 0 : 0,
+    durationMs,
+    options: randomOptions(query)
+  });
 }
 
 async function handleRandomImage(c: Context) {
@@ -81,6 +173,7 @@ async function respondRandom(c: Context, url: URL, maxItems: number) {
         items
       } satisfies RandomImageJsonResponseDto)
     );
+    c.set(randomImageCountKey, items.length);
     const headers = new Headers({
       "Cache-Control": noStoreCacheControl,
       "Content-Type": "application/json; charset=utf-8"
@@ -96,6 +189,7 @@ async function respondRandom(c: Context, url: URL, maxItems: number) {
       message: "Not Found: No available images"
     });
   }
+  c.set(randomImageCountKey, 1);
   const baseHeaders = {
     "Cache-Control": noStoreCacheControl
   };

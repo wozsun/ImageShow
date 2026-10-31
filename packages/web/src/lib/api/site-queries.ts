@@ -42,19 +42,26 @@ function forThisBrowser(config: SiteConfig): SiteConfig {
   };
 }
 
-const inlinedSiteConfig: SiteConfig | undefined = (() => {
+// Exactly what the server inlined, before this browser's rules.
+const documentSiteConfig: SiteConfig | undefined = (() => {
   const raw = document.getElementById("__site_config__")?.textContent;
   if (!raw) return undefined;
   try {
-    return forThisBrowser(JSON.parse(raw) as SiteConfig);
+    return JSON.parse(raw) as SiteConfig;
   } catch {
     return undefined;
   }
 })();
+const inlinedSiteConfig = documentSiteConfig && forThisBrowser(documentSiteConfig);
 
 /** The configuration the server inlined into the document, if any. */
 export function initialSiteConfig() {
   return inlinedSiteConfig;
+}
+
+/** The inlined configuration as the server sent it, before the gallery-only rules. */
+export function serverInlinedSiteConfig() {
+  return documentSiteConfig;
 }
 
 export function useSiteConfig() {

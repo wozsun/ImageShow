@@ -449,17 +449,29 @@ body:has(.admin > .workspace-contained) {
   grid-template-rows: 1fr;
 }
 
+/* 收展动画靠裁剪溢出实现；四周留出焦点框余量，再以等量负外边距抵消，子项位置与收起后的
+   零高度不变，焦点框与顶层导航项一样完整画在元素外侧。收起后隐藏，子项不再进入 Tab 顺序。 */
 .admin-nav-sub-inner {
+  --admin-nav-focus-room: 4px;
+  margin: calc(-1 * var(--admin-nav-focus-room));
+  padding: var(--admin-nav-focus-room);
+  padding-left: calc(18px + var(--admin-nav-focus-room));
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding-left: 18px;
   overflow: hidden;
+  visibility: hidden;
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    visibility 0s linear 0.2s;
 }
 .admin-nav-sub.is-open .admin-nav-sub-inner {
+  visibility: visible;
   opacity: 1;
+  transition:
+    opacity 0.2s ease,
+    visibility 0s;
 }
 .admin > aside .admin-nav-sub a {
   min-height: 38px;

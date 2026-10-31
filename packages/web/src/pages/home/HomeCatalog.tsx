@@ -1,4 +1,5 @@
 import { gallerySelectorValue, GallerySelectorError } from "../../lib/gallery/gallery-selectors.js";
+import { errorShownReport, trackAnalytics } from "../../lib/analytics/analytics.js";
 import {
   basicTagSelection,
   basicTagValue,
@@ -7,6 +8,7 @@ import {
 } from "@imageshow/shared/browser";
 import type { GalleryFacetsDto, GalleryStatsDto } from "@imageshow/shared/browser";
 import {
+  useEffect,
   useRef,
   useState,
   type ComponentPropsWithoutRef,
@@ -233,6 +235,10 @@ export function HomeCatalog({
 }) {
   const refreshGlintRun = useRefreshGlintRun(isRefreshing);
   const reduceMotion = useMediaQuery(reducedMotionQuery);
+  // The catalog's own error state counts like the shared error states.
+  useEffect(() => {
+    if (isError) trackAnalytics(errorShownReport(error));
+  }, [isError, error]);
   const themeSet = new Set(selectedSlugs(filters.theme));
   const tagSet = new Set(basicTagSelection(filters.tag).selected);
   const [selectionError, setSelectionError] = useState<{
@@ -275,6 +281,7 @@ export function HomeCatalog({
 
   const updateFilter = (key: keyof GalleryFilters, value: string) => {
     onFiltersChange({ ...filters, [key]: value });
+    trackAnalytics({ event: "catalog_click", target: key });
   };
 
   const toggleMultiFacet = (

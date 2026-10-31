@@ -187,6 +187,14 @@ export const appConfig = {
       image_page_size: adminImagePageLimit,
       recent_uploads: 16
     },
+    analytics: {
+      enabled: true,
+      home_visitors: true,
+      visit_retention_days: 90,
+      interaction_retention_days: 30,
+      collect_events_per_minute: 1_200,
+      collect_events_per_day: 200_000
+    },
     security: {
       session_ttl_seconds: 7 * 24 * 60 * 60,
       login_failure_window_seconds: 60,

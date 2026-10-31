@@ -20,7 +20,7 @@ import { apiErrorResponse } from "../core/http/responses.ts";
 
 export const randomDevices = ["pc", "mb"] as const;
 export const randomBrightnesses = ["dark", "light"] as const;
-const randomRequestDeviceValues = ["pc", "mb", "all", "auto"] as const;
+export const randomRequestDeviceValues = ["pc", "mb", "all", "auto"] as const;
 export type RandomBrightness = (typeof randomBrightnesses)[number];
 export type RandomRequestDevice = (typeof randomRequestDeviceValues)[number];
 

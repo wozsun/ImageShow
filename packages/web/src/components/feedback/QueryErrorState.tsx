@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { errorShownReport, trackAnalytics } from "../../lib/analytics/analytics.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { Icon } from "../icon/Icon.js";
 import { ErrorDetails } from "./ErrorDetails.js";
@@ -20,6 +21,10 @@ export function QueryErrorState({
   useEffect(() => {
     if (reportContext) reportAdminUiError(reportContext, error);
   }, [error, reportContext]);
+  // Counted only on public pages; the admin shell excludes itself.
+  useEffect(() => {
+    trackAnalytics(errorShownReport(error));
+  }, [error]);
 
   return (
     <div className={`${fullPage ? "center " : ""}query-error-state`}>

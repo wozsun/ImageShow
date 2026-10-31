@@ -47,6 +47,11 @@ export const settingsSections = {
     title: "后台界面",
     description: "应用于后台列表、概览和登录页面。"
   },
+  analytics: {
+    column: "right",
+    title: "访问统计",
+    description: "统计公开页面、嵌入页与随机 API 的访问；不记录 IP、完整网址与浏览器标识。每日汇总永久保留。"
+  },
   security: {
     column: "right",
     title: "登录与请求限制",
@@ -92,6 +97,7 @@ const settingsGroups = {
   medium: { section: "normalize", title: "中图" },
   small: { section: "normalize", title: "小图" },
   admin: { section: "admin" },
+  analytics: { section: "analytics" },
   session: { section: "security", title: "会话", singleColumn: true },
   login: { section: "security", title: "登录保护" },
   rate: { section: "security", title: "随机图片 API" },
@@ -518,6 +524,46 @@ const settingsFields = {
     label: "概览最近上传展示数量",
     kind: "number",
     ...runtimeConfigLimits["admin.recent_uploads"]
+  },
+  "analytics.enabled": {
+    group: "analytics",
+    label: "收集访问统计",
+    kind: "toggle",
+    hint: "关闭后不再收集新数据，已有数据保留，可在「检查」页清空。"
+  },
+  "analytics.home_visitors": {
+    group: "analytics",
+    label: "首页显示今日访客",
+    kind: "toggle",
+    hint: "在首页底部、备案号上方显示全站今日访客数；关闭统计时不显示。"
+  },
+  "analytics.visit_retention_days": {
+    group: "analytics",
+    label: "访问明细保留天数",
+    kind: "number",
+    hint: "页面浏览与停留明细；随机 API 的小时明细同样按此保留。超出后只能查看每日汇总。",
+    ...runtimeConfigLimits["analytics.visit_retention_days"]
+  },
+  "analytics.interaction_retention_days": {
+    group: "analytics",
+    label: "交互明细保留天数",
+    kind: "number",
+    hint: "首页目录、排序、展映、列表进度与错误等交互明细。",
+    ...runtimeConfigLimits["analytics.interaction_retention_days"]
+  },
+  "analytics.collect_events_per_minute": {
+    group: "analytics",
+    label: "全站每分钟上报上限（事件）",
+    kind: "number",
+    hint: "所有访客合计；超出的上报直接丢弃，页面不受影响。",
+    ...runtimeConfigLimits["analytics.collect_events_per_minute"]
+  },
+  "analytics.collect_events_per_day": {
+    group: "analytics",
+    label: "全站每日上报上限（事件）",
+    kind: "number",
+    hint: "所有访客合计，按 24 小时窗口计算，用满后暂停到窗口结束；限制统计明细的增长。",
+    ...runtimeConfigLimits["analytics.collect_events_per_day"]
   },
   "security.session_ttl_seconds": {
     group: "session",

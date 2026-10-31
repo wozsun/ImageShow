@@ -26,7 +26,7 @@ npm run verify:release
 | `server/` | 配置、HTTP / 鉴权、进程、缓存、存储、图片、内容接入和数据库集成 |
 | `web/` | 共享交互、公开导航、画廊、后台、内容接入、表单和展映 |
 | `web/admin/groups.test.ts` | 分组页面真实挂载的权限、排序、成员选择与写入、未知响应收敛、查询失效和随机链接契约 |
-| `web/admin/` | 后台交互、偏好、图片查询与管理、分组管理、认证、图片加载和检查页；`web/admin.test.ts` 按稳定顺序装配 |
+| `web/admin/` | 后台交互、偏好、图片查询与管理、分组管理、认证、图片加载、检查页与统计（含公开页上报门控）；`web/admin.test.ts` 按稳定顺序装配 |
 | `web/ingestion/` | 接入队列模型、连接、动作、草稿、重复处理、接管清理与窗口交互；`web/ingestion.test.ts` 按稳定顺序装配 |
 | `verify/` | 源码、构建、运行时门禁和发布前总编排 |
 | `support/` | DOM / 全局属性恢复、可控时钟、有界轮询、进程树和隔离目录等窄职责支撑 |
@@ -77,6 +77,7 @@ PowerShell 中使用 `$env:IMAGESHOW_DATABASE_SCENARIO = "cold-redis"`、`$env:I
 | 后台任务 | `background-job-history` |
 | 图片写入与分类 | `image-update-consistency`、`image-update-locking`、`image-snapshot-cancellation`、`image-classification-consistency`、`vocabulary-order` |
 | 查询与缓存 | `image-read-consistency`、`tag-filter-consistency`、`device-index`、`derived-cache-budgets`、`random-size`、`public-request-access`、`public-image-browse`、`public-gallery-concurrency`、`ready-cache-read-model`、`ready-cache-recovery`、`redis-business-commands` |
+| 访问统计 | `analytics` |
 | 存储与回收站 | `local-io-lifecycle`、`storage-registry-lifecycle`、`storage-registry-cache`、`storage-migration-recovery`、`storage-cleanup-recovery`、`storage-lock-admission`、`trash-purge-recovery` |
 | 存储维护 | `storage-variant-recovery`、`storage-maintenance-cancellation` |
 | 接入服务与队列 | `ingestion-service-contracts`、`ingestion-action-protocol`、`ingestion-upload-lifecycle`、`ingestion-import-queue`、`ingestion-queue-actions`、`ingestion-http-boundaries`、`redis-canonical` |
@@ -91,7 +92,7 @@ Web 队列场景值为 `strict-mode`、`empty-reconnect`、`reconnect-pagination
 
 - 纯规则测试证明输入到输出的领域契约，不证明真实数据库、文件系统或浏览器排版。
 - `linkedom` 组件测试通过公开 DOM 事件验证 React 交互、请求、取消和卸载，不把模拟视口当成 CSS 排版或 GPU 呈现验收。
-- 数据库集成测试使用一次性 PostgreSQL / Redis 和合成图片；strict `.mts` 场景分别验证 schema、readiness、配置与图片事务、权限与会话、真实 Redis canonical 和业务命令、接入队列与正式提交、存储迁移及维护、raw 租约与孤儿清理，以及读模型重建。故障用例验证真实数据或文件副作用、取消和资源释放；它不接触部署中的现有实例。
+- 数据库集成测试使用一次性 PostgreSQL / Redis 和合成图片；strict `.mts` 场景分别验证 schema、readiness、配置与图片事务、权限与会话、真实 Redis canonical 和业务命令、接入队列与正式提交、存储迁移及维护、raw 租约与孤儿清理、读模型重建，以及访问统计的上报、汇总、裁剪与清空。故障用例验证真实数据或文件副作用、取消和资源释放；它不接触部署中的现有实例。
 - 运行时镜像门禁另行验证生产镜像冷启动、HTTP、schema 和重启；局部测试通过不能替代 `npm run verify:release`。
 - 三档编码与缓存使用隔离 Linux 生产镜像验收，`verify/normalize-encoding.mjs` 由镜像门禁复制后以 node 用户执行。
 - local 发布的故障注入验证文件与目录同步、发布失败及恢复边界；真实掉电持久性还依赖文件系统、磁盘和 PostgreSQL 部署配置。

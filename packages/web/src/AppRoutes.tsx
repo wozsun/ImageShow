@@ -103,7 +103,7 @@ function publicFallback(rootPath: ReturnType<typeof publicRootPath>) {
  * too. The root path shows its page in place; other paths redirect to it,
  * keeping the browse choices a show or gallery target supports.
  */
-function publicPage(path: string, { site, embed }: SiteConfig, search: string) {
+function publicPage(path: string, { site, embed, analytics }: SiteConfig, search: string) {
   const target = publicPageTarget(site, embed.enabled, path);
   if (target === null) return <PublicPageNotFound />;
   const embedded = target.startsWith("/embed/");
@@ -116,7 +116,7 @@ function publicPage(path: string, { site, embed }: SiteConfig, search: string) {
     return <Navigate to={href} replace />;
   }
   return page === "/home" ? (
-    <HomePage embedded={embedded} site={site} />
+    <HomePage embedded={embedded} site={site} todayVisitors={analytics.home_visitors} />
   ) : page === "/show" ? (
     <ShowPage embedded={embedded} settings={site.show} />
   ) : (

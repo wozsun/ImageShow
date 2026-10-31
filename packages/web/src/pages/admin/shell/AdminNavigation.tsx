@@ -144,6 +144,14 @@ const adminNavigationModel = {
     },
     {
       kind: "link",
+      to: `${adminBasePath}/analytics`,
+      icon: "bar-chart-box-line",
+      label: "统计",
+      permission: adminPermissions.analyticsView,
+      routeModule: "analytics"
+    },
+    {
+      kind: "link",
       to: `${adminBasePath}/check`,
       icon: "checkbox-circle-line",
       label: "检查",

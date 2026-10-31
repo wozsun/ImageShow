@@ -599,6 +599,8 @@ export function useGalleryDataWindow({
 
   return {
     snapshot,
+    /** Changes whenever another list (query or history entry) is shown. */
+    scope: queryScope,
     positions,
     initialLoading: snapshot.compactItems === 0
       && snapshot.pendingQueryPages > 0,

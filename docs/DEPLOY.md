@@ -139,6 +139,8 @@ docker compose up -d imageshow            # 启动应用
 
 应用启动时只检查已有数据库结构，不会自动修改；检查不通过时应用不会就绪，原因见日志。
 
+6.9.0 与 6.9.1 例外：启动时为已有数据库补建访问统计所需的新表和索引，只新建，不修改已有的表和数据。这需要数据库账号能在 `public` 模式中建表（默认 Compose 的账号可以）；没有这个权限时应用启动失败，日志会说明原因：可由数据库所有者先执行对应版本 `packages/server/schema.sql` 中 `-- BEGIN 6.9 analytics tables` 与 `-- END 6.9 analytics tables` 之间的语句，并授予应用账号对 `visit_event`、`random_api_hourly`、`random_api_option_hourly`、`analytics_daily` 四张表的 SELECT、INSERT、UPDATE、DELETE 权限，再启动应用。
+
 ### 定期检查
 
 - 站点能打开，图片能显示，管理员能登录。
@@ -243,8 +245,9 @@ CDN 可以加速图片和静态文件，但需要遵守以下规则，否则可�
 - 应用自己负责压缩：保留 `Accept-Encoding`，原样传递编码、长度和缓存相关的响应头。
 - 页面 HTML 由应用动态生成，不能交给 CDN 或代理当静态文件托管。
 - `/random` 不能缓存。
+- 访问统计的上报地址 `/api/collect` 不能缓存；它是 POST 请求，CDN 默认不会缓存，不要为它添加缓存规则。
 - 保留应用的 `Access-Control-Allow-Origin` 和 `Access-Control-Expose-Headers`，并允许 `OPTIONS` 预检到达应用；不要重复添加冲突的 CORS 头。随机图和三档公开图片允许匿名跨站读取，具体用法见[随机图 API](api/random.md#跨站读取)。
-- 登录和 `/random` 的频率限制按访客 IP 计算。CDN 回源时 `$remote_addr` 是 CDN 节点地址，需要先用 Nginx 的 `set_real_ip_from`（填 CDN 回源地址段）和 `real_ip_header`（填 CDN 提供的访客 IP 请求头）恢复访客 IP，再覆盖 `X-Real-IP` 和 `X-Forwarded-For`。不要让所有访客共用 CDN 节点的 IP，也不要透传访客自己发来的 IP 头。
+- 登录、`/random` 和访问统计上报的频率限制按访客 IP 计算。CDN 回源时 `$remote_addr` 是 CDN 节点地址，需要先用 Nginx 的 `set_real_ip_from`（填 CDN 回源地址段）和 `real_ip_header`（填 CDN 提供的访客 IP 请求头）恢复访客 IP，再覆盖 `X-Real-IP` 和 `X-Forwarded-For`。不要让所有访客共用 CDN 节点的 IP，也不要透传访客自己发来的 IP 头。
 - 原图 `/images/original/*` 是否允许访客访问由 `site.public_original` 控制，关闭时回源必须透传登录 Cookie，应用才能识别管理员。由本站返回的原图不论开关都按普通图片长期缓存，和三档图片一样按 `Vary: Referer` 区分；源站允许直连时的跳转是 `private`，代理失败后的回退跳转不缓存，CDN 都不存。关闭后，CDN 已缓存的原图（包括管理员打开过的）仍会返回给任何人，只是不会再让本站去取新的原图。修改某张图的原图链接后，需要手动清理该图的 `/images/original/<id>` 缓存。
 - 图片防盗链按 Referer 判断：必须透传 Referer，并按 `Vary: Referer` 区分缓存；不支持的 CDN 需要在边缘实现相同规则。
 

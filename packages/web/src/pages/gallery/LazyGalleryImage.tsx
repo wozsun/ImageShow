@@ -17,6 +17,7 @@ import {
   imageLoadPriority,
   type ImageLoadTaskHandle
 } from "../../components/image/image-load-scheduler.js";
+import { countImageLoadFailure } from "../../lib/analytics/analytics.js";
 import { type GalleryImageVisibility } from "./gallery-image-visibility.js";
 import { useGalleryImageRuntime } from "./GalleryImageRuntime.js";
 
@@ -129,6 +130,7 @@ export const LazyGalleryImage = memo(function LazyGalleryImage({
       if (result.status === "completed") {
         setLoaded(true);
       } else if (result.status === "failed") {
+        countImageLoadFailure();
         setFailed(true);
         setLoaded(true);
       }

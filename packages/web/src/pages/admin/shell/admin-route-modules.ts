@@ -19,6 +19,7 @@ export const adminRouteModuleLoaders = {
   storage: createPageLifetimeModuleLoader(() => import(/* @chunk access: super */ "../storage/StorageSettings.js")),
   users: createPageLifetimeModuleLoader(() => import(/* @chunk access: super */ "../users/UserAdmin.js")),
   check: createPageLifetimeModuleLoader(() => import(/* @chunk visits: occasional */ "../check/CheckPage.js")),
+  analytics: createPageLifetimeModuleLoader(() => import(/* @chunk visits: occasional */ "../analytics/AnalyticsPage.js")),
   logs: createPageLifetimeModuleLoader(() => import(/* @chunk access: super, visits: rare */ "../logs/LogPage.js"))
 } as const;
 
@@ -41,6 +42,7 @@ const adminRoutes = [
   { path: "storage", module: "storage", permission: adminPermissions.storageManage },
   { path: "users", module: "users", permission: adminPermissions.usersManage },
   { path: "check", module: "check" },
+  { path: "analytics", module: "analytics", permission: adminPermissions.analyticsView },
   { path: "logs", module: "logs", permission: adminPermissions.logsManage }
 ] as const satisfies readonly {
   path: string;

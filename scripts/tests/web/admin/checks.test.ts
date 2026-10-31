@@ -797,7 +797,7 @@ test("[Web/后台] 检查页保留完整 Redis 快照并串行化自动检测与
     authenticated: true,
     username: "review",
     role: "image",
-    permissions: [],
+    permissions: ["analytics.view"],
     csrf_token: "test-token",
     application_version: "current-build",
     preferences: {},
@@ -854,6 +854,13 @@ test("[Web/后台] 检查页保留完整 Redis 快照并串行化自动检测与
       ),
       false,
       "图片管理员不应加载或显示超级管理员彻底删除维护入口"
+    );
+    assert.equal(
+      [...container.querySelectorAll("button")].some((candidate) =>
+        candidate.textContent?.includes("清空统计")
+      ),
+      false,
+      "清空统计只对拥有 analytics.manage 的超级管理员显示"
     );
     await React.act(async () => {
       resolveStatus(jsonResponse(statusResult()));

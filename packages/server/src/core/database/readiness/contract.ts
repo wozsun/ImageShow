@@ -2,7 +2,7 @@ import type { PoolClient } from "pg";
 
 export type DatabaseReader = Pick<PoolClient, "query">;
 type PostgreSqlType =
-  "_text" | "bool" | "int2" | "int4" | "int8" | "jsonb" | "text" | "timestamptz" | "uuid";
+  "_text" | "bool" | "date" | "int2" | "int4" | "int8" | "jsonb" | "text" | "timestamptz" | "uuid";
 type TablePrivilege = "SELECT" | "INSERT" | "UPDATE" | "DELETE";
 type TableReadiness = {
   columns: Record<string, PostgreSqlType>;
@@ -131,6 +131,58 @@ export const databaseReadiness = {
       updated_at: "timestamptz"
     },
     privileges: readWritePrivileges
+  },
+  visit_event: {
+    columns: {
+      occurred_at: "timestamptz",
+      visitor_id: "uuid",
+      session_id: "uuid",
+      event: "text",
+      page: "text",
+      embedded: "bool",
+      referrer_host: "text",
+      embed_host: "text",
+      device: "text",
+      browser: "text",
+      browser_major: "int4",
+      os: "text",
+      detail: "jsonb"
+    },
+    privileges: ["SELECT", "INSERT", "DELETE"]
+  },
+  random_api_hourly: {
+    columns: {
+      hour: "timestamptz",
+      mode: "text",
+      method: "text",
+      status_class: "text",
+      trusted: "bool",
+      referrer_host: "text",
+      requests: "int8",
+      images: "int8",
+      duration_ms_sum: "int8",
+      duration_ms_max: "int4"
+    },
+    privileges: readWritePrivileges
+  },
+  random_api_option_hourly: {
+    columns: {
+      hour: "timestamptz",
+      option: "text",
+      value: "text",
+      requests: "int8"
+    },
+    privileges: readWritePrivileges
+  },
+  analytics_daily: {
+    columns: {
+      day: "date",
+      metric: "text",
+      dimensions: "jsonb",
+      count: "int8",
+      visitors: "int8"
+    },
+    privileges: readWritePrivileges
   }
 } as const satisfies Record<string, TableReadiness>;
 
@@ -170,7 +222,13 @@ export const requiredPrimaryKeys = [
   { table: "image_group", columns: ["slug"] },
   { table: "image_group_member", columns: ["group_slug", "image_id"] },
   { table: "background_job", columns: ["id"] },
-  { table: "admin_account", columns: ["username"] }
+  { table: "admin_account", columns: ["username"] },
+  {
+    table: "random_api_hourly",
+    columns: ["hour", "mode", "method", "status_class", "trusted", "referrer_host"]
+  },
+  { table: "random_api_option_hourly", columns: ["hour", "option", "value"] },
+  { table: "analytics_daily", columns: ["day", "metric", "dimensions"] }
 ] as const satisfies readonly RequiredPrimaryKey[];
 
 export const requiredUniqueIndexes = [

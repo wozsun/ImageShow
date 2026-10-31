@@ -196,6 +196,28 @@ export const runtimeConfigEnvironmentBindings = [
     environmentVariable: "ADMIN_RECENT_UPLOADS",
     valueKind: "number"
   },
+  { path: "analytics.enabled", environmentVariable: "ANALYTICS_ENABLED", valueKind: "boolean" },
+  { path: "analytics.home_visitors", environmentVariable: "ANALYTICS_HOME_VISITORS", valueKind: "boolean" },
+  {
+    path: "analytics.visit_retention_days",
+    environmentVariable: "ANALYTICS_VISIT_RETENTION_DAYS",
+    valueKind: "number"
+  },
+  {
+    path: "analytics.interaction_retention_days",
+    environmentVariable: "ANALYTICS_INTERACTION_RETENTION_DAYS",
+    valueKind: "number"
+  },
+  {
+    path: "analytics.collect_events_per_minute",
+    environmentVariable: "ANALYTICS_COLLECT_EVENTS_PER_MINUTE",
+    valueKind: "number"
+  },
+  {
+    path: "analytics.collect_events_per_day",
+    environmentVariable: "ANALYTICS_COLLECT_EVENTS_PER_DAY",
+    valueKind: "number"
+  },
   {
     path: "security.session_ttl_seconds",
     environmentVariable: "SECURITY_SESSION_TTL_SECONDS",

@@ -1,4 +1,4 @@
-import { useRef, useState, type RefObject } from "react";
+import { useRef, useState, type ReactNode, type RefObject } from "react";
 import type { AdminIconName } from "../icon/AdminIcon.js";
 import { AsyncActionButton } from "../actions/AsyncActionButton.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
@@ -22,6 +22,7 @@ export function ConfirmDialog({
   pendingProgress,
   onBackground,
   returnFocusRef,
+  children,
   onClose,
   onConfirm
 }: {
@@ -50,6 +51,8 @@ export function ConfirmDialog({
    */
   onBackground?: () => void;
   returnFocusRef?: RefObject<HTMLElement | null>;
+  /** Choices that belong to the confirmation, shown under the description. */
+  children?: ReactNode;
   onClose: () => void;
   onConfirm: () => Promise<boolean | void>;
 }) {
@@ -99,6 +102,8 @@ export function ConfirmDialog({
       {({ requestClose }) => (
         <form
           tabIndex={-1}
+          // A choice changed after arming must be confirmed again.
+          onChange={() => setFinalConfirmationArmed(false)}
           onSubmit={(event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -140,6 +145,7 @@ export function ConfirmDialog({
             )}
           </header>
           <p className="confirm-dialog-description">{description}</p>
+          {children}
           {errorMessage && (
             <p className="confirm-dialog-error admin-error" role="alert">
               {errorMessage}

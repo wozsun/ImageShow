@@ -1,4 +1,4 @@
-import { useLayoutEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, clearCsrfToken } from "../../../lib/api/client.js";
@@ -12,6 +12,7 @@ import { useAuthSessionQuery } from "../../../hooks/useAuthSession.js";
 import { QueryErrorState } from "../../../components/feedback/QueryErrorState.js";
 import { AppLoadingScreen } from "../../../components/feedback/AppLoadingScreen.js";
 import { applyUiColorContext } from "../../../lib/ui/apply-ui-color-context.js";
+import { excludeFromAnalytics } from "../../../lib/analytics/analytics.js";
 
 type AdminCacheModule = typeof import("../../../lib/api/query-invalidation.js");
 
@@ -69,6 +70,8 @@ export function AdminShell({ siteHeaderName }: { siteHeaderName: string }) {
     isError: authFailed,
     refetch
   } = useAuthSessionQuery();
+  // The admin is not counted; errors shown here stay out of public pages.
+  useEffect(() => excludeFromAnalytics(), []);
   const unauthenticatedAppearanceReady = Boolean(data && !data.authenticated);
   useLayoutEffect(() => {
     if (unauthenticatedAppearanceReady) applyUiColorContext("public");

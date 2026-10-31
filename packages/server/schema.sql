@@ -273,3 +273,68 @@ CREATE TABLE admin_account (
 
 CREATE UNIQUE INDEX idx_admin_single_super
 ON admin_account((role)) WHERE role = 'super';
+
+-- BEGIN 6.9 analytics tables
+-- Visit analytics and random API counters (6.9). Raw rows are disposable:
+-- the application buffers writes in process, drops them on failure and prunes
+-- them by retention tier; analytics_daily keeps permanent daily rollups.
+-- 6.9.0 – 6.9.1 run this section on existing databases at startup; every
+-- statement must stay idempotent (IF NOT EXISTS) and create objects only.
+CREATE TABLE IF NOT EXISTS visit_event (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  occurred_at TIMESTAMPTZ NOT NULL,
+  visitor_id UUID NOT NULL,
+  session_id UUID NOT NULL,
+  event TEXT NOT NULL,
+  page TEXT NOT NULL,
+  embedded BOOLEAN NOT NULL,
+  referrer_host TEXT,
+  embed_host TEXT,
+  device TEXT NOT NULL,
+  browser TEXT NOT NULL,
+  browser_major INTEGER,
+  os TEXT NOT NULL,
+  detail JSONB NOT NULL DEFAULT '{}'::jsonb,
+  CONSTRAINT visit_event_detail_object_check
+    CHECK (jsonb_typeof(detail) = 'object'),
+  CONSTRAINT visit_event_detail_size_check
+    CHECK (octet_length(detail::text) <= 1024)
+);
+
+CREATE INDEX IF NOT EXISTS idx_visit_event_occurred
+ON visit_event(occurred_at);
+
+CREATE INDEX IF NOT EXISTS idx_visit_event_event_occurred
+ON visit_event(event, occurred_at);
+
+CREATE TABLE IF NOT EXISTS random_api_hourly (
+  hour TIMESTAMPTZ NOT NULL,
+  mode TEXT NOT NULL,
+  method TEXT NOT NULL,
+  status_class TEXT NOT NULL,
+  trusted BOOLEAN NOT NULL,
+  referrer_host TEXT NOT NULL,
+  requests BIGINT NOT NULL,
+  images BIGINT NOT NULL,
+  duration_ms_sum BIGINT NOT NULL,
+  duration_ms_max INTEGER NOT NULL,
+  PRIMARY KEY (hour, mode, method, status_class, trusted, referrer_host)
+);
+
+CREATE TABLE IF NOT EXISTS random_api_option_hourly (
+  hour TIMESTAMPTZ NOT NULL,
+  option TEXT NOT NULL,
+  value TEXT NOT NULL,
+  requests BIGINT NOT NULL,
+  PRIMARY KEY (hour, option, value)
+);
+
+CREATE TABLE IF NOT EXISTS analytics_daily (
+  day DATE NOT NULL,
+  metric TEXT NOT NULL,
+  dimensions JSONB NOT NULL,
+  count BIGINT NOT NULL,
+  visitors BIGINT NOT NULL,
+  PRIMARY KEY (day, metric, dimensions)
+);
+-- END 6.9 analytics tables

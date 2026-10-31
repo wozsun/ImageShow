@@ -42,6 +42,11 @@ import {
   assertLocalImageHostForSite
 } from "./storage/backends/registry.ts";
 import { createHttpApp } from "./http-app.ts";
+import {
+  drainAnalyticsWriter,
+  startAnalyticsWriter,
+  stopAnalyticsWriter
+} from "./analytics/runtime.ts";
 import { closeAllAdminSessionConnections } from "./users/admin-session-connections.ts";
 import { acquireApplicationHost } from "./core/database/application-host.ts";
 
@@ -94,6 +99,7 @@ async function initializeApplication() {
   });
   startupAbort.signal.throwIfAborted();
   markRuntimeInitializationComplete();
+  startAnalyticsWriter();
 
   unsubscribeBusinessAvailabilityGate = onBusinessAvailabilityGateOpen(() => {
     if (shuttingDown) return;
@@ -146,6 +152,7 @@ function shutdown(signal: string, exitCode = 0) {
       stopRedisOperationalMonitor();
       stopBackgroundJobWorker();
       stopIngestionSessionWorker();
+      stopAnalyticsWriter();
       const remainingDrainMs = Math.max(0, drainDeadline - performance.now());
       const backgroundJobWorkerDrain = drainBackgroundJobWorker(remainingDrainMs);
       const ingestionWorkerDrain = drainIngestionSessionWorker(remainingDrainMs);
@@ -154,8 +161,10 @@ function shutdown(signal: string, exitCode = 0) {
       // driver from a stale or freshly loaded registry snapshot.
       const storageRegistryClose = closeStorageBackendRegistry();
       const readyImageCacheStop = settleCoordinatorInitialization().then(() => stopReadyImageCacheCoordinator());
+      // Statistics collected until HTTP stops are written once within the deadline.
+      const analyticsDrain = serverClose.then(drainAnalyticsWriter);
       const [, backgroundDrained, ingestionDrained] = await waitForShutdownStage(Promise.all([
-        serverClose,
+        analyticsDrain,
         backgroundJobWorkerDrain,
         ingestionWorkerDrain,
         readyImageCacheStop,

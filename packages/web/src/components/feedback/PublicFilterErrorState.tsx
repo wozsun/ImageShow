@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { TagFilterError } from "@imageshow/shared/browser";
+import { trackAnalytics } from "../../lib/analytics/analytics.js";
 import { ErrorDetails } from "./ErrorDetails.js";
 import {
   GallerySelectorError,
@@ -19,6 +21,10 @@ export function PublicFilterErrorState({
   const selectorError = error instanceof GallerySelectorError ? error : null;
   const field = selectorError?.field ?? "tag";
   const label = selectorError ? gallerySelectorLabels[selectorError.field] : "标签";
+  const code = selectorError ? "filter_selector" : tagError ? "filter_tag" : "filter_vocabulary";
+  useEffect(() => {
+    trackAnalytics({ event: "error_shown", status: null, code });
+  }, [code, error]);
   return (
     <div className="query-error-state">
       <p role="alert">

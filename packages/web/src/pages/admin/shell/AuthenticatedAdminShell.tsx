@@ -54,11 +54,12 @@ const StorageSettings = moduleComponent(pages.storage, (module) => module.Storag
 const UserAdmin = moduleComponent(pages.users, (module) => module.UserAdmin);
 const CheckPage = moduleComponent(pages.check, (module) => module.CheckPage);
 const LogPage = moduleComponent(pages.logs, (module) => module.LogPage);
+const AnalyticsPage = moduleComponent(pages.analytics, (module) => module.AnalyticsPage);
 
-function adminPage(route: AdminRoute, canManageStorage: boolean) {
+function adminPage(route: AdminRoute, permissions: readonly AdminPermission[]) {
   switch (route.module) {
     case "overview":
-      return <Overview canManageStorage={canManageStorage} />;
+      return <Overview canManageStorage={permissions.includes(adminPermissions.storageManage)} />;
     case "images":
       return <ImageAdmin />;
     case "groupDetail":
@@ -79,6 +80,8 @@ function adminPage(route: AdminRoute, canManageStorage: boolean) {
       return <CheckPage />;
     case "logs":
       return <LogPage />;
+    case "analytics":
+      return <AnalyticsPage />;
   }
 }
 
@@ -112,7 +115,6 @@ function AuthenticatedAdminLayout({
   const navScrollRef = useRef<HTMLDivElement | null>(null);
   const [colorScheme, setColorScheme] = useAdminPreference("color_scheme");
   const [colorSchemeCycle, setColorSchemeCycle] = useState<AdminColorSchemeCycle | null>(null);
-  const canManageStorage = permissions.includes(adminPermissions.storageManage);
   const navigation = adminNavigationForPermissions(role, permissions);
 
   const resolvedColorScheme = useAdminColorScheme(colorScheme);
@@ -199,10 +201,10 @@ function AuthenticatedAdminLayout({
                 <Route
                   key={route.path}
                   path={route.path}
-                  element={adminPage(route, canManageStorage)}
+                  element={adminPage(route, permissions)}
                 />
               ) : (
-                <Route key="index" index element={adminPage(route, canManageStorage)} />
+                <Route key="index" index element={adminPage(route, permissions)} />
               ))}
               <Route path="*" element={<Navigate to={adminBasePath} replace />} />
             </Routes>

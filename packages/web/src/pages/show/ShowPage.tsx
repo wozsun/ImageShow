@@ -1,5 +1,6 @@
 import {
   readableFilterSearch,
+  type AnalyticsShowControl,
   type ShowDensity,
   type PublicImageOrder,
   type SiteShowSettings
@@ -27,6 +28,9 @@ import { useDocumentMotionPause } from "../../hooks/useDocumentMotionPause.js";
 import { useMediaQuery } from "../../hooks/useMediaQuery.js";
 import { usePublicImageViewportControls } from "../../hooks/usePublicImageViewportControls.js";
 import { usePublicNavigationEntrance } from "../../hooks/usePublicNavigationEntrance.js";
+import { useAnalyticsPage } from "../../hooks/useAnalyticsPage.js";
+import { useOrderAnalytics } from "../../hooks/useOrderAnalytics.js";
+import { reportAtPageEnd, startVisibleClock, trackAnalytics } from "../../lib/analytics/analytics.js";
 import {
   imageBrowseApiSearchParams,
   imageBrowseNavigationHref,
@@ -107,6 +111,7 @@ export function ShowPage({
   embedded?: boolean;
   settings: SiteShowSettings;
 }) {
+  useAnalyticsPage("show", embedded);
   const browseRoute = useImageBrowseRoute();
   // A stage that cannot start offers the gallery with the same filters and
   // order; an embedded stage stays within the embeds. The gallery closes only
@@ -137,6 +142,7 @@ export function ShowPage({
     ),
     [configuredScene, routeQuery]
   );
+  useOrderAnalytics(order);
   // 星群按分类聚成星团，不叠加访客筛选；它的数据由 useShowClusters 负责，展映的单一图片流停用。
   const clusterMode = scene === "cluster";
   const clusterGroup = useMemo(
@@ -198,6 +204,36 @@ export function ShowPage({
     [clusterData.clusters]
   );
   const browseImages = clusterMode ? clusterImages : data.images;
+  // One show_start / show_end pair per scene; switching scenes ends the pair.
+  const sceneRef = useRef<ShowPixiSceneKind | null>(null);
+  useEffect(() => {
+    const switched = sceneRef.current !== null;
+    if (switched) trackAnalytics({ event: "control_use", control: "mode" });
+    sceneRef.current = scene;
+    trackAnalytics({ event: "show_start", mode: scene, switched });
+    // The show pauses while the page is hidden, so only visible time counts;
+    // a view restored from the back-forward cache reports its own time.
+    const visible = startVisibleClock();
+    const end = () => ({ event: "show_end" as const, mode: scene, duration_ms: visible.take() });
+    const withdraw = reportAtPageEnd(end);
+    return () => {
+      // Leaving the page already sent this view's end with the page summary.
+      const summary = withdraw();
+      visible.stop();
+      if (summary) trackAnalytics(summary);
+    };
+  }, [scene]);
+  const groupRef = useRef(clusterGroup);
+  useEffect(() => {
+    if (groupRef.current === clusterGroup) return;
+    groupRef.current = clusterGroup;
+    trackAnalytics({ event: "control_use", control: "grouping" });
+  }, [clusterGroup]);
+  const trackControl = (control: AnalyticsShowControl) => trackAnalytics({ event: "control_use", control });
+  const changeRunning = (next: boolean) => {
+    trackControl(next ? "resume" : "pause");
+    setRunning(next);
+  };
   const playbackRunning = running && (clusterMode
     ? clusterImages.length > 0
     : !data.initialLoading && !data.error && data.images.length > 0);
@@ -430,7 +466,7 @@ export function ShowPage({
             getSceneHref={getShowModeHref}
             order={order}
             onOrderChange={changeOrder}
-            onRunningChange={setRunning}
+            onRunningChange={changeRunning}
             reducedMotion={reducedMotion}
             running={running && !reducedMotion}
           />
@@ -460,7 +496,7 @@ export function ShowPage({
           <>
             <ShowToolbarControls scene={scene} getSceneHref={getShowModeHref} />
             <ShowPlaybackButton
-              onRunningChange={setRunning}
+              onRunningChange={changeRunning}
               reducedMotion={reducedMotion}
               running={running && !reducedMotion}
             />
@@ -486,6 +522,7 @@ export function ShowPage({
               scene === "waterfall" ? waterfallSizeDescription : floatSizeDescription
             }
             onDecreaseSize={() => {
+              trackControl("size");
               if (scene === "cluster")
                 stageRef.current?.clusterCommand({ type: "zoom", direction: -1 });
               else if (scene === "float")
@@ -496,6 +533,7 @@ export function ShowPage({
                 );
             }}
             onIncreaseSize={() => {
+              trackControl("size");
               if (scene === "cluster")
                 stageRef.current?.clusterCommand({ type: "zoom", direction: 1 });
               else if (scene === "float")
@@ -506,6 +544,7 @@ export function ShowPage({
                 );
             }}
             onReset={() => {
+              trackControl("size");
               if (scene === "cluster") exitCluster();
               else if (scene === "waterfall") setWaterfallColumns(waterfallDensity.defaultColumns);
               else setFloatSizeIndex(defaultShowFloatSizeIndex);

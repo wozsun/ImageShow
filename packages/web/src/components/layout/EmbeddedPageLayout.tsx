@@ -1,5 +1,7 @@
 import { Component, type ReactNode } from "react";
 import { Outlet } from "react-router";
+import type { AnalyticsBridge } from "@imageshow/shared/browser";
+import { trackAnalytics } from "../../lib/analytics/analytics.js";
 import { useEmbeddedCursorBridge } from "./useEmbeddedCursorBridge.js";
 import { useEmbeddedSafeArea } from "./useEmbeddedSafeArea.js";
 import "../../styles/embed-cursor.css";
@@ -8,10 +10,10 @@ import "../../styles/embed-cursor.css";
 export function EmbeddedPageLayout() {
   return (
     <>
-      <HostBridgeBoundary>
+      <HostBridgeBoundary bridge="cursor">
         <CursorBridge />
       </HostBridgeBoundary>
-      <HostBridgeBoundary>
+      <HostBridgeBoundary bridge="safe_area">
         <SafeAreaBridge />
       </HostBridgeBoundary>
       <Outlet />
@@ -33,7 +35,10 @@ function SafeAreaBridge() {
  * The host protocols are optional: a bridge that fails stops alone and the
  * page keeps running without it.
  */
-class HostBridgeBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+class HostBridgeBoundary extends Component<
+  { bridge: AnalyticsBridge; children: ReactNode },
+  { failed: boolean }
+> {
   state = { failed: false };
 
   static getDerivedStateFromError() {
@@ -42,6 +47,7 @@ class HostBridgeBoundary extends Component<{ children: ReactNode }, { failed: bo
 
   componentDidCatch(error: unknown) {
     console.error("[ImageShow] 嵌入协议已停用", error);
+    trackAnalytics({ event: "bridge_failed", bridge: this.props.bridge });
   }
 
   render() {

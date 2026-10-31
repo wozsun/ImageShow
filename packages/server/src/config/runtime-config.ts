@@ -3,6 +3,10 @@ import { z } from "zod";
 import { appConfig } from "@imageshow/shared";
 import { randomFallbackDimensions, type RuntimeConfig } from "@imageshow/shared/browser";
 import {
+  analyticsCollectEventsPerDay,
+  analyticsCollectEventsPerMinute,
+  analyticsInteractionRetentionDays,
+  analyticsVisitRetentionDays,
   altchaCost,
   altchaCounter,
   altchaTtlSeconds,
@@ -157,6 +161,14 @@ const runtimeConfigSchema = z.strictObject({
     login_background: loginBackground,
     image_page_size: imagePageSize,
     recent_uploads: recentUploads
+  }),
+  analytics: z.strictObject({
+    enabled: z.boolean(),
+    home_visitors: z.boolean(),
+    visit_retention_days: analyticsVisitRetentionDays,
+    interaction_retention_days: analyticsInteractionRetentionDays,
+    collect_events_per_minute: analyticsCollectEventsPerMinute,
+    collect_events_per_day: analyticsCollectEventsPerDay
   }),
   security: z.strictObject({
     session_ttl_seconds: sessionTtlSeconds,

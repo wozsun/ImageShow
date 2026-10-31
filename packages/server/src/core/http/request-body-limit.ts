@@ -2,6 +2,8 @@ import { appConfig } from "@imageshow/shared";
 import {
   adminApiBasePath,
   adminPreferencesMaxBytes,
+  analyticsCollectLimits,
+  analyticsCollectPath,
   ingestionActionPath,
   ingestionCancelPath,
   ingestionCommitPath,
@@ -152,6 +154,8 @@ const protectedBodyLimits = new Map([
   [`POST ${importWeiboParsePath}`, measuredBodyLimit(weiboImportBodyMaxBytes)]
 ]);
 
+const limitAnalyticsCollectBody = measuredBodyLimit(analyticsCollectLimits.maxBodyBytes);
+
 export function limitApiRequestBody(c: Context, next: Next) {
   const path = new URL(c.req.url).pathname;
   if (path.startsWith(`${adminApiBasePath}/`)) {
@@ -159,6 +163,7 @@ export function limitApiRequestBody(c: Context, next: Next) {
     // authentication. This also keeps anonymous large requests off the body.
     return next();
   }
+  if (path === analyticsCollectPath) return limitAnalyticsCollectBody(c, next);
   return limitStandardApiBody(c, next);
 }
 

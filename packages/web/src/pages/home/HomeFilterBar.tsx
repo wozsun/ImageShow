@@ -1,6 +1,7 @@
 import { basicTagSelection } from "@imageshow/shared/browser";
 import type { GalleryFacetsDto, GalleryStatsDto } from "@imageshow/shared/browser";
 import { Link } from "react-router";
+import { trackAnalytics } from "../../lib/analytics/analytics.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { useOneShotAnimation } from "../../hooks/useOneShotAnimation.js";
 import {
@@ -104,7 +105,15 @@ export function HomeFilterBar({
         </span>
         <span className="home-filter-reset-label">重置</span>
       </button>
-      <Link className="home-gallery-entry" to={destination} {...targetPreloadProps}>
+      <Link
+        className="home-gallery-entry"
+        to={destination}
+        {...targetPreloadProps}
+        onClick={(event) => {
+          targetPreloadProps.onClick(event);
+          trackAnalytics({ event: "catalog_click", target: "browse" });
+        }}
+      >
         {`进入${targetLabel}`} <span aria-hidden="true">→</span>
       </Link>
     </section>

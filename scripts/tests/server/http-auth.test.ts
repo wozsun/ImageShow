@@ -594,7 +594,7 @@ test("[Server/HTTP 与鉴权] Redis ready 投影、管理员权限和密码验�
     adminPermissionsForRole("super").sort(),
     Object.values(adminPermissions).sort()
   );
-  assert.deepEqual(adminPermissionsForRole("image"), []);
+  assert.deepEqual(adminPermissionsForRole("image"), [adminPermissions.analyticsView]);
 
   const password = "ImageShow-final-version-password";
   const encoded = await hashPassword(password);

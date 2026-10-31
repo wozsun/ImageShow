@@ -25,7 +25,7 @@ packages/web ─────► packages/shared
 - `packages/shared` 只保存前后端共同需要的配置默认值、稳定类型、常量、DTO 与浏览器安全纯规则。
 - 默认入口可供 Server 与构建配置使用；Web 只通过浏览器安全入口读取可进入 bundle 的契约。
 - 数据库行型、执行所有权、Node.js 能力和未脱敏凭据不得进入浏览器入口。
-- 浏览器安全契约按鉴权、后台、站点配置及其取值范围、图片、分组、词表、随机图、存储、接入、日志及 API 边界分别维护，入口只汇出这些领域；领域间直接导入所属模块，不通过入口反向汇聚。不构成前后端契约、只被一端使用的常量与默认值留在使用方：Web 独有的界面与 URL 选择（如星群分组）放在 Web，服务端独有的默认值（如图片处理默认参数）放在默认入口。
+- 浏览器安全契约按鉴权、后台、站点配置及其取值范围、图片、分组、词表、随机图、存储、接入、日志、访问统计及 API 边界分别维护，入口只汇出这些领域；领域间直接导入所属模块，不通过入口反向汇聚。不构成前后端契约、只被一端使用的常量与默认值留在使用方：Web 独有的界面与 URL 选择（如星群分组）放在 Web，服务端独有的默认值（如图片处理默认参数）放在默认入口。
 
 ## Server
 
@@ -35,18 +35,18 @@ packages/web ─────► packages/shared
 index / http-app / routes
           │
           ▼
-images / storage / random / jobs / checks / vocab / users
+images / storage / random / jobs / checks / vocab / users / analytics
           │
           ▼
 core / config
 ```
 
 - `src/index.ts` 只负责进程装配与生命周期；`http-app.ts` 和独立 CLI 的模块导入不得启动服务或产生初始化副作用。
-- `routes/` 只负责 HTTP、Host、鉴权、权限、输入和响应边界，业务工作委托给领域模块；`routes/validation/` 按图片、分组、Ingestion、存储、设置、用户和词表职责拥有请求 schema，并集中保留通用 HTTP 原语，不建立总仓库或 barrel；`validation_error` 的 `details.issues` 映射由 `core/validation-issues.ts` 提供，供请求校验与站点配置保存共用。
+- `routes/` 只负责 HTTP、Host、鉴权、权限、输入和响应边界，业务工作委托给领域模块；`routes/validation/` 按图片、分组、Ingestion、存储、设置、统计、用户和词表职责拥有请求 schema，并集中保留通用 HTTP 原语，不建立总仓库或 barrel；`validation_error` 的 `details.issues` 映射由 `core/validation-issues.ts` 提供，供请求校验与站点配置保存共用。
 - HTTP schema 以领域 DTO / 输入类型作编译期约束；列表、统计、JSONL 和 cursor 等非 HTTP 契约由对应图片或 Ingestion 模块拥有，领域模块不得反向导入 `routes/validation/`。
 - `core/` 和运行配置 schema / store 提供基础设施，不依赖业务领域或路由。`config/` 唯一拥有 RuntimeConfig 写入协调、持久化和内存发布；`app-settings.ts` 拥有公开 / 后台投影与完整配置保存，组合存储注册表的 Host 冲突校验，基础配置模块不反向依赖该入口。
 - `core/http/` 拥有供路由与审计共用的请求上下文契约；`users/` 实现会话认证及持久化。审计基础设施不得通过会话读取助手反向依赖用户业务。
-- 数据库启动负责空库完整初始化与非空库最小只读 readiness；既有结构由维护者处理，额外表不进入数据或权限核对，必需结构不满足时明确失败。
+- 数据库启动负责空库完整初始化与非空库最小只读 readiness；既有结构由维护者处理（6.9.0 – 6.9.1 的统计表临时补建例外见 `database.md`），额外表不进入数据或权限核对，必需结构不满足时明确失败。
 - `core/redis/` 只拥有唯一 client、连接与能力探测和通用 Redis 原语；具体领域拥有自己的 Lua、命令注册、参数布局和返回解析，不以导入副作用反转依赖方向。
 - 三档名称、对象目录、资源路径与随机 API 尺寸统一使用 `large/medium/small`；数据库保留 `l_/m_/s_` 列前缀，列映射由图片事实读取模块持有。
 - `images/` 拥有图片读写、展示、分类、回收站、缩略图、read model、ready cache 与 Ingestion；分类只更新 metadata 与必要投影，不得依赖或触发对象搬迁。`trash/` 集中回收站与永久删除流程，`serving/` 集中图片寻址、对象响应与外部原图处理。正式展示图与缩略图属于公开资源，外部原图由路由按公开配置或管理员会话完成准入后再交给 `serving/`，访问与投影规则见[安全与主机](../reference/security.md#会话与鉴权)。回收站永久删除的逐图意图由 `background_job.target_id` 与幂等键持有，metadata 不保存任务字段。
@@ -58,6 +58,7 @@ core / config
 - Ingestion 内部协议、执行与顶层装配按 [模块分层](../reference/ingestion.md#模块分层) 组织；Routes 只依赖公开 service、repository facade、DTO 和窄执行控制接口。
 - `storage/` 拥有 backend、driver、对象原语、位置锁、I/O 准入和持久清理；存储配置 schema、记录解析与领域输入类型留在 `storage/backends/`，HTTP 请求 schema 留在路由边界；`random/` 只编排随机出口；`jobs/` 只维护通用后台任务生命周期；`checks/` 负责检查和显式维护入口。
 - 存储注册表独立拥有配置缓存与共享加载，不接收请求绑定的 reader；本地公开图片 Host 与静态资源 Host 由统一资源 Host 边界准入，各自固定入口并复用主站的对象与静态响应，不经过每图寻址。`/assets/` 只提供镜像内构建产物（含内置图标），`/asset/` 只在主站提供 `data/asset` 中的运维图片，两者不互相回退。读取顺序与准入规则见[架构不变量](../reference/architecture.md#redis-图片投影)与[安全与主机](../reference/security.md#代理与-host)。
+- `analytics/` 拥有访问统计与随机 API 计数的缓冲、写入、汇总、裁剪、清空和分析查询；写入所有者 `runtime.ts` 自持定时器，不进入通用 `jobs/`。随机路由只调用其计数入口，事件契约在 shared 的 `analytics.ts`，请求 schema 在 `routes/validation/analytics.ts`。
 - 可变状态、连接、协调器、Worker、限流器和事务各有唯一所有者；不得因拆文件创建第二实例、第二状态机或第二恢复权威。
 - 跨领域调用直接依赖对方表达职责的模块，不经由路由、测试工具、模糊 service 或 barrel 绕行。
 
@@ -77,7 +78,7 @@ hooks ──► lib
 - Web 直接消费 shared 的 DTO 与公共常量，不另建总类型别名层；页面表单类型就近维护，公开图片组合类型与画廊预算归 `lib/gallery/`。
 - 公开浏览的 URL 筛选动作由同一 Hook 持有，导航组件只组合共同视图；画廊与展映分别拥有页面生命周期。展映入口保留路由懒加载，渲染实现位于页面所属的 `pixi/`。
 - 普通公开页面与后台共用会话所有者；嵌入路由始终是访客，不挂载会话所有者，共享详情按可选会话上下文消费身份，不直接读取认证缓存或另建探测入口。
-- `pages/admin/` 每个后台路由或能力一个目录（外壳、账号、概览、图片、接入、分组、词表、检查、设置、存储、用户、日志），只服务该路由的请求客户端与状态就近维护；`lib/api/` 只保存多个页面共用的客户端与查询契约。
+- `pages/admin/` 每个后台路由或能力一个目录（外壳、账号、概览、图片、接入、分组、词表、统计、检查、设置、存储、用户、日志），只服务该路由的请求客户端与状态就近维护；`lib/api/` 只保存多个页面共用的客户端与查询契约。
 - `pages/admin/groups/` 拥有分组管理与成员操作编排，按 ID 输入及只读核对复用图片工作流；分组不是词表，列表复用词表布局，成员页面复用图片筛选、分页、选择和卡片，查询由分组范围独立标识。
 - `pages/admin/ingestion/` 以 Ingestion 为上位领域，以 `upload` / `import` 为来源子模式；queue、workflow、来源 owner 与浏览器资源所有权保持单一。
 - 页面和权限专有代码保持懒加载，资源合并不能扩大权限边界；同层页面之间按代价合并，可能顺带下载同层其他页面的少量代码。分块规则见 [Web](../reference/web.md#按需加载与分块)。

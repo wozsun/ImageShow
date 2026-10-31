@@ -104,6 +104,7 @@ const publicApiCacheControl =
 export const publicImageCacheControl = "public, max-age=30, s-maxage=60";
 export const publicMetadataCacheControl = publicApiCacheControl;
 export const publicConfigCacheControl = publicApiCacheControl;
+export const publicCounterCacheControl = "public, max-age=60, s-maxage=60";
 export const robotsCacheControl =
   "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400, stale-if-error=86400";
 

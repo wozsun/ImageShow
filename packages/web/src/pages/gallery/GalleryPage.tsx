@@ -26,6 +26,9 @@ import { AppLoadingRegion } from "../../components/feedback/AppLoadingScreen.js"
 import { pageScrollRestoredEvent } from "../../hooks/usePageScrollLock.js";
 import { useDocumentMotionPause } from "../../hooks/useDocumentMotionPause.js";
 import { usePublicNavigationEntrance } from "../../hooks/usePublicNavigationEntrance.js";
+import { useAnalyticsPage } from "../../hooks/useAnalyticsPage.js";
+import { useOrderAnalytics } from "../../hooks/useOrderAnalytics.js";
+import { reportAtPageEnd } from "../../lib/analytics/analytics.js";
 import {
   useGalleryColumnCount,
   useGalleryGeometry
@@ -57,6 +60,7 @@ export function GalleryPage({
   embedded?: boolean;
   order: PublicImageOrder;
 }) {
+  useAnalyticsPage("gallery", embedded);
   const mobile = useMediaQuery(mobileViewportMediaQuery);
   const [selected, setSelected] = useState<GalleryImageCardDto | null>(null);
   const [pinnedImageId, setPinnedImageId] = useState<string | null>(null);
@@ -76,6 +80,7 @@ export function GalleryPage({
     error: filterError
   } = browseRoute;
   const order = publicImageOrderFromSearchParams(routeSearchParams, defaultOrder);
+  useOrderAnalytics(order);
   const navigationControls = usePublicImageViewportControls({
     headerPresent: !embedded,
     paused: dialogOpen
@@ -150,6 +155,45 @@ export function GalleryPage({
     pinnedImageId,
     windowRef: galleryWindowRef
   });
+  const { fetchedPages, hasNextPage } = galleryData.snapshot;
+  const listProgressRef = useRef({
+    pages: 0,
+    scope: galleryData.scope,
+    listPages: fetchedPages,
+    reachedEnd: false
+  });
+  useEffect(() => {
+    // Only pages loaded while a list is shown count: a list restored from
+    // history with its pages, or pages dropped on revalidation, add nothing.
+    const progress = listProgressRef.current;
+    const added = progress.scope === galleryData.scope ? Math.max(0, fetchedPages - progress.listPages) : 0;
+    listProgressRef.current = {
+      pages: progress.pages + added,
+      scope: galleryData.scope,
+      listPages: fetchedPages,
+      reachedEnd: progress.reachedEnd || (added > 0 && !hasNextPage)
+    };
+  }, [galleryData.scope, fetchedPages, hasNextPage]);
+  useEffect(() => {
+    // Each view reports the pages it loaded and whether a list reached its end
+    // since the last report, so a view restored from the back-forward cache
+    // counts only its own reading.
+    let reportedPages = 0;
+    const progress = () => {
+      const current = listProgressRef.current;
+      if (current.pages <= reportedPages) return null;
+      const loaded = current.pages - reportedPages;
+      reportedPages = current.pages;
+      listProgressRef.current = { ...current, reachedEnd: false };
+      return { event: "list_progress" as const, pages: loaded, reached_end: current.reachedEnd };
+    };
+    // The page view, begun by this page's first hook, ends before this cleanup
+    // and sends the summary, so unmounting only withdraws it.
+    const withdraw = reportAtPageEnd(progress);
+    return () => {
+      withdraw();
+    };
+  }, []);
   useEffect(() => {
     if (!selected) return;
     const refreshed = galleryData.positions.find((position) => position.id === selected.id)?.item;

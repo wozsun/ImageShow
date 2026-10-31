@@ -5,13 +5,16 @@ import {
 } from "@tanstack/react-query";
 import {
   adminApiBasePath,
+  analyticsClearScopes,
   adminTrashCheckIssueKinds,
   trashPurgeJobStates,
   type AdminCheckStatusDto,
-  type AdminTrashCheckDto
+  type AdminTrashCheckDto,
+  type AnalyticsClearScope
 } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { StableButtonLabel } from "../../../components/data-display/StableButtonLabel.js";
+import { ConfirmDialog } from "../../../components/dialog/ConfirmDialog.js";
 import { DialogFrame } from "../../../components/dialog/DialogFrame.js";
 import { api } from "../../../lib/api/client.js";
 import { queryKeys } from "../../../lib/api/query-keys.js";
@@ -145,37 +148,35 @@ export function CheckStorageMaintenanceActions({
   };
   return (
     <>
-      <div className="actions">
-        {canMigrateStorage && (
-          <button
-            type="button"
-            disabled={Boolean(running)}
-            onClick={() => setOperationModal("storage-backend-image-migration")}
-          >
-            <AdminIcon name="database-2-line" />
-            <StableButtonLabel
-              idle="迁移存储后端"
-              busyText="迁移中"
-              busy={running === "storage-backend-image-migration"}
-            />
-          </button>
-        )}
-        {canMaintainStorage && (
-          <button
-            type="button"
-            disabled={Boolean(running)}
-            onClick={() => void openStorageMaintenance()}
-          >
-            <AdminIcon name="database-2-line" />
-            <StableButtonLabel
-              idle="存储维护"
-              busyText="处理中"
-              busy={running === "storage-maintenance-preview"
-                || running === "storage-maintenance"}
-            />
-          </button>
-        )}
-      </div>
+      {canMigrateStorage && (
+        <button
+          type="button"
+          disabled={Boolean(running)}
+          onClick={() => setOperationModal("storage-backend-image-migration")}
+        >
+          <AdminIcon name="database-2-line" />
+          <StableButtonLabel
+            idle="迁移存储后端"
+            busyText="迁移中"
+            busy={running === "storage-backend-image-migration"}
+          />
+        </button>
+      )}
+      {canMaintainStorage && (
+        <button
+          type="button"
+          disabled={Boolean(running)}
+          onClick={() => void openStorageMaintenance()}
+        >
+          <AdminIcon name="database-2-line" />
+          <StableButtonLabel
+            idle="存储维护"
+            busyText="处理中"
+            busy={running === "storage-maintenance-preview"
+              || running === "storage-maintenance"}
+          />
+        </button>
+      )}
       {operationModal === "storage-backend-image-migration"
         && canMigrateStorage && (
         <StorageBackendMigrationDialog
@@ -368,6 +369,92 @@ type RebuildErrorBaseline = {
   reason: string | null;
   appliedRevision: string | null;
 };
+
+const analyticsClearScopeCopy: Record<AnalyticsClearScope, { label: string; detail: string }> = {
+  visits: { label: "访问统计", detail: "页面浏览、停留与交互明细，以及它们的每日汇总" },
+  random: { label: "随机 API 统计", detail: "/random 每小时调用次数与每日汇总" },
+  all: { label: "全部统计", detail: "以上全部，「统计」页恢复为空" }
+};
+
+/**
+ * Deleting statistics takes three steps: the button opens the dialog, the
+ * first confirm arms it and the second deletes.
+ */
+export function CheckAnalyticsClearAction({ running }: { running: string }) {
+  const client = useQueryClient();
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const [open, setOpen] = useState(false);
+  const [scope, setScope] = useState<AnalyticsClearScope>("visits");
+  const [errorMessage, setErrorMessage] = useState("");
+  const clear = async () => {
+    setErrorMessage("");
+    try {
+      await api(`${adminApiBasePath}/analytics/clear`, {
+        method: "POST",
+        body: JSON.stringify({ scope })
+      });
+      return true;
+    } catch (error) {
+      reportAdminUiError("analytics.clear", error);
+      setErrorMessage("清空失败，请稍后重试。");
+      return false;
+    } finally {
+      void client.invalidateQueries({ queryKey: queryKeys.analytics });
+      void client.invalidateQueries({ queryKey: queryKeys.todayVisitors });
+    }
+  };
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        disabled={Boolean(running)}
+        onClick={() => {
+          setScope("visits");
+          setErrorMessage("");
+          setOpen(true);
+        }}
+      >
+        <AdminIcon name="delete-bin-line" />
+        清空统计
+      </button>
+      {open && (
+        <ConfirmDialog
+          title="清空统计数据"
+          description="删除所选范围的明细与每日汇总，删除后无法恢复。"
+          confirmLabel={`清空${analyticsClearScopeCopy[scope].label}`}
+          requireFinalConfirmation
+          pendingLabel="清空中"
+          successLabel="已清空"
+          errorLabel="清空失败"
+          errorMessage={errorMessage}
+          returnFocusRef={buttonRef}
+          onClose={() => setOpen(false)}
+          onConfirm={clear}
+        >
+          <fieldset className="analytics-clear-scopes">
+            <legend>清空范围</legend>
+            {analyticsClearScopes.map((value) => (
+              <label key={value}>
+                <input
+                  type="radio"
+                  name="analytics-clear-scope"
+                  value={value}
+                  checked={scope === value}
+                  onChange={() => setScope(value)}
+                />
+                <span>
+                  <strong>{analyticsClearScopeCopy[value].label}</strong>
+                  <small>{analyticsClearScopeCopy[value].detail}</small>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+        </ConfirmDialog>
+      )}
+    </>
+  );
+}
 
 export function ReadyImageCacheMaintenancePanel({
   query,

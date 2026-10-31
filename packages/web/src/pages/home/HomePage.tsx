@@ -20,6 +20,7 @@ import { AppHeader } from "../../components/navigation/AppHeader.js";
 import { useDocumentMotionPause } from "../../hooks/useDocumentMotionPause.js";
 import { usePublicNavigationEntrance } from "../../hooks/usePublicNavigationEntrance.js";
 import { usePublicFilterStats } from "../../hooks/usePublicFilterStats.js";
+import { useAnalyticsPage } from "../../hooks/useAnalyticsPage.js";
 import { useGalleryFacets } from "../../lib/api/site-queries.js";
 import {
   emptyGalleryFilters,
@@ -65,11 +66,14 @@ function HomeStartupLoadingText({ active }: { active: boolean }) {
 
 export function HomePage({
   embedded = false,
-  site
+  site,
+  todayVisitors = false
 }: {
   embedded?: boolean;
   site: Pick<PublicSiteSettings, "home" | "show" | "icp" | "mps" | "footer">;
+  todayVisitors?: boolean;
 }) {
+  useAnalyticsPage("home", embedded);
   const catalogRef = useRef<HTMLElement>(null);
   const {
     hadAppearedBeforeMount: navigationHadAppearedBeforeMount,
@@ -200,7 +204,7 @@ export function HomePage({
         }}
         onCatalogIntent={entrance.revealImmediately}
       />
-      <HomeFooter site={site} embedded={embedded} />
+      <HomeFooter site={site} embedded={embedded} todayVisitors={todayVisitors} />
     </main>
   );
 }

@@ -64,7 +64,8 @@ test("[Web/公开导航] 嵌入路由保持访客并在普通页往返时交接�
   });
   client.setQueryData(queryKeys.siteConfig, {
     site: { ...appConfig.runtimeDefaults.site, icp: "示例备案", footer: "嵌入页脚" },
-    embed: { enabled: true }
+    embed: { enabled: true },
+    analytics: { enabled: false, home_visitors: false }
   });
   client.setQueryData(
     queryKeys.me,
@@ -133,9 +134,12 @@ test("[Web/公开导航] 嵌入路由保持访客并在普通页往返时交接�
 
 test("[Web/公开导航] 首页页脚按配置展示备案和受限 HTML，安全处理链接及空项", async (t) => {
   const h = await createConfigStreamHarness(t);
+  const client = new QueryClient();
+  t.after(() => client.clear());
   const site = { icp: "", mps: "", footer: "" };
   const render = async (patch: Partial<typeof site>, embedded = false) => {
-    await h.render(h.React.createElement(HomeFooter, { site: { ...site, ...patch }, embedded }));
+    await h.render(h.React.createElement(QueryClientProvider, { client },
+      h.React.createElement(HomeFooter, { site: { ...site, ...patch }, embedded })));
   };
   await render({});
   assert.equal(h.document.querySelector("footer"), null);
@@ -392,7 +396,8 @@ test("[Web/公开导航] 真实画廊与展映页面刷新词表后按完整原�
       client.setQueryData(queryKeys.galleryFacets, { themes: [], tags: [], authors: [] });
       client.setQueryData(queryKeys.siteConfig, {
         site: appConfig.runtimeDefaults.site,
-        embed: { enabled: true }
+        embed: { enabled: true },
+        analytics: { enabled: false, home_visitors: false }
       });
       client.setQueryData(queryKeys.me, { authenticated: false });
       let search = "";

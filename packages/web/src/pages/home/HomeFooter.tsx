@@ -1,5 +1,12 @@
-import type { PublicSiteSettings } from "@imageshow/shared/browser";
+import {
+  analyticsTodayVisitorsPath,
+  type AnalyticsTodayVisitorsDto,
+  type PublicSiteSettings
+} from "@imageshow/shared/browser";
+import { useQuery } from "@tanstack/react-query";
 import { Fragment, useMemo, type ReactNode } from "react";
+import { api } from "../../lib/api/client.js";
+import { queryKeys } from "../../lib/api/query-keys.js";
 
 function footerLink(value: string | null) {
   if (!value) return undefined;
@@ -44,19 +51,38 @@ function parseFooter(source: string) {
   return footerNodes(template.content.childNodes);
 }
 
+/** Today's distinct visitors of the whole site; undefined until the count arrives. */
+function useTodayVisitors(enabled: boolean) {
+  const visitors = useQuery({
+    queryKey: queryKeys.todayVisitors,
+    queryFn: ({ signal }) => api<AnalyticsTodayVisitorsDto>(analyticsTodayVisitorsPath, { signal }),
+    enabled,
+    staleTime: 60_000,
+    retry: false
+  }).data?.visitors;
+  return enabled ? visitors : undefined;
+}
+
 export function HomeFooter({
   site: { icp, mps, footer },
-  embedded = false
+  embedded = false,
+  todayVisitors = false
 }: {
   site: Pick<PublicSiteSettings, "icp" | "mps" | "footer">;
   embedded?: boolean;
+  todayVisitors?: boolean;
 }) {
   const footerContent = useMemo(() => parseFooter(footer), [footer]);
+  // An empty footer would leave a bare landmark and shift once the count arrives.
+  const visitors = useTodayVisitors(todayVisitors && !embedded);
   const showRegistrations = !embedded && Boolean(icp || mps);
-  if (!showRegistrations && !footer) return null;
+  if (!showRegistrations && !footer && visitors === undefined) return null;
 
   return (
     <footer className="home-footer" aria-label="站点信息">
+      {visitors !== undefined && (
+        <p className="home-footer-text">今日访客 {visitors.toLocaleString("zh-CN")}</p>
+      )}
       {showRegistrations && (
         <div className="home-footer-registrations">
           {icp && (

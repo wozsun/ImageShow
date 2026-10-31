@@ -59,6 +59,7 @@ const iconGroups = [
     names: [
       "arrow-go-back-line",
       "arrow-left-right-line",
+      "bar-chart-box-line",
       "checkbox-circle-line",
       "computer-line",
       "dashboard-line",

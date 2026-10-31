@@ -1,4 +1,5 @@
 import { ImageSource, Texture } from "pixi.js";
+import { countImageLoadFailure } from "../../../lib/analytics/analytics.js";
 import { requestWithDeadline } from "../../../lib/api/request-deadline.js";
 import type { ShowPixiTextureStats } from "./show-pixi-types.js";
 
@@ -764,6 +765,9 @@ export class ShowPixiTextureCache {
   }
 
   #rememberFailedUrl(url: string, transportFailure: boolean) {
+    // Sizes and prefetches share one download, so a failure counts once per
+    // address until a retry clears it.
+    if (!this.#failedUrls.has(url)) countImageLoadFailure();
     this.#failedUrls.delete(url);
     this.#failedUrls.set(url, transportFailure);
     while (this.#failedUrls.size > this.#maximumFailedUrls) {

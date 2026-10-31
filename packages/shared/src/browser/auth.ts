@@ -19,7 +19,9 @@ export const adminPermissions = {
   authorDelete: "author.delete",
   storageMaintenanceMigrate: "storage.maintenance.migrate",
   storageMaintenanceExecute: "storage.maintenance.execute",
-  cacheMaintenanceRebuild: "cache.maintenance.rebuild"
+  cacheMaintenanceRebuild: "cache.maintenance.rebuild",
+  analyticsView: "analytics.view",
+  analyticsManage: "analytics.manage"
 } as const;
 
 export type AdminPermission = (typeof adminPermissions)[keyof typeof adminPermissions];

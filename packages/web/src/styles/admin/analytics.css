@@ -1,0 +1,522 @@
+:root {
+  --admin-color-analytics-series-primary: light-dark(#2563eb, #60a5fa);
+  --admin-color-analytics-series-secondary: light-dark(#0d9488, #2dd4bf);
+  --admin-color-analytics-area-primary: light-dark(rgba(37, 99, 235, 0.22), rgba(96, 165, 250, 0.26));
+  --admin-color-analytics-area-secondary: light-dark(rgba(13, 148, 136, 0.18), rgba(45, 212, 191, 0.2));
+  --admin-color-analytics-area-fade: light-dark(rgba(255, 255, 255, 0), rgba(22, 27, 34, 0));
+  --admin-color-analytics-bar: light-dark(rgba(37, 99, 235, 0.12), rgba(96, 165, 250, 0.16));
+  --admin-color-analytics-grid: var(--admin-color-border-muted);
+  --admin-color-analytics-axis: var(--admin-color-text-subtle);
+  --admin-color-analytics-tab-surface: var(--admin-color-control-surface-muted);
+  --admin-color-analytics-heat-0: var(--admin-color-control-surface-muted);
+  --admin-color-analytics-heat-1: light-dark(rgba(37, 99, 235, 0.2), rgba(96, 165, 250, 0.22));
+  --admin-color-analytics-heat-2: light-dark(rgba(37, 99, 235, 0.42), rgba(96, 165, 250, 0.44));
+  --admin-color-analytics-heat-3: light-dark(rgba(37, 99, 235, 0.68), rgba(96, 165, 250, 0.7));
+  --admin-color-analytics-heat-4: var(--admin-color-analytics-series-primary);
+}
+
+.analytics-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--admin-control-gap);
+}
+
+/* 标签页与时间范围共用分段控件：浅底轨道上的白色选中块。 */
+.analytics-tabs,
+.analytics-segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--admin-radius-container);
+  background: var(--admin-color-analytics-tab-surface);
+}
+.analytics-tabs > button,
+.analytics-segmented > button {
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--admin-radius-control);
+  color: var(--admin-color-text-secondary);
+  background: transparent;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.analytics-tabs > button:hover,
+.analytics-segmented > button:hover {
+  color: var(--admin-color-text-primary);
+}
+.analytics-tabs > button.is-selected,
+.analytics-segmented > button.is-selected {
+  color: var(--admin-color-text-primary);
+  background: var(--admin-color-surface-primary);
+  border-color: var(--admin-color-border-card);
+  box-shadow: 0 1px 2px var(--admin-shadow-control-resting);
+}
+.analytics-range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.analytics-dates {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--admin-color-text-secondary);
+}
+/* 与分段控件同高（32px 按钮加 3px 轨道内边距）。 */
+.analytics-dates input {
+  width: 150px;
+  height: 38px;
+  padding: 6px 8px;
+}
+
+.analytics-body {
+  display: grid;
+  gap: 16px;
+  padding-top: 8px;
+  padding-bottom: 24px;
+  transition: opacity 0.16s ease;
+}
+.analytics-body[data-stale="true"] {
+  opacity: 0.6;
+}
+.analytics-notice {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--admin-radius-control);
+  background: var(--admin-color-control-surface-muted);
+  color: var(--admin-color-text-secondary);
+  font-size: 13px;
+}
+.workspace .analytics-empty {
+  margin: 0;
+  padding: 24px 0;
+  color: var(--admin-color-text-subtle);
+  font-size: 13px;
+  text-align: center;
+}
+
+.analytics-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--admin-card-grid-gap);
+}
+.analytics-metric,
+.analytics-card {
+  min-width: 0;
+  border: 1px solid var(--admin-color-border-card);
+  border-radius: var(--admin-radius-container);
+  background: var(--admin-color-surface-primary);
+}
+.analytics-metric {
+  display: grid;
+  gap: 4px;
+  padding: 16px;
+}
+.analytics-metric-label {
+  color: var(--admin-color-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+.analytics-metric-value {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.analytics-change {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--admin-color-text-subtle);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.analytics-change.is-up {
+  color: var(--admin-color-success-text-strong);
+}
+.analytics-change.is-down {
+  color: var(--admin-color-danger-text);
+}
+.analytics-change small {
+  color: var(--admin-color-text-subtle);
+  font-size: 12px;
+}
+
+/* 同一行的卡片等高，空状态在剩余高度中居中，避免较矮的卡片在下方留出参差的空白。 */
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.analytics-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+.analytics-card > .analytics-empty {
+  display: flex;
+  flex: 1 0 auto;
+  align-items: center;
+  justify-content: center;
+}
+.analytics-card.is-wide {
+  grid-column: 1 / -1;
+}
+.workspace .analytics-card h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.analytics-chart {
+  position: relative;
+}
+.analytics-chart svg {
+  display: block;
+  overflow: visible;
+}
+.analytics-note {
+  margin: 10px 0 0;
+  color: var(--admin-color-text-subtle);
+  font-size: 12px;
+}
+.analytics-facts.is-four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 12px;
+}
+.analytics-facts dd.is-text {
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analytics-heatmap {
+  display: grid;
+  gap: 8px;
+}
+.analytics-heatmap-grid {
+  display: grid;
+  grid-template-columns: 20px repeat(24, minmax(0, 1fr));
+  grid-auto-rows: 18px;
+  gap: 2px;
+  color: var(--admin-color-analytics-axis);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.analytics-heatmap-hour,
+.analytics-heatmap-day {
+  align-self: center;
+  overflow: visible;
+  white-space: nowrap;
+}
+.analytics-heatmap-cell {
+  display: block;
+  border-radius: 3px;
+  background: var(--admin-color-analytics-heat-0);
+}
+.analytics-heatmap-cell[data-level="1"] {
+  background: var(--admin-color-analytics-heat-1);
+}
+.analytics-heatmap-cell[data-level="2"] {
+  background: var(--admin-color-analytics-heat-2);
+}
+.analytics-heatmap-cell[data-level="3"] {
+  background: var(--admin-color-analytics-heat-3);
+}
+.analytics-heatmap-cell[data-level="4"] {
+  background: var(--admin-color-analytics-heat-4);
+}
+.analytics-heatmap-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  color: var(--admin-color-analytics-axis);
+  font-size: 11px;
+}
+.analytics-heatmap-legend .analytics-heatmap-cell {
+  width: 12px;
+  height: 12px;
+}
+
+.analytics-chart-data {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.analytics-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 16px;
+  margin-bottom: 4px;
+  color: var(--admin-color-text-secondary);
+  font-size: 12px;
+}
+.analytics-legend-item,
+.analytics-tooltip span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.analytics-legend-item i,
+.analytics-tooltip i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--admin-color-analytics-series-primary);
+}
+:is(.analytics-legend-item, .analytics-tooltip span).is-secondary i {
+  background: var(--admin-color-analytics-series-secondary);
+}
+.analytics-gridline {
+  stroke: var(--admin-color-analytics-grid);
+  stroke-dasharray: 3 3;
+}
+.analytics-axis {
+  fill: var(--admin-color-analytics-axis);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.analytics-line {
+  fill: none;
+  stroke: var(--admin-color-analytics-series-primary);
+  stroke-width: 2;
+}
+.analytics-line.is-secondary {
+  stroke: var(--admin-color-analytics-series-secondary);
+}
+.analytics-gradient-start {
+  stop-color: var(--admin-color-analytics-area-primary);
+}
+.analytics-gradient-start.is-secondary {
+  stop-color: var(--admin-color-analytics-area-secondary);
+}
+.analytics-gradient-end {
+  stop-color: var(--admin-color-analytics-area-fade);
+}
+.analytics-crosshair {
+  stroke: var(--admin-color-analytics-axis);
+  stroke-dasharray: 3 3;
+}
+.analytics-dot {
+  fill: var(--admin-color-surface-primary);
+  stroke: var(--admin-color-analytics-series-primary);
+  stroke-width: 2;
+}
+.analytics-dot.is-secondary {
+  stroke: var(--admin-color-analytics-series-secondary);
+}
+.analytics-column {
+  fill: var(--admin-color-analytics-series-primary);
+  opacity: 0.85;
+}
+.analytics-column.is-active {
+  opacity: 1;
+}
+.analytics-hit {
+  fill: transparent;
+}
+.analytics-tooltip {
+  position: absolute;
+  top: 28px;
+  z-index: 1;
+  display: grid;
+  gap: 4px;
+  min-width: 140px;
+  padding: 8px 10px;
+  border: 1px solid var(--admin-color-border-card);
+  border-radius: var(--admin-radius-container);
+  background: var(--admin-color-surface-raised);
+  box-shadow: 0 8px 22px var(--admin-shadow-card-hover);
+  font-size: 12px;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+.analytics-tooltip b {
+  margin-left: auto;
+  padding-left: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 条目不按内容撑宽列表：过长的标签截断，过长的明细换行。 */
+.analytics-share-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.analytics-share-list + .analytics-share-list,
+.analytics-share-list + .analytics-empty {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--admin-color-border-muted);
+}
+.analytics-share-list li {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 32px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+.analytics-share-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  min-width: 2px;
+  border-radius: var(--admin-radius-control);
+  background: var(--admin-color-analytics-bar);
+}
+/* 明细过长时只在空格处换行（中文词不拆开），而不是撑宽列表；标签至少保留 4 个字宽，不被明细挤成省略号。 */
+.analytics-share-label {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 4em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.analytics-share-detail {
+  position: relative;
+  flex: 0 1 auto;
+  color: var(--admin-color-text-subtle);
+  font-size: 12px;
+  text-align: right;
+  word-break: keep-all;
+}
+.analytics-share-value {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 48px;
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.analytics-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+.analytics-facts div {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: var(--admin-radius-control);
+  background: var(--admin-color-control-surface-muted);
+}
+.analytics-facts dt {
+  color: var(--admin-color-text-secondary);
+  font-size: 12px;
+}
+.analytics-facts dd {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+/* 只有指标块的卡片被同行拉高时，指标块随之填满，数值在块内居中。 */
+.analytics-card > .analytics-facts:last-child {
+  flex: 1 0 auto;
+}
+.analytics-card > .analytics-facts:last-child > div {
+  align-content: center;
+}
+
+.analytics-page .workspace-header-toolbar-row {
+  margin-top: 16px;
+}
+
+/* 侧栏占去宽度后，1024 以下的半宽卡片放不下排行的标签、明细与数值（如“跳转 · 成功”被截成“跳转 · …”），统计网格改为单列。 */
+@media (max-width: 1023px) {
+  .analytics-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  /* 单行纵向排列：多行时行宽取最宽的控件，标签栏会超出页面。 */
+  .analytics-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    flex-wrap: nowrap;
+  }
+  .analytics-range {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .analytics-tabs,
+  .analytics-segmented {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .analytics-tabs > button,
+  .analytics-segmented > button {
+    flex: 1 0 auto;
+    padding-inline: 8px;
+  }
+  .analytics-dates input {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+  }
+  .analytics-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .analytics-metric-value {
+    font-size: 22px;
+  }
+  .analytics-facts.is-four {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .analytics-heatmap-grid {
+    grid-template-columns: 16px repeat(24, minmax(0, 1fr));
+    grid-auto-rows: 12px;
+    gap: 1px;
+    font-size: 10px;
+  }
+}
+
+@media (forced-colors: active) {
+  :is(.analytics-tabs, .analytics-segmented) > button.is-selected {
+    border-color: Highlight;
+  }
+  .analytics-line,
+  .analytics-dot {
+    stroke: CanvasText;
+  }
+  .analytics-line.is-secondary,
+  .analytics-dot.is-secondary {
+    stroke: Highlight;
+  }
+  .analytics-column,
+  .analytics-share-bar,
+  :is(.analytics-legend-item, .analytics-tooltip span) i {
+    background: Highlight;
+    fill: Highlight;
+    forced-color-adjust: none;
+  }
+  /* Shades carry the data, so the heatmap keeps its own colors and outlines each cell. */
+  .analytics-heatmap-cell {
+    border: 1px solid CanvasText;
+    forced-color-adjust: none;
+  }
+}

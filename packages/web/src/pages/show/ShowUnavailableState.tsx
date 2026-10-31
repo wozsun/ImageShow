@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Link, useNavigate } from "react-router";
 import { ErrorDetails } from "../../components/feedback/ErrorDetails.js";
+import { trackAnalytics } from "../../lib/analytics/analytics.js";
 
 /**
  * A stage this browser cannot start: says why, then replaces the history
@@ -12,6 +13,9 @@ export function ShowUnavailableState({ error, galleryHref, webglUnavailable }: {
   webglUnavailable: boolean;
 }) {
   const navigate = useNavigate();
+  useEffect(() => {
+    trackAnalytics({ event: "fallback", reason: webglUnavailable ? "webgl_unavailable" : "show_init_failed" });
+  }, [webglUnavailable]);
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void navigate(galleryHref, { replace: true });

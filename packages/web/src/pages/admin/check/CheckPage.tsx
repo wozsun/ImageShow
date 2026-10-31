@@ -39,6 +39,11 @@ const CheckStorageMaintenanceActions = lazy(() =>
     default: module.CheckStorageMaintenanceActions
   }))
 );
+const CheckAnalyticsClearAction = lazy(() =>
+  loadCheckMaintenanceCapability().then((module) => ({
+    default: module.CheckAnalyticsClearAction
+  }))
+);
 const ReadyImageCacheMaintenancePanel = lazy(() =>
   loadCheckMaintenanceCapability().then((module) => ({
     default: module.ReadyImageCacheMaintenancePanel
@@ -103,6 +108,7 @@ export function CheckPage() {
     permissions.includes(adminPermissions.storageMaintenanceExecute) &&
     permissions.includes(adminPermissions.imageTrashPurge);
   const canRebuildCache = permissions.includes(adminPermissions.cacheMaintenanceRebuild);
+  const canClearAnalytics = permissions.includes(adminPermissions.analyticsManage);
   useEffect(() => {
     if (!redisInspectionQuery.error) return;
     reportAdminUiError(
@@ -191,18 +197,27 @@ export function CheckPage() {
                 </button>
               ))}
             </div>
-            {(canMigrateStorage || canMaintainStorage) && (
-              <Suspense fallback={null}>
-                <CheckStorageMaintenanceActions
-                  canMaintainStorage={canMaintainStorage}
-                  canMigrateStorage={canMigrateStorage}
-                  running={running}
-                  onPublishResult={setResult}
-                  onRunCheck={runCheck}
-                  onRunningChange={setRunning}
-                  onShowStorage={() => setCheckView("storage")}
-                />
-              </Suspense>
+            {(canMigrateStorage || canMaintainStorage || canClearAnalytics) && (
+              <div className="actions">
+                {(canMigrateStorage || canMaintainStorage) && (
+                  <Suspense fallback={null}>
+                    <CheckStorageMaintenanceActions
+                      canMaintainStorage={canMaintainStorage}
+                      canMigrateStorage={canMigrateStorage}
+                      running={running}
+                      onPublishResult={setResult}
+                      onRunCheck={runCheck}
+                      onRunningChange={setRunning}
+                      onShowStorage={() => setCheckView("storage")}
+                    />
+                  </Suspense>
+                )}
+                {canClearAnalytics && (
+                  <Suspense fallback={null}>
+                    <CheckAnalyticsClearAction running={running} />
+                  </Suspense>
+                )}
+              </div>
             )}
           </>
         }

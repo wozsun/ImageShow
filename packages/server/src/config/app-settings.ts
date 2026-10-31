@@ -84,6 +84,10 @@ export function siteConfigPayload(runtime: RuntimeConfig = getRuntimeConfig()): 
     },
     embed: {
       enabled: effectiveEmbedAncestorSources(runtime).length > 0
+    },
+    analytics: {
+      enabled: runtime.analytics.enabled,
+      home_visitors: runtime.analytics.enabled && runtime.analytics.home_visitors
     }
   };
 }
