@@ -32,6 +32,9 @@
   display: grid;
   gap: 12px;
 }
+.settings-column:empty {
+  display: none;
+}
 .settings-card {
   min-width: 0;
   padding: 18px;

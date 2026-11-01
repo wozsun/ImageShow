@@ -274,13 +274,10 @@ CREATE TABLE admin_account (
 CREATE UNIQUE INDEX idx_admin_single_super
 ON admin_account((role)) WHERE role = 'super';
 
--- BEGIN 6.9 analytics tables
--- Visit analytics and random API counters (6.9). Raw rows are disposable:
--- the application buffers writes in process, drops them on failure and prunes
+-- Visit analytics and random API counters. Raw rows are disposable: the
+-- application buffers writes in process, drops them on failure and prunes
 -- them by retention tier; analytics_daily keeps permanent daily rollups.
--- 6.9.0 – 6.9.1 run this section on existing databases at startup; every
--- statement must stay idempotent (IF NOT EXISTS) and create objects only.
-CREATE TABLE IF NOT EXISTS visit_event (
+CREATE TABLE visit_event (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   occurred_at TIMESTAMPTZ NOT NULL,
   visitor_id UUID NOT NULL,
@@ -301,13 +298,13 @@ CREATE TABLE IF NOT EXISTS visit_event (
     CHECK (octet_length(detail::text) <= 1024)
 );
 
-CREATE INDEX IF NOT EXISTS idx_visit_event_occurred
+CREATE INDEX idx_visit_event_occurred
 ON visit_event(occurred_at);
 
-CREATE INDEX IF NOT EXISTS idx_visit_event_event_occurred
+CREATE INDEX idx_visit_event_event_occurred
 ON visit_event(event, occurred_at);
 
-CREATE TABLE IF NOT EXISTS random_api_hourly (
+CREATE TABLE random_api_hourly (
   hour TIMESTAMPTZ NOT NULL,
   mode TEXT NOT NULL,
   method TEXT NOT NULL,
@@ -321,7 +318,7 @@ CREATE TABLE IF NOT EXISTS random_api_hourly (
   PRIMARY KEY (hour, mode, method, status_class, trusted, referrer_host)
 );
 
-CREATE TABLE IF NOT EXISTS random_api_option_hourly (
+CREATE TABLE random_api_option_hourly (
   hour TIMESTAMPTZ NOT NULL,
   option TEXT NOT NULL,
   value TEXT NOT NULL,
@@ -329,7 +326,7 @@ CREATE TABLE IF NOT EXISTS random_api_option_hourly (
   PRIMARY KEY (hour, option, value)
 );
 
-CREATE TABLE IF NOT EXISTS analytics_daily (
+CREATE TABLE analytics_daily (
   day DATE NOT NULL,
   metric TEXT NOT NULL,
   dimensions JSONB NOT NULL,
@@ -337,4 +334,3 @@ CREATE TABLE IF NOT EXISTS analytics_daily (
   visitors BIGINT NOT NULL,
   PRIMARY KEY (day, metric, dimensions)
 );
--- END 6.9 analytics tables

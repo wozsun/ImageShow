@@ -251,20 +251,44 @@ await runIntegrationScenario(async (runtime) => {
   const authApp = new Hono();
   authApp.onError((error, context) => httpResponses.handleApiError(context, error));
   authRoutes.registerPublicAuthRoutes(authApp);
-  const loginResponse = await authApp.request(
-    new Request("http://imageshow.test/api/admin/auth/login", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        host: "imageshow.test",
-        origin: "http://imageshow.test"
-      },
-      body: JSON.stringify({
-        username: "integration-admin",
-        password: "IntegrationAdmin123!"
+  const loginRequest = (username: string, password: string) =>
+    authApp.request(
+      new Request("http://imageshow.test/api/admin/auth/login", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          host: "imageshow.test",
+          origin: "http://imageshow.test"
+        },
+        body: JSON.stringify({ username, password })
       })
-    })
+    );
+  const { logger } = await import("../../../../packages/server/src/core/logger.ts");
+  // A rejected login is logged with the account name only when the account
+  // exists, so a password typed into the name field stays out of the log.
+  const loginFailures: [string, unknown][] = [];
+  const originalLoginWarn = logger.warn;
+  logger.warn = (message, context) => {
+    loginFailures.push([message, context]);
+  };
+  try {
+    for (const username of ["integration-admin", "IntegrationAdmin123!"]) {
+      const rejected = await loginRequest(username, "wrong-integration-password");
+      assert.equal(rejected.status, 401, await rejected.clone().text());
+    }
+  } finally {
+    logger.warn = originalLoginWarn;
+  }
+  const loggedFailures = loginFailures.filter(([message]) => message === "admin_login_failed");
+  assert.deepEqual(
+    loggedFailures.map(([, context]) => {
+      const { reason, username } = context as { reason: string; username: string | null };
+      return [reason, username];
+    }),
+    [["invalid_credentials", "integration-admin"], ["invalid_credentials", null]]
   );
+  assert.doesNotMatch(JSON.stringify(loggedFailures), /wrong-integration-password|IntegrationAdmin123!/);
+  const loginResponse = await loginRequest("integration-admin", "IntegrationAdmin123!");
   assert.equal(loginResponse.status, 200, await loginResponse.clone().text());
   const loginCookie = loginResponse.headers.get("set-cookie") ?? "";
   const sessionId = /imageshow_session=([^;]+)/u.exec(loginCookie)?.[1];
@@ -328,7 +352,6 @@ await runIntegrationScenario(async (runtime) => {
   preferenceRoutes.registerAdminPreferenceRoutes(preferenceApp);
   const csrf = (await renewedResponse.json()).csrf_token;
   const { createHttpApp } = await import("../../../../packages/server/src/http-app.ts");
-  const { logger } = await import("../../../../packages/server/src/core/logger.ts");
   const fullApp = createHttpApp({
     businessGateIsOpen: () => true,
     requireRedis: async () => undefined

@@ -4,7 +4,7 @@ import type { ShowMode } from "./settings.ts";
 /**
  * 访问统计的事件契约：公开页面采集与服务端校验共用同一份事件、页面与保留档位。
  * 未知事件或字段一律拒收；访问档原始事件保留 analytics.visit_retention_days 天，
- * 交互档保留 analytics.interaction_retention_days 天，日汇总永久保留。
+ * 交互档保留 analytics.interaction_retention_days 天，天数为 0 的档位不删除，日汇总永久保留。
  */
 export const analyticsCollectPath = "/api/collect";
 export const analyticsTodayVisitorsPath = "/api/visitors/today";

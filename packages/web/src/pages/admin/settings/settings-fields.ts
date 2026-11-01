@@ -6,66 +6,59 @@ import {
   type RuntimeConfig
 } from "@imageshow/shared/browser";
 
+// Half-width sections are split between two columns by their measured heights,
+// each column keeping this order (see useBalancedColumns); wide ones, listed
+// last, span the page below.
 export const settingsSections = {
   site: {
-    column: "left",
     title: "站点信息",
     description: "保存后影响后续请求；域名和资源地址变更前，请先完成域名接入。"
   },
   home: {
-    column: "right",
     title: "首页与页脚",
     description: "页面默认内容保存后，刷新或重新进入页面即可看到。页脚支持安全 Markdown。"
   },
   browsing: {
-    column: "left",
     title: "画廊与展映",
     description: "设置页面入口和默认浏览方式；管理员与访客仍可使用各自的浏览偏好。"
   },
   embed: {
-    column: "right",
     title: "外部嵌入",
     description: "额外来源同时用于嵌入授权与图片防盗链白名单。"
   },
   random: {
-    column: "right",
     title: "随机图片 API",
     description: "设置随机图的默认返回方式、尺寸、单次返回数量上限和零匹配回退顺序。"
   },
-  ingestion: {
-    column: "wide",
-    title: "上传与导入",
-    description: "控制原始图片接收、队列和入库；不会重新处理已入库图片。"
-  },
-  normalize: {
-    column: "wide",
-    title: "图片处理",
-    description: "三档分别生成 WebP，长边与目标体积须满足小图 ≤ 中图 ≤ 大图；降到最低质量后允许超出目标体积。"
-  },
   admin: {
-    column: "left",
     title: "后台界面",
     description: "应用于后台列表、概览和登录页面。"
   },
   analytics: {
-    column: "right",
     title: "访问统计",
     description: "统计公开页面、嵌入页与随机 API 的访问；不记录 IP、完整网址与浏览器标识。每日汇总永久保留。"
   },
   security: {
-    column: "right",
     title: "登录与请求限制",
     description: "修改只影响之后签发的会话和之后的请求。随机 API 单次取图不超过“图片额度 ÷ 批量请求次数”（至少 1）张时按张计入图片额度，超过时计 1 次批量请求。"
   },
   altcha: {
-    column: "left",
     title: "登录验证",
     description: "工作成本 × 计数上限不能超过 100,000,000，计数下限不能高于上限。"
   },
   log: {
-    column: "right",
     title: "运行日志",
     description: "日志等级和轮转设置在保存后生效。"
+  },
+  ingestion: {
+    wide: true,
+    title: "上传与导入",
+    description: "控制原始图片接收、队列和入库；不会重新处理已入库图片。"
+  },
+  normalize: {
+    wide: true,
+    title: "图片处理",
+    description: "三档分别生成 WebP，长边与目标体积须满足小图 ≤ 中图 ≤ 大图；降到最低质量后允许超出目标体积。"
   }
 } as const;
 
@@ -541,14 +534,14 @@ const settingsFields = {
     group: "analytics",
     label: "访问明细保留天数",
     kind: "number",
-    hint: "页面浏览与停留明细；随机 API 的小时明细同样按此保留。超出后只能查看每日汇总。",
+    hint: "页面浏览与停留明细；随机 API 的小时明细同样按此保留。超出后只能查看每日汇总；0 表示不删除。",
     ...runtimeConfigLimits["analytics.visit_retention_days"]
   },
   "analytics.interaction_retention_days": {
     group: "analytics",
     label: "交互明细保留天数",
     kind: "number",
-    hint: "首页目录、排序、展映、列表进度与错误等交互明细。",
+    hint: "首页目录、排序、展映、列表进度与错误等交互明细；0 表示不删除。",
     ...runtimeConfigLimits["analytics.interaction_retention_days"]
   },
   "analytics.collect_events_per_minute": {

@@ -21,6 +21,7 @@ import {
 } from "../../../components/feedback/ActionFeedbackRegion.js";
 import { createActionFeedback, type ActionFeedbackState } from "../../../lib/ui/action-feedback.js";
 import { SettingsFieldControl } from "./SettingsFieldControl.js";
+import { useBalancedColumns } from "./useBalancedColumns.js";
 import {
   replaceSettingsField,
   settingsFieldEntries,
@@ -47,6 +48,11 @@ const savePresentation = {
 } as const;
 
 type SettingsAction = ({ kind: "save" } & RuntimeConfigSaveRequestDto) | { kind: "reload" };
+
+type SettingsSection = keyof typeof settingsSections;
+const sectionKeys = Object.keys(settingsSections) as SettingsSection[];
+const halfSections = sectionKeys.filter((section) => !("wide" in settingsSections[section]));
+const wideSections = sectionKeys.filter((section) => "wide" in settingsSections[section]);
 
 export function SettingsPage() {
   const query = useQuery({
@@ -89,6 +95,7 @@ function SettingsPageContent({ snapshot }: { snapshot: RuntimeConfigResponseDto 
   const [confirmation, setConfirmation] = useState<SettingsAction | null>(null);
   const actionRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { columnsRef, secondColumn } = useBalancedColumns(halfSections);
   const workspaceToolbarRef = useWorkspaceToolbarCollapse();
   const returnFocusRef = useRef<HTMLButtonElement | null>(null);
   const reloadStatus = useAsyncActionStatus();
@@ -208,10 +215,10 @@ function SettingsPageContent({ snapshot }: { snapshot: RuntimeConfigResponseDto 
     );
   };
 
-  const renderSections = (column: "left" | "right" | "wide") => Object.entries(settingsSections)
-    .filter(([, section]) => section.column === column)
+  const renderSections = (sections: readonly SettingsSection[]) => sections
+    .map((section) => [section, settingsSections[section]] as const)
     .map(([section, { title, description }]) => (
-      <section key={section} className={`settings-card settings-card-${section}`}>
+      <section key={section} className={`settings-card settings-card-${section}`} data-balanced-card={section}>
         <header className="settings-card-heading">
           <div className="settings-heading-row">
             <h2>{title}</h2>
@@ -285,11 +292,15 @@ function SettingsPageContent({ snapshot }: { snapshot: RuntimeConfigResponseDto 
       />
       <WorkspaceScrollBody ref={scrollRef} className="settings-scroll-region">
         <fieldset className="settings-grid" disabled={locked} aria-busy={busy}>
-          <div className="settings-columns">
-            <div className="settings-column">{renderSections("left")}</div>
-            <div className="settings-column">{renderSections("right")}</div>
+          <div className="settings-columns" ref={columnsRef}>
+            <div className="settings-column">
+              {renderSections(halfSections.filter((section) => !secondColumn.has(section)))}
+            </div>
+            <div className="settings-column">
+              {renderSections(halfSections.filter((section) => secondColumn.has(section)))}
+            </div>
           </div>
-          {renderSections("wide")}
+          {renderSections(wideSections)}
         </fieldset>
       </WorkspaceScrollBody>
       {actionFeedback && (

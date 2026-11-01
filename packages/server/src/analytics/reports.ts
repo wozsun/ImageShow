@@ -2,6 +2,7 @@ import {
   analyticsCollectDropReasons,
   analyticsColorSchemes,
   analyticsDirectHost,
+  analyticsEarliestDay,
   analyticsListDepths,
   analyticsOtherHost,
   analyticsSessionDepths,
@@ -48,11 +49,15 @@ import { analyticsTimeZone } from "./time-zone.ts";
 type DayRange = { from: string; to: string };
 type RangeRequest = DayRange | { days: number };
 
-/** The server's local day and the first day raw rows are complete for; read once per report. */
+/**
+ * The server's local day, the first day raw rows are complete for, and the
+ * first day any raw row exists (null without raw rows); read once per report.
+ */
 type Calendar = {
   timeZone: string;
   today: string;
   rawFrom: string;
+  rawEarliest: string | null;
 };
 
 type RangeContext = {
@@ -77,26 +82,35 @@ function daysBetween(from: string, to: string) {
 
 async function readCalendar(): Promise<Calendar> {
   const timeZone = analyticsTimeZone();
-  const { today, pruned } = (
-    await pool.query<{ today: string; pruned: string | null }>(
+  const { today, pruned, earliest } = (
+    await pool.query<{ today: string; pruned: string | null; earliest: string | null }>(
       `SELECT to_char((now() AT TIME ZONE $1)::date, 'YYYY-MM-DD') AS today,
-              (SELECT to_char(max(day), 'YYYY-MM-DD') FROM analytics_daily WHERE metric = $2) AS pruned`,
+              (SELECT to_char(max(day), 'YYYY-MM-DD') FROM analytics_daily WHERE metric = $2) AS pruned,
+              to_char(least(
+                (SELECT min(occurred_at) FROM visit_event),
+                (SELECT min(hour) FROM random_api_hourly)
+              ) AT TIME ZONE $1, 'YYYY-MM-DD') AS earliest`,
       [timeZone, rawPrunedMetric]
     )
   ).rows[0]!;
-  // Raw rows cover the configured retention, but only from the day after the
-  // latest pruning: a shorter retention used before may have removed more.
-  const retentionStart = shiftDay(today, 1 - getRuntimeConfig().analytics.visit_retention_days);
+  // Raw rows cover the configured retention (all of history when it is 0;
+  // yesterday is always kept), but only from the day after the latest
+  // pruning: a shorter retention used before may have removed more.
+  const retentionDays = getRuntimeConfig().analytics.visit_retention_days;
+  const retentionStart = retentionDays > 0
+    ? shiftDay(today, Math.min(-1, 1 - retentionDays))
+    : analyticsEarliestDay;
   const afterPruned = pruned ? shiftDay(pruned, 1) : retentionStart;
   return {
     timeZone,
     today,
-    rawFrom: afterPruned > retentionStart ? afterPruned : retentionStart
+    rawFrom: afterPruned > retentionStart ? afterPruned : retentionStart,
+    rawEarliest: earliest
   };
 }
 
 async function rangeContext(
-  { timeZone, today, rawFrom }: Calendar,
+  { timeZone, today, rawFrom, rawEarliest }: Calendar,
   { from, to }: DayRange
 ): Promise<RangeContext> {
   if (to > today) {
@@ -116,7 +130,11 @@ async function rangeContext(
   return {
     range: { from, to, today, raw_from: rawFrom },
     days,
-    liveDays: days.filter((day) => day >= rawFrom && !rolled.has(day)),
+    // Days before the first raw row have nothing to count live; skipping them
+    // keeps a long range from scanning every raw row when retention is 0.
+    liveDays: rawEarliest === null
+      ? []
+      : days.filter((day) => day >= rawFrom && day >= rawEarliest && !rolled.has(day)),
     timeZone
   };
 }

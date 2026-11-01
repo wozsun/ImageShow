@@ -139,8 +139,6 @@ docker compose up -d imageshow            # 启动应用
 
 应用启动时只检查已有数据库结构，不会自动修改；检查不通过时应用不会就绪，原因见日志。
 
-6.9.0 与 6.9.1 例外：启动时为已有数据库补建访问统计所需的新表和索引，只新建，不修改已有的表和数据。这需要数据库账号能在 `public` 模式中建表（默认 Compose 的账号可以）；没有这个权限时应用启动失败，日志会说明原因：可由数据库所有者先执行对应版本 `packages/server/schema.sql` 中 `-- BEGIN 6.9 analytics tables` 与 `-- END 6.9 analytics tables` 之间的语句，并授予应用账号对 `visit_event`、`random_api_hourly`、`random_api_option_hourly`、`analytics_daily` 四张表的 SELECT、INSERT、UPDATE、DELETE 权限，再启动应用。
-
 ### 定期检查
 
 - 站点能打开，图片能显示，管理员能登录。

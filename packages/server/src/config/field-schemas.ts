@@ -206,8 +206,18 @@ export const ingestionListPageSize = integerWithin(limits["ingestion.list_page_s
 export const uploadMaxItems = integerWithin(limits["upload.max_items"]);
 export const imagePageSize = integerWithin(limits["admin.image_page_size"]);
 export const recentUploads = integerWithin(limits["admin.recent_uploads"]);
-export const analyticsVisitRetentionDays = integerWithin(limits["analytics.visit_retention_days"]);
-export const analyticsInteractionRetentionDays = integerWithin(limits["analytics.interaction_retention_days"]);
+// Not coerced: 0 keeps raw rows forever and 1 prunes all but two days, so a
+// null or true must not pass as a day count.
+export const analyticsVisitRetentionDays = z
+  .number()
+  .int()
+  .min(limits["analytics.visit_retention_days"].min)
+  .max(limits["analytics.visit_retention_days"].max);
+export const analyticsInteractionRetentionDays = z
+  .number()
+  .int()
+  .min(limits["analytics.interaction_retention_days"].min)
+  .max(limits["analytics.interaction_retention_days"].max);
 export const analyticsCollectEventsPerMinute = integerWithin(limits["analytics.collect_events_per_minute"]);
 export const analyticsCollectEventsPerDay = integerWithin(limits["analytics.collect_events_per_day"]);
 

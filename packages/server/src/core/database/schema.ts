@@ -3,10 +3,8 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { PoolClient } from "pg";
 import { errorMessage } from "../api-error.ts";
-import { logger } from "../logger.ts";
 import { assertDatabaseReadiness } from "./readiness.ts";
 import { pool } from "./pools.ts";
-import { applyTemporarySchemaUpgrade } from "./temporary-schema-upgrade.ts";
 import { withTransactionOnClient } from "./transactions.ts";
 
 export async function initializeDatabaseSchema() {
@@ -51,19 +49,18 @@ function databaseReadinessError(error: unknown) {
 
 async function initializeDatabaseSchemaOnClient(client: PoolClient) {
   const empty = await databaseHasNoUserRelations(client);
-  const schema = await readFile(databaseSchemaPath(), "utf8");
-  const created = await withTransactionOnClient(client, async (transaction) => {
+  const schema = empty
+    ? await readFile(databaseSchemaPath(), "utf8")
+    : null;
+  await withTransactionOnClient(client, async (transaction) => {
     try {
-      const upgraded = empty ? [] : await applyTemporarySchemaUpgrade(transaction, schema);
-      if (empty) await transaction.query(schema);
+      if (schema) await transaction.query(schema);
       await assertCoreDatabaseReady(transaction);
-      return upgraded;
     } catch (error) {
       if (!empty) throw databaseReadinessError(error);
       throw error;
     }
   });
-  if (created.length) logger.warn("database_temporary_upgrade_applied", { created });
 }
 
 export async function pingDatabase() {

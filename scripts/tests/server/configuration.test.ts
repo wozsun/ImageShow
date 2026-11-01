@@ -289,6 +289,13 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
   reversedWeiboDelay.weibo.request_delay_seconds = [6, 5];
   assert.throws(() => parseRuntimeConfig(reversedWeiboDelay));
 
+  // A retention of 0 keeps raw rows forever, so values that only coerce to a day count are rejected.
+  for (const value of [null, true, ""]) {
+    const coercedRetention = structuredClone(defaults);
+    coercedRetention.analytics.visit_retention_days = value as never;
+    assert.throws(() => parseRuntimeConfig(coercedRetention));
+  }
+
   const configWithImportTypesKeepingOriginalLink = structuredClone(defaults);
   configWithImportTypesKeepingOriginalLink.import.keep_original_link = [
     "weibo",

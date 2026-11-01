@@ -207,6 +207,7 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
     MutationObserver: window.MutationObserver,
     getComputedStyle,
     localStorage,
+    location: new URL("https://img.example/admin"),
     fetch: fetchStub,
     React,
     IS_REACT_ACT_ENVIRONMENT: true
@@ -2469,6 +2470,10 @@ test("[Web/后台表单] 站点配置完整草稿支持保存与重载确认，�
     await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
   let settings = structuredClone(appConfig.runtimeDefaults) as RuntimeConfig;
   client.setQueryData(queryKeys.runtimeConfig, { config: settings, settings, revision: settings.site.header_name.padEnd(43, "_") });
+  // linkedom has no layout: the cards stay in one column in declared order.
+  t.after(installProperties(globalThis, {
+    getComputedStyle: () => ({ gridTemplateColumns: "none", rowGap: "normal" })
+  }));
   await h.render(
     h.React.createElement(
       QueryClientProvider,

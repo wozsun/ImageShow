@@ -31,6 +31,7 @@ import {
   authorizeAdminSessionCredentialTransition
 } from "../users/admin-session.ts";
 import { adminPermissionsForRole } from "../users/admin-authorization.ts";
+import { logAdminLoginFailure } from "../users/login-failure-log.ts";
 import { readAdminPreferences } from "../users/preferences.ts";
 
 const sessionRedis = adminSessionRedisClient(redis);
@@ -54,12 +55,17 @@ export function registerPublicAuthRoutes(app: Hono) {
     limitStandardApiBody,
     async (c) => {
       const body = parse(adminLoginInput, await readJsonBody(c));
-      await verifyAltchaProof(body.altcha);
-      return c.json(apiSuccess(await createAdminSession(
-        c,
-        body.username,
-        body.password
-      )));
+      try {
+        await verifyAltchaProof(body.altcha);
+        return c.json(apiSuccess(await createAdminSession(
+          c,
+          body.username,
+          body.password
+        )));
+      } catch (error) {
+        await logAdminLoginFailure(c, body.username, error);
+        throw error;
+      }
     }
   );
 

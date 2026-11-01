@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { Hono } from "hono";
-import { analyticsCollectLimits } from "@imageshow/shared/browser";
+import { analyticsCollectLimits, analyticsEarliestDay } from "@imageshow/shared/browser";
 import type { AdminSession } from "../../../../packages/server/src/core/http/admin-session-context.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
@@ -463,7 +463,7 @@ await runIntegrationScenario(async (runtime) => {
     [400, 150, 400]
   );
   assert.deepEqual(earlierRandom.options, [{ option: "seed", value: "used", requests: 4 }]);
-  assert.ok(await rollupFinishedDays(signal) >= 2);
+  assert.ok(await rollupFinishedDays(signal) >= 1);
   assert.equal(await rollupFinishedDays(signal), 0, "rolled-up days are not rolled up again");
   assert.deepEqual(
     await Promise.all(sections.map((section) => stableReport(section, range))),
@@ -639,5 +639,64 @@ await runIntegrationScenario(async (runtime) => {
     retentionStart,
     "clearing everything also forgets pruning"
   );
-  await updateRuntimeConfig({ analytics: { visit_retention_days: 90 } });
+
+  // Retention 0 keeps every raw row and rolls up from the oldest one.
+  await updateRuntimeConfig({ analytics: { visit_retention_days: 0, interaction_retention_days: 0 } });
+  for (const event of ["page_view", "control_use"]) {
+    await pool.query(
+      `INSERT INTO visit_event (occurred_at, visitor_id, session_id, event, page, embedded, device, browser, os, detail)
+       VALUES (now() - interval '3 days', $1, $2, $3, 'gallery', false, 'desktop', 'Chrome', 'Windows', '{}')`,
+      [otherVisitor, session, event]
+    );
+  }
+  await pool.query(
+    `INSERT INTO random_api_hourly VALUES (date_trunc('hour', now() - interval '3 days'), 'json', 'GET', 'success', false, '', 1, 1, 0, 0)`
+  );
+  const oldest = (await pool.query<{ day: string }>(
+    "SELECT to_char(min(occurred_at) AT TIME ZONE $1, 'YYYY-MM-DD') AS day FROM visit_event",
+    [timeZone]
+  )).rows[0]!.day;
+  await pruneExpiredAnalytics(signal);
+  assert.equal(await count("SELECT count(*) FROM visit_event"), 2, "retention 0 deletes no visits or interactions");
+  assert.equal(await count("SELECT count(*) FROM random_api_hourly"), 1);
+  assert.equal((await analyticsReport("overview", { days: 3 })).range.raw_from, analyticsEarliestDay);
+  await rollupFinishedDays(signal);
+  assert.equal(
+    Number((await pool.query(
+      "SELECT count(*) FROM analytics_daily WHERE metric = 'rollup' AND day = $1::date",
+      [oldest]
+    )).rows[0].count),
+    1,
+    "the oldest raw day is rolled up"
+  );
+
+  // A one-day retention first rolls up a day missed while stopped, and keeps
+  // all of yesterday's rows for its rollup.
+  await pool.query("DELETE FROM analytics_daily WHERE day = $1::date", [earlier]);
+  await updateRuntimeConfig({ analytics: { visit_retention_days: 1 } });
+  await rollupFinishedDays(signal);
+  assert.equal(
+    Number((await pool.query(
+      "SELECT count(*) FROM analytics_daily WHERE metric = 'rollup' AND day = $1::date",
+      [earlier]
+    )).rows[0].count),
+    1,
+    "a missed day older than the retention is rolled up before pruning"
+  );
+  await pool.query(
+    `INSERT INTO visit_event (occurred_at, visitor_id, session_id, event, page, embedded, device, browser, os, detail)
+     SELECT ((now() AT TIME ZONE $1)::date - 1)::timestamp AT TIME ZONE $1 + shift, $2, $3, 'page_view', 'gallery', false, 'desktop', 'Chrome', 'Windows', '{}'
+       FROM (VALUES (interval '1 minute'), (interval '-1 minute')) AS shifts(shift)`,
+    [timeZone, otherVisitor, session]
+  );
+  await pruneExpiredAnalytics(signal);
+  assert.deepEqual(
+    (await pool.query<{ day: string }>(
+      "SELECT to_char(occurred_at AT TIME ZONE $1, 'YYYY-MM-DD') AS day FROM visit_event WHERE event = 'page_view'",
+      [timeZone]
+    )).rows.map((row) => row.day),
+    [yesterday]
+  );
+  assert.equal((await analyticsReport("overview", { days: 3 })).range.raw_from, yesterday);
+  await updateRuntimeConfig({ analytics: { visit_retention_days: 90, interaction_retention_days: 30 } });
 });

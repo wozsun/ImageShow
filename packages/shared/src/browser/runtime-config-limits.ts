@@ -46,8 +46,9 @@ export const runtimeConfigLimits = {
   "admin.login_background": { maxLength: 2048 },
   "admin.image_page_size": { min: 10, max: adminImageBatchLimit },
   "admin.recent_uploads": { min: 1, max: 60 },
-  "analytics.visit_retention_days": { min: 7, max: 400 },
-  "analytics.interaction_retention_days": { min: 7, max: 400 },
+  // 0 keeps raw rows forever.
+  "analytics.visit_retention_days": { min: 0, max: 500 },
+  "analytics.interaction_retention_days": { min: 0, max: 500 },
   "analytics.collect_events_per_minute": { min: 60, max: 100_000 },
   "analytics.collect_events_per_day": { min: 1_000, max: 100_000_000 },
   "security.session_ttl_seconds": { min: 5 * 60, max: 365 * 24 * 60 * 60 },
